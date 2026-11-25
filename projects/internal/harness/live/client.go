@@ -260,8 +260,9 @@ func (p *projects) choose(ctx context.Context, option int) (string, error) {
 		var d struct {
 			Question string `json:"question"`
 			Chosen   *int   `json:"chosen"`
+			Custom   string `json:"custom"`
 		}
-		if json.Unmarshal([]byte(payload), &d) != nil || d.Chosen != nil {
+		if json.Unmarshal([]byte(payload), &d) != nil || d.Chosen != nil || d.Custom != "" {
 			return false
 		}
 		question = d.Question

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Chip, Collapse, Paper, Typography } from '@mui/material';
+import { Box, Button, Chip, Collapse, Paper, TextField, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -173,6 +173,8 @@ interface DecisionPayload {
     recommended: number;
     reason?: string;
     chosen?: number;
+    /** The user's own answer when none of the options fit. */
+    custom?: string;
     /** What the card is about, as the system resolved it from the coordinator's ask. */
     thread_id?: string;
     /** The thread's number in its project, as chats name it ("#12"). */
@@ -236,23 +238,28 @@ function DecisionSource({ d, threads, onOpen }: { d: DecisionPayload; threads: M
 function DecisionCard({ message, threads, onChoose, onOpen, disabled }: {
     message: TranscriptEntry;
     threads: Map<string, Thread>;
-    onChoose: (messageId: string, index: number) => Promise<void>;
+    onChoose: (messageId: string, index: number, custom?: string) => Promise<void>;
     onOpen: (id: string) => void;
     disabled: boolean;
 }) {
     const { t } = useTranslation('projects');
     const [busy, setBusy] = useState(false);
+    const [typing, setTyping] = useState(false);
+    const [text, setText] = useState('');
     const d = parse<DecisionPayload>(message.payload);
     if (!d) return null;
-    const answered = d.chosen !== undefined && d.chosen !== null;
-    const choose = async (index: number) => {
+    const answered = (d.chosen !== undefined && d.chosen !== null) || !!d.custom;
+    const choose = async (index: number, custom?: string) => {
         setBusy(true);
         try {
-            await onChoose(message.id!, index);
+            if (custom === undefined) await onChoose(message.id!, index);
+            else await onChoose(message.id!, index, custom);
         } finally {
             setBusy(false);
         }
     };
+    const words = text.trim();
+    const sendCustom = () => { if (words && !busy && !disabled) void choose(-1, words); };
     return (
         <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }}>
             <Typography variant="overline" color="text.secondary">{t('conversation.decision')}</Typography>
@@ -281,6 +288,39 @@ function DecisionCard({ message, threads, onChoose, onOpen, disabled }: {
                         </Box>
                     );
                 })}
+                {d.custom && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: radius.row, bgcolor: 'action.hover' }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="caption" color="text.secondary">{t('conversation.customAnswer')}</Typography>
+                            <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{d.custom}</Typography>
+                        </Box>
+                        <Check fontSize="small" color="primary" aria-label={t('conversation.chosen')} />
+                    </Box>
+                )}
+                {!answered && !typing && (
+                    <Button size="small" variant="outlined" color="inherit" disabled={busy || disabled} onClick={() => setTyping(true)} sx={{ alignSelf: 'flex-start' }}>
+                        {t('conversation.customOption')}
+                    </Button>
+                )}
+                {!answered && typing && (
+                    <Box component="form" onSubmit={(e: React.FormEvent) => { e.preventDefault(); sendCustom(); }} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                        <TextField
+                            autoFocus multiline maxRows={6} size="small" fullWidth
+                            value={text} disabled={busy || disabled}
+                            onChange={(e) => setText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') { setTyping(false); setText(''); }
+                                else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) { e.preventDefault(); sendCustom(); }
+                            }}
+                            placeholder={t('conversation.customPlaceholder')}
+                            slotProps={{ htmlInput: { 'aria-label': t('conversation.customPlaceholder'), maxLength: 2000 } }}
+                        />
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button type="submit" size="small" variant="contained" disabled={!words || busy || disabled}>{t('conversation.customSend')}</Button>
+                            <Button size="small" color="inherit" disabled={busy} onClick={() => { setTyping(false); setText(''); }}>{t('conversation.customCancel')}</Button>
+                        </Box>
+                    </Box>
+                )}
             </Box>
         </Paper>
     );
@@ -317,7 +357,8 @@ interface Props {
     /** Opens a thread's running tasks from its card's count pill. */
     onOpenTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
-    onChooseDecision: (messageId: string, index: number) => Promise<void>;
+    /** custom is set (index -1) when the user answers in their own words. */
+    onChooseDecision: (messageId: string, index: number, custom?: string) => Promise<void>;
     /** Interrupts the running coordinator turn, like a thread's stop. */
     onStop?: () => Promise<void>;
     /** An entry to bring into view and mark for a moment (a thread's "View reply"); onFocused says it was shown. */

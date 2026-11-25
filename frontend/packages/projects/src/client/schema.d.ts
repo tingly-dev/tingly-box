@@ -910,8 +910,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message
-         * @description Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message
+         * Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message
+         * @description Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message
          */
         post: operations["apiV1ThreadsIdEventsEidChoosePost"];
         delete?: never;
@@ -1514,6 +1514,8 @@ export interface components {
             verbose: boolean;
         };
         ChooseRequest: {
+            /** @description Field custom */
+            custom?: string;
             /**
              * Format: int64
              * @description Field index

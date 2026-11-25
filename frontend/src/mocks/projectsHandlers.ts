@@ -219,6 +219,8 @@ const messages = [
     // about, and the answer reaches the coordinator naming its card.
     msg('m10', 'decision', '', 2.5, { question: 'Resolve the conflicts of the SDK PR with main?', thread_id: 't-sdk', thread_seq: 3, thread_title: 'Retry budget in the SDK', number: 37, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The conflict is in one import block.', chosen: 1 }),
     msg('m10a', 'user', "I'll handle it", 2.4, { answer: { card: 'm10', question: 'Resolve the conflicts of the SDK PR with main?', thread_id: 't-sdk', thread_seq: 3, thread_title: 'Retry budget in the SDK', number: 37, link_kind: 'pr' } }),
+    // A card answered in the user's own words.
+    msg('m10b', 'decision', '', 2.2, { question: 'Cut the release branch today?', options: [{ label: 'Cut it now' }, { label: 'Wait for the freeze' }], recommended: 1, custom: 'Cut it after the Redis PR merges, then tag.' }),
     msg('m11', 'decision', '', 2, { question: 'Resolve the conflicts of the Redis PR with main?', thread_id: 't-cache', thread_seq: 2, thread_title: 'Cache idempotency keys in Redis', number: 214, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The branch is two commits behind and CI was green before.' }),
 ]
 

@@ -35,7 +35,17 @@ type Decision struct {
 	LinkKind string `json:"link_kind,omitempty"`
 	// Chosen is the picked option's index, nil until the user answers.
 	Chosen *int `json:"chosen,omitempty"`
+	// Custom is the user's own answer when none of the options fit; set
+	// instead of Chosen.
+	Custom string `json:"custom,omitempty"`
 }
+
+// MaxCustomAnswer caps a custom answer, in bytes.
+const MaxCustomAnswer = 2000
+
+// answered reports whether the user has answered the card, by an option or
+// in their own words.
+func (d Decision) answered() bool { return d.Chosen != nil || d.Custom != "" }
 
 // decisionAnswer is what a user message that answers a card carries in its
 // payload: the card's source, copied by the system when the user chose, so
@@ -50,6 +60,8 @@ type decisionAnswer struct {
 	LinkKind    string `json:"link_kind,omitempty"`
 	// Option is the picked option's number, from 1 as the card shows it.
 	Option int `json:"option,omitempty"`
+	// Custom marks an answer in the user's own words, none of the options.
+	Custom bool `json:"custom,omitempty"`
 }
 
 // answerOf reads the card a user message answers from its payload.
@@ -98,7 +110,9 @@ func (a *decisionAnswer) lead() string {
 		where = ", about " + s
 	}
 	pick := "The user picked:"
-	if a.Option > 0 {
+	if a.Custom {
+		pick = "The user answered in their own words (none of the options):"
+	} else if a.Option > 0 {
 		pick = fmt.Sprintf("The user picked option %d:", a.Option)
 	}
 	return escapeEnvelope(fmt.Sprintf("(System: answer to your decision card %s%s, %q. %s)", short(a.Card), where, oneLine(a.Question), pick))
@@ -140,7 +154,7 @@ type DecisionOption struct {
 
 // validate checks a decision the coordinator wants to ask.
 func (d *Decision) validate() error {
-	d.Chosen = nil
+	d.Chosen, d.Custom = nil, ""
 	d.Question = strings.TrimSpace(d.Question)
 	if d.Question == "" {
 		return errors.New("question is required")
@@ -241,7 +255,6 @@ func linkKind(links []db.ThreadLink, number int) string {
 	return kind
 }
 
-
 // ask posts a decision card to the conversation.
 func (c *Coordinator) ask(projectID string, d Decision) string {
 	// The content is the card in words, for chats that cannot show a card.
@@ -256,6 +269,24 @@ func (c *Coordinator) ask(projectID string, d Decision) string {
 // The message's payload names the card and what it is about, which the
 // coordinator reads ahead of the label in the system's words.
 func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, index int, src Source) (*db.ThreadEvent, error) {
+	return c.answerDecision(ctx, mainThreadID, eventID, index, "", src)
+}
+
+// ChooseCustom records the user's own words as the answer of a decision card,
+// for when none of its options fit. The coordinator reads them as the user's
+// message, led by the card they answer.
+func (c *Coordinator) ChooseCustom(ctx context.Context, mainThreadID, eventID, text string, src Source) (*db.ThreadEvent, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, errors.New("write an answer")
+	}
+	if len(text) > MaxCustomAnswer {
+		return nil, fmt.Errorf("keep the answer under %d bytes", MaxCustomAnswer)
+	}
+	return c.answerDecision(ctx, mainThreadID, eventID, -1, text, src)
+}
+
+func (c *Coordinator) answerDecision(ctx context.Context, mainThreadID, eventID string, index int, custom string, src Source) (*db.ThreadEvent, error) {
 	c.choosing.Lock()
 	defer c.choosing.Unlock()
 	main, err := c.store.GetThread(mainThreadID)
@@ -273,17 +304,25 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 	if err := json.Unmarshal([]byte(m.Payload), &d); err != nil {
 		return nil, err
 	}
-	if d.Chosen != nil {
+	if d.answered() {
 		return m, ErrDecided
 	}
-	if index < 0 || index >= len(d.Options) {
-		return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
+	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadSeq: d.ThreadSeq, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind}
+	text := custom
+	if custom != "" {
+		answer.Custom = true
+		d.Custom = custom
+	} else {
+		if index < 0 || index >= len(d.Options) {
+			return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
+		}
+		answer.Option = index + 1
+		text = d.Options[index].Label
+		d.Chosen = &index
 	}
-	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadSeq: d.ThreadSeq, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind, Option: index + 1}
-	if _, err := c.post(main.ProjectID, d.Options[index].Label, jsonString(map[string]any{"answer": answer}), src); err != nil {
+	if _, err := c.post(main.ProjectID, text, jsonString(map[string]any{"answer": answer}), src); err != nil {
 		return nil, err
 	}
-	d.Chosen = &index
 	m.Payload = jsonString(d)
 	if err := c.store.UpdateThreadEvent(m); err != nil {
 		return nil, err
@@ -303,7 +342,7 @@ func (c *Coordinator) pendingDecision(threadID, eventID string) (db.ThreadEvent,
 		return db.ThreadEvent{}, Decision{}, false
 	}
 	var d Decision
-	if json.Unmarshal([]byte(m.Payload), &d) != nil || d.Chosen != nil {
+	if json.Unmarshal([]byte(m.Payload), &d) != nil || d.answered() {
 		return db.ThreadEvent{}, Decision{}, false
 	}
 	return *m, d, true
@@ -380,12 +419,16 @@ func (d Decision) describe() string {
 		switch {
 		case d.Chosen != nil && *d.Chosen == i:
 			mark = ", chosen"
-		case d.Chosen == nil && d.Recommended == i:
+		case !d.answered() && d.Recommended == i:
 			mark = ", recommended"
 		}
 		parts = append(parts, fmt.Sprintf("%d. %s%s", i+1, o.Label, mark))
 	}
-	return strings.Join(parts, "; ")
+	out := strings.Join(parts, "; ")
+	if d.Custom != "" {
+		out += "; answered in the user's own words: " + d.Custom
+	}
+	return out
 }
 
 // text renders the question and its options as a message.

@@ -137,6 +137,33 @@ describe('conversation presentation', () => {
         expect(screen.getByText('Task report')).toBeInTheDocument();
     });
 
+    it('lets a decision card be answered in the user\'s own words, and keeps those words after', async () => {
+        const options = [{ label: 'Merge now' }, { label: 'Wait for review' }];
+        const open = props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options, recommended: 1 }) })]);
+        const view = show(open);
+        fireEvent.click(screen.getByRole('button', { name: 'conversation.customOption' }));
+        const box = screen.getByRole('textbox', { name: 'conversation.customPlaceholder' });
+        expect(screen.getByRole('button', { name: 'conversation.customSend' })).toBeDisabled();
+        fireEvent.change(box, { target: { value: '  Merge after the tests pass  ' } });
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.customSend' })));
+        expect(open.onChooseDecision).toHaveBeenCalledWith('dec', -1, 'Merge after the tests pass');
+        view.unmount();
+
+        show(props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options, recommended: 1, custom: 'Merge after the tests pass' }) })]));
+        expect(screen.getByText('Merge after the tests pass')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'conversation.customOption' })).toBeNull();
+        expect(screen.queryAllByRole('button', { name: 'conversation.choose' })).toHaveLength(0);
+    });
+
+    it('cancels the custom answer without sending anything', () => {
+        const open = props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options: [{ label: 'a' }, { label: 'b' }], recommended: 0 }) })]);
+        show(open);
+        fireEvent.click(screen.getByRole('button', { name: 'conversation.customOption' }));
+        fireEvent.click(screen.getByRole('button', { name: 'conversation.customCancel' }));
+        expect(screen.getByRole('button', { name: 'conversation.customOption' })).toBeInTheDocument();
+        expect(open.onChooseDecision).not.toHaveBeenCalled();
+    });
+
     it('offers a decision card once and keeps the pick after it is answered', async () => {
         const options = [{ label: 'Merge now', consequence: 'main gets it' }, { label: 'Wait for review' }];
         const open = props([event('decision', 'Merge?', { id: 'dec', payload: JSON.stringify({ question: 'Merge?', options, recommended: 1, reason: 'Cannot be undone' }) })]);

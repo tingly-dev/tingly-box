@@ -2037,8 +2037,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
-        "description": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "summary": "Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message",
+        "description": "Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message",
         "operationId": "apiV1ThreadsIdEventsEidChoosePost",
         "parameters": [
           {
@@ -3329,6 +3329,10 @@
       "ChooseRequest": {
         "type": "object",
         "properties": {
+          "custom": {
+            "type": "string",
+            "description": "Field custom"
+          },
           "index": {
             "type": "integer",
             "format": "int64",

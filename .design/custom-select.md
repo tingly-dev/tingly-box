@@ -17,8 +17,11 @@
 | Projects 输入框条「自动回答」（`AutoAnswerSelect`） | 等待时长 | 整数分钟 1–60（须早于常驻进程 65 分钟的空闲回收，否则回答时进程已被收掉） | `PUT /threads/:id/auto-answer`，`auto_answer = "delay:<分钟>"`；后端 `parseAutoAnswer` 校验并按它计时 |
 | Limits 编辑器「用量窗口」（`LimitsEditor`） | 窗口 | 整数分钟 1–43200（30 天） | `limits.window_seconds`（秒，原字段） |
 | 系统日志 / 请求日志「最近 N 条」（`LogLimitSelect`） | 加载行数 | 1–1000（接口上限） | 组件 state → `limit` 查询参数 |
+| 协调者决策卡（`ConversationPane` 的 `DecisionCard`） | 回答 | 自己的话，≤2000 字节 | `POST /threads/:id/events/:eid/choose` 带 `custom`；事件 `custom` 字段，原话作为用户消息送达协调者 |
 
 模型选择（`ModelPicker`、设置里的 `Autocomplete freeSolo`）本来就能输入自定义模型 ID；图片尺寸已有 `__custom__` 项；Limits 的数量类字段本来就是数字输入框。
+
+「选项卡式」的单选（按钮列表而不是下拉）同理：末尾一行「其他回答…」，点开后行内输入框，Esc 取消。回答问题的 `QuestionCard`（AskUserQuestion）本来就带「用自己的话回答」输入框。
 
 ## 不适合自定义（保持固定选项）
 
