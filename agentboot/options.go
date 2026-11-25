@@ -3,6 +3,8 @@ package agentboot
 import (
 	"io"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot/process"
 )
 
 // SessionCloseTimeout bounds how long callers wait for a process or
@@ -46,7 +48,10 @@ type ExecutionContext struct {
 
 // ExecutionOptions controls agent execution.
 type ExecutionOptions struct {
-	ProjectPath  string
+	ProjectPath string
+	// Sandbox, if non-nil, confines the agent process to the paths it lists
+	// (process.Sandbox); the process is not started without it.
+	Sandbox      *process.Sandbox
 	OutputFormat OutputFormat
 	// Timeout overrides the Runner default. Zero uses the configured default;
 	// a negative value explicitly disables the default timeout.

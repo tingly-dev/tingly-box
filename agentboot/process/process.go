@@ -37,6 +37,10 @@ type LaunchSpec struct {
 	// before any protocol output) attached to the execution that produced
 	// them.
 	Stderr io.Writer
+
+	// Sandbox, if non-nil, runs the process confined to the paths it lists
+	// (see Sandbox). A factory that cannot confine it must refuse to start it.
+	Sandbox *Sandbox
 }
 
 // BuildCmd converts the specification into an exec.Cmd.
