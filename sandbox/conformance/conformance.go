@@ -278,7 +278,8 @@ func (c *suite) limited(t *testing.T, r sandbox.Resources) sandbox.Policy {
 // before it finishes; a small one must still work.
 func (c *suite) memoryLimited(t *testing.T) {
 	p := c.limited(t, sandbox.Resources{MemoryBytes: 64 << 20})
-	out := c.run(t, p, `head -c 8000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^80000' && echo SMALL-OK
+	out := c.run(t, p, `[ -z "$XDG_RUNTIME_DIR$DBUS_SESSION_BUS_ADDRESS" ] || echo LEAK-session-env
+head -c 8000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^80000' && echo SMALL-OK
 head -c 200000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^2000' && echo LEAK-allocated`)
 	expect(t, out, "SMALL-OK")
 }

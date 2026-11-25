@@ -31,7 +31,7 @@ var lookPath = func() (string, error) { return exec.LookPath("bwrap") }
 // variable for tests.
 var lookSystemdRun = func() (string, error) { return exec.LookPath("systemd-run") }
 
-func (Runtime) Info()sandbox.Info {
+func (Runtime) Info() sandbox.Info {
 	return sandbox.Info{Name: Name, Isolation: sandbox.IsolationProcess, Supports: map[sandbox.Axis][]sandbox.Level{
 		sandbox.AxisStorage:     {sandbox.StorageConfined},
 		sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone},
@@ -91,21 +91,36 @@ func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sa
 			return nil, fmt.Errorf("%w: systemd-run is not installed", sandbox.ErrUnavailable)
 		}
 		// systemd-run reaches the user manager through the host's session
-		// variables; the process must get only cmd.Env, so env -i hands it
-		// exactly that inside the scope.
-		prefix = append(append(scopeArgs(run, p.Resources), "/usr/bin/env", "-i"), cmd.Env...)
-		prefix = append(prefix, bin)
-		cmd.Env = nil
+		// variables and execs bwrap with its own environment. The process
+		// must get only cmd.Env, so bwrap puts those variables back as cmd.Env
+		// had them (never the environment on a command line: argv is public).
+		prefix = append(scopeArgs(run, p.Resources), bin)
+		var restore []string
 		for _, k := range []string{"XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"} {
+			if v, ok := envLookup(cmd.Env, k); ok {
+				restore = append(restore, "--setenv", k, v)
+			} else {
+				restore = append(restore, "--unsetenv", k)
+			}
 			if v, ok := os.LookupEnv(k); ok {
-				cmd.Env = append(cmd.Env, k+"="+v)
+				cmd.Env = append(slices.DeleteFunc(slices.Clone(cmd.Env), func(kv string) bool { return strings.HasPrefix(kv, k+"=") }), k+"="+v)
 			}
 		}
+		args = append(restore, args...)
 	}
 	cmd.Args = append(append(prefix, args...), cmd.Args...)
 	// bwrap changes into cmd.Dir inside; outside it starts where we are.
 	cmd.Dir = ""
 	return sandbox.ExecCommand(ctx, cmd)
+}
+
+func envLookup(env []string, name string) (string, bool) {
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, name+"="); ok {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 // scopeArgs is the command that runs what follows in a transient systemd user
