@@ -101,8 +101,8 @@ type Project struct {
 	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
-	// ThreadSandbox is where threads run: empty on the host, "bwrap" confined
-	// with bubblewrap (project.SandboxBwrap).
+	// ThreadSandbox is the sandbox runtime threads run in (a name in the
+	// sandbox registry); empty runs them on the host.
 	ThreadSandbox string `gorm:"size:20" json:"thread_sandbox"`
 	// ThreadGitHubAccess is the setting GitHubAuto replaced (allow, the default
 	// also when empty, or ask); it is read once, to migrate a project to it.

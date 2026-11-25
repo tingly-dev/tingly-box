@@ -6,6 +6,8 @@ replace github.com/tingly-dev/tingly-box/imbot => ../imbot
 
 replace github.com/tingly-dev/tingly-box/agentboot => ../agentboot
 
+replace github.com/tingly-dev/tingly-box/sandbox => ../sandbox
+
 require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.12.1
@@ -15,6 +17,7 @@ require (
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0 // indirect
+	github.com/tingly-dev/tingly-box/sandbox v0.0.0-00010101000000-000000000000 // indirect
 	github.com/go-telegram/bot v1.23.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect

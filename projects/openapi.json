@@ -4677,12 +4677,20 @@
             "type": "integer",
             "format": "int64",
             "description": "Field max_running_threads_limit"
+          },
+          "sandboxes": {
+            "type": "array",
+            "description": "Field sandboxes",
+            "items": {
+              "$ref": "#/components/schemas/SandboxRuntime"
+            }
           }
         },
         "required": [
           "cli_path",
           "base_url",
-          "max_running_threads_limit"
+          "max_running_threads_limit",
+          "sandboxes"
         ]
       },
       "ProjectSummary": {
@@ -4982,6 +4990,40 @@
         },
         "required": [
           "requests"
+        ]
+      },
+      "SandboxRuntime": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Field available"
+          },
+          "isolation": {
+            "type": "string",
+            "description": "Field isolation"
+          },
+          "levels": {
+            "type": "object",
+            "description": "Field levels",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          }
+        },
+        "required": [
+          "name",
+          "isolation",
+          "available",
+          "levels"
         ]
       },
       "SendMessageRequest": {
@@ -6053,11 +6095,7 @@
           },
           "thread_sandbox": {
             "type": "string",
-            "description": "Field thread_sandbox",
-            "enum": [
-              "",
-              "bwrap"
-            ]
+            "description": "Field thread_sandbox"
           }
         }
       },

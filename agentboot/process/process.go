@@ -38,8 +38,8 @@ type LaunchSpec struct {
 	// them.
 	Stderr io.Writer
 
-	// Sandbox, if non-nil, runs the process confined to the paths it lists
-	// (see Sandbox). A factory that cannot confine it must refuse to start it.
+	// Sandbox, if non-nil, runs the process isolated by a runtime of the
+	// sandbox module. A factory that cannot isolate it must refuse to start it.
 	Sandbox *Sandbox
 }
 

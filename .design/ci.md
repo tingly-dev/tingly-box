@@ -14,7 +14,7 @@
 | 层 | 何时 | 跑什么 | Workflow |
 |---|---|---|---|
 | PR | 每次 push（只在改到前端时） | 前端 build / lint / `@tingly/projects` 检查 | `verify-frontend.yml` |
-| 每日 | 03:23（UTC+8），`main` 与上次绿色 run 同一提交则跳过；可手动触发 | cli / gui 编译、projects / remote 测试、IM 集成测试、catalog check、完整 harness | `daily.yml` |
+| 每日 | 03:23（UTC+8），`main` 与上次绿色 run 同一提交则跳过；可手动触发 | cli / gui 编译、projects / remote / sandbox 测试（sandbox 装上 bubblewrap 跑一致性测试）、IM 集成测试、catalog check、完整 harness | `daily.yml` |
 | 发版 | tag `v*` 或手动 | 前端构建 → 完整 harness（门禁）→ CLI 与 GUI 全平台构建、发布、发布后校验 | `release.yml` → `release-cli.yml` / `release-gui.yml` / `verify-release-*.yml` |
 | 手动 | `workflow_dispatch` | npm 发布、npm 发布演练、源码镜像、harness 子集 | `npm.yml`、`harness-npm.yml`、`docker-source.yml` |
 

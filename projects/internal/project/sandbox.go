@@ -15,17 +15,52 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/sandbox"
+	// The runtimes this build ships: a new one is one more import here.
+	_ "github.com/tingly-dev/tingly-box/sandbox/bwrap"
 )
 
-// Thread sandboxes (db.Project.ThreadSandbox). Empty runs threads on the host
-// as before. See .design/thread-runtime.md §10.
-const (
-	SandboxNone  = ""
-	SandboxBwrap = "bwrap"
-)
+// db.Project.ThreadSandbox names the sandbox runtime a project's threads run
+// in (the sandbox registry); empty, or the host runtime, runs them on the host
+// as before. See .design/thread-runtime.md.
 
-// ValidSandbox reports whether s is a value a project can be set to.
-func ValidSandbox(s string) bool { return s == SandboxNone || s == SandboxBwrap }
+// ValidSandbox reports whether s is a value a project can be set to: empty, or
+// a runtime this build ships.
+func ValidSandbox(s string) bool {
+	_, ok := sandbox.Get(s)
+	return s == "" || ok
+}
+
+// sandboxed reports whether a project's threads run isolated.
+func sandboxed(p *db.Project) bool {
+	return p.ThreadSandbox != "" && p.ThreadSandbox != sandbox.HostName
+}
+
+// ThreadPolicyLevels are the levels, axis by axis, a project's threads run at
+// with runtime: what the settings show.
+func ThreadPolicyLevels(runtime string) map[sandbox.Axis]sandbox.Level {
+	if runtime == "" || runtime == sandbox.HostName {
+		return sandbox.Policy{
+			Storage: sandbox.Storage{Level: sandbox.StorageHost}, Network: sandbox.Network{Level: sandbox.NetworkOpen},
+			Exec: sandbox.Exec{Level: sandbox.ExecHost}, Credentials: sandbox.Credentials{Level: sandbox.CredentialsInherit},
+			Resources: sandbox.Resources{Level: sandbox.ResourcesUnlimited},
+		}.Levels()
+	}
+	return threadPolicy("", nil, nil).Levels()
+}
+
+// threadPolicy is what a sandboxed thread runs under. Storage: only the mounts
+// (home is empty). Network: open, for now (the user's decision; §8). Exec:
+// confined. Credentials: only the variables named. Resources: no limits yet.
+func threadPolicy(home string, mounts []sandbox.Mount, env []string) sandbox.Policy {
+	return sandbox.Policy{
+		Storage:     sandbox.Storage{Level: sandbox.StorageConfined, Home: home, Mounts: mounts},
+		Network:     sandbox.Network{Level: sandbox.NetworkOpen},
+		Exec:        sandbox.Exec{Level: sandbox.ExecConfined},
+		Credentials: sandbox.Credentials{Level: sandbox.CredentialsExplicit, Env: env},
+		Resources:   sandbox.Resources{Level: sandbox.ResourcesUnlimited},
+	}
+}
 
 // sandboxEnv are the host variables a sandboxed thread keeps besides the ones
 // its launch sets itself: what tools need to run, nothing that carries a secret.
@@ -34,23 +69,26 @@ var sandboxEnv = []string{"PATH", "LANG", "LANGUAGE", "LC_*", "TERM", "TZ", "USE
 	"CLAUDE_CODE_*", "CLAUDE_CONFIG_DIR", "DISABLE_*"}
 
 // sandboxFor is the sandbox a thread's launch runs in, or nil when the project
-// runs threads on the host. It confines the process to what the thread works
-// with: its directory and repository, the project's library and memory, its
-// own Claude Code transcripts, and read-only what it runs with (settings, MCP
+// runs threads on the host. Its storage is what the thread works with: its
+// directory and repository, the project's library and memory, its own Claude
+// Code transcripts, and read-only what it runs with (settings, MCP
 // configuration, the CLI, toolchains on PATH). A repository's config and hooks
 // are read-only inside: the host runs git there too, and must not run what the
 // thread wrote into them (§10.5).
 func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, opts *agentboot.ExecutionOptions) (*process.Sandbox, error) {
-	if p.ThreadSandbox != SandboxBwrap {
+	if !sandboxed(p) {
 		return nil, nil
+	}
+	if _, ok := sandbox.Get(p.ThreadSandbox); !ok {
+		return nil, fmt.Errorf("sandbox %q is not in this build", p.ThreadSandbox)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: %w", err)
 	}
-	var ms []process.Mount
-	rw := func(path string) { ms = append(ms, process.Mount{Path: path}) }
-	ro := func(path string) { ms = append(ms, process.Mount{Path: path, ReadOnly: true, Optional: true}) }
+	var ms []sandbox.Mount
+	rw := func(path string) { ms = append(ms, sandbox.Mount{Path: path, Writable: true}) }
+	ro := func(path string) { ms = append(ms, sandbox.Mount{Path: path, Optional: true}) }
 
 	if t.Cwd != "" {
 		rw(t.Cwd)
@@ -63,7 +101,7 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 	}
 	for _, r := range p.Repos {
 		if r.Path != "" && r.Path != t.RepoPath {
-			ms = append(ms, process.Mount{Path: r.Path, Optional: true})
+			ms = append(ms, sandbox.Mount{Path: r.Path, Optional: true})
 			ms = append(ms, gitMounts(ctx, r.Path, false)...)
 		}
 	}
@@ -117,20 +155,20 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 			keep = append(keep, name)
 		}
 	}
-	return &process.Sandbox{Home: home, Mounts: ms, KeepEnv: keep}, nil
+	return &process.Sandbox{Runtime: p.ThreadSandbox, Policy: threadPolicy(home, ms, keep)}, nil
 }
 
 // gitMounts are a repository's git directory, writable (commits, branches)
 // when writable is set, with its config and hooks read-only on top, also a
 // submodule's and a worktree's own. Nothing for a directory outside git.
-func gitMounts(ctx context.Context, dir string, writable bool) []process.Mount {
+func gitMounts(ctx context.Context, dir string, writable bool) []sandbox.Mount {
 	common, err := git(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return nil
 	}
 	common = strings.TrimSpace(common)
-	ms := []process.Mount{{Path: common, ReadOnly: !writable, Optional: true}}
-	guard := func(path string) { ms = append(ms, process.Mount{Path: path, ReadOnly: true, Optional: true}) }
+	ms := []sandbox.Mount{{Path: common, Writable: writable, Optional: true}}
+	guard := func(path string) { ms = append(ms, sandbox.Mount{Path: path, Optional: true}) }
 	guard(filepath.Join(common, "config"))
 	guard(filepath.Join(common, "hooks"))
 	for _, pattern := range []string{"modules/*/config", "modules/*/hooks", "worktrees/*/config.worktree"} {

@@ -101,7 +101,7 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	require.NoError(t, os.WriteFile(secret, []byte("PRIVATE"), 0o600))
 
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
-	f.project.ThreadSandbox = SandboxBwrap
+	f.project.ThreadSandbox = "bwrap"
 	require.NoError(t, f.store.SaveProject(f.project))
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Probe", Task: "probe"})
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	require.NotNil(t, opts.Sandbox)
 	opts.Env = append(opts.Env, "ANTHROPIC_BASE_URL="+srv.URL, "ANTHROPIC_AUTH_TOKEN=x", "ANTHROPIC_MODEL=claude-sonnet-4-5",
 		"DISABLE_TELEMETRY=1", "DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
-	opts.Sandbox.KeepEnv = append(opts.Sandbox.KeepEnv, "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL")
+	opts.Sandbox.Policy.Credentials.Env = append(opts.Sandbox.Policy.Credentials.Env, "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL")
 	opts.PermissionMode = "bypassPermissions"
 	opts.PermissionPromptTool = ""
 	opts.ProjectPath = th.Cwd

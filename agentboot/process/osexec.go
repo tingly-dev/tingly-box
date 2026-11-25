@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/sandbox"
 )
 
 // OSExecFactory is the production Factory backed by os/exec.
@@ -27,11 +29,7 @@ func (f *OSExecFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, err
 		return nil, fmt.Errorf("empty launch command")
 	}
 	if spec.Sandbox != nil {
-		wrapped, err := spec.Sandbox.wrap(spec)
-		if err != nil {
-			return nil, err
-		}
-		spec = wrapped
+		return f.startSandboxed(ctx, spec)
 	}
 	cmd := spec.BuildCmd(ctx)
 	cmd.Stderr = spec.Stderr
@@ -95,6 +93,23 @@ func (f *OSExecFactory) Start(ctx context.Context, spec LaunchSpec) (Handle, err
 // stdoutDrainGrace is how long stdout stays readable after the process
 // exits when the consumer has not called Wait yet. A variable for tests.
 var stdoutDrainGrace = 5 * time.Second
+
+// startSandboxed hands the process to its sandbox runtime. The environment is
+// complete there (nothing is inherited), so an inherited one is spelled out.
+func (f *OSExecFactory) startSandboxed(ctx context.Context, spec LaunchSpec) (Handle, error) {
+	env := spec.Env
+	if env == nil {
+		env = os.Environ()
+	}
+	stderr := spec.Stderr
+	if stderr == nil {
+		stderr = f.Stderr
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	return sandbox.Start(ctx, spec.Sandbox.Runtime, sandbox.Cmd{Args: spec.Command, Env: env, Dir: spec.WorkDir, Stderr: stderr}, spec.Sandbox.Policy)
+}
 
 type osHandle struct {
 	cmd    *exec.Cmd

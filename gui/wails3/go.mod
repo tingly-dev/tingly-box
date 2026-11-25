@@ -16,6 +16,8 @@ replace github.com/tingly-dev/tingly-box/ai => ../../ai
 
 replace github.com/tingly-dev/tingly-box/agentboot => ../../agentboot
 
+replace github.com/tingly-dev/tingly-box/sandbox => ../../sandbox
+
 replace github.com/tingly-dev/tingly-box/swagger => ../../swagger
 
 replace github.com/tingly-dev/tingly-box/afk => ../../afk
@@ -169,6 +171,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.8.0 // indirect
 	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000 // indirect
+	github.com/tingly-dev/tingly-box/sandbox v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/imbot v0.1.0 // indirect
 	github.com/tingly-dev/tingly-box/projects v0.0.0-00010101000000-000000000000 // indirect
 	github.com/tingly-dev/tingly-box/remote v0.0.0-00010101000000-000000000000 // indirect

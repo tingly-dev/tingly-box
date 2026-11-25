@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
+	"github.com/tingly-dev/tingly-box/sandbox"
 )
 
 // memStore records what the engine writes.
@@ -99,8 +100,8 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 
 func TestLaunchSignatureChangesWhenTheSandboxChanges(t *testing.T) {
 	off := agentboot.ExecutionOptions{}
-	on := agentboot.ExecutionOptions{Sandbox: &process.Sandbox{Home: "/h", Mounts: []process.Mount{{Path: "/w"}}}}
-	more := agentboot.ExecutionOptions{Sandbox: &process.Sandbox{Home: "/h", Mounts: []process.Mount{{Path: "/w"}, {Path: "/lib"}}}}
+	on := agentboot.ExecutionOptions{Sandbox: &process.Sandbox{Runtime: "bwrap", Policy: sandbox.Policy{Storage: sandbox.Storage{Mounts: []sandbox.Mount{{Path: "/w"}}}}}}
+	more := agentboot.ExecutionOptions{Sandbox: &process.Sandbox{Runtime: "bwrap", Policy: sandbox.Policy{Storage: sandbox.Storage{Mounts: []sandbox.Mount{{Path: "/w"}, {Path: "/lib"}}}}}}
 	if launchSignature(off) == launchSignature(on) || launchSignature(on) == launchSignature(more) {
 		t.Fatal("turning the sandbox on or changing its mounts must restart the resident process")
 	}

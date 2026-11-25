@@ -2,11 +2,14 @@ module github.com/tingly-dev/tingly-box/agentboot
 
 go 1.26.0
 
+replace github.com/tingly-dev/tingly-box/sandbox => ../sandbox
+
 require (
 	github.com/anthropics/anthropic-sdk-go v1.57.0
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.12.1
+	github.com/tingly-dev/tingly-box/sandbox v0.0.0-00010101000000-000000000000
 	go.uber.org/goleak v1.3.0
 )
 
