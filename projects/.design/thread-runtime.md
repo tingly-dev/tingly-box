@@ -82,6 +82,8 @@ claude ──stdio──┐                         ┌── Projects 引擎（
 
 ## 3 统一接口
 
+> **已被 §11 取代**：实现时按用户要求把策略拆成五个轴，并放进独立的 `sandbox/` 模块。下面是最初的草案，留作对照。
+
 ```go
 package sandbox
 
@@ -306,3 +308,45 @@ worker 可能以 yolo 模式跑，此时沙箱是唯一的防线，要按“沙�
 - **验证**：bwrap 真实运行的单元测试（秘密文件不可见、只读 config 写不进、环境变量被滤、杀掉后无残留进程、无 bwrap 拒绝启动）；挂载计划测试；`TB_SANDBOX_LIVE=1` 的端到端：真实 `claude` 2.1.259 以 `bypassPermissions` 在沙箱里跑，本地脚本模型让它的 Bash 去探家目录、植入的秘密、token 环境变量、仓库 `.git/config` 并在工作区写文件——全部挡住、写入落到宿主、转录在宿主读的位置。`TB_SANDBOX_LIVE_HOST=1` 是对照（不进沙箱），探针此时看到整个家目录，证明探针有效。端到端发现并修了一个问题：长路径的转录目录名被 Claude Code 截断加哈希，原先挂错目录。
 
 未做：资源上限（`systemd-run --user --scope`）；运行中经审批新加的目录（`AddDirectories`）不会自动挂进沙箱；`library/.cache` 线程间共享；网络（按决定后补）。宿主侧 agentboot 的 `SessionReader` 也没按长路径规则找转录（已告知协调者）。
+
+## 11 隔离层：独立模块、五轴行为模型（2026-11-25，已实现）
+
+用户原话：“我们的实现有可能相对独立么，这样未来实现上，shim 可以在一处考虑，而不必改动太多不同模块……我们自己得定义好 interface 和行为模型，否则就会变成每个都独立适配了”；“隔离这里，我们一般就是网络，存储，执行的隔离，各一更明确清晰一些（以便于组合配置和管理）”。
+
+v1 原本把 bwrap 写在 agentboot、Projects、API enum 和前端四处，加一个运行时要改四处。现在：
+
+**一个模块 `sandbox/`**（独立 Go module，不依赖本仓库其它模块；`sandbox/CLAUDE.md`）：
+
+```
+sandbox/
+  sandbox.go      行为模型 Policy、接口 Runtime、注册表、Start（统一的校验与通用部分）
+  exec.go         ExecCommand：包一层命令的运行时共用的起进程原语
+  host.go         host 运行时（不隔离，参考实现）
+  conformance/    按轴组织的对抗性一致性测试：conformance.Run(t, rt)
+  bwrap/          bubblewrap shim
+```
+
+**行为模型：五个轴，各有级别，单独配置、自由组合**
+
+| 轴 | 级别 | 说明 |
+|---|---|---|
+| storage（文件） | `host` / `confined` | confined：只有声明的挂载（同路径；后挂的盖在先挂的上面，只读文件可以盖住可写目录）、私有 /tmp、空 HOME |
+| network（网络） | `open` / `none`（以后 `allowlist`） | none：连宿主本机的服务也不行 |
+| exec（进程） | `host` / `confined` | confined：独立命名空间、无特权、不能再建命名空间、看不到别的进程、杀掉即全灭 |
+| credentials（凭据） | `inherit` / `explicit` | explicit：只给点名的环境变量；横跨另外三轴的秘密（文件靠 storage、注入的 token 靠 network）在这里集中声明 |
+| resources（资源） | `unlimited` / `limited` | CPU、内存、进程数 |
+
+生命周期（起停、暂停、快照）是接口的动作，不是策略；可见性与审计是管理面，不在模型里。
+
+**接口**：`Runtime{Info() (名字、隔离等级、每轴支持的级别), Check(ctx) (本机能否运行、为什么), Start(ctx, Cmd, Policy) Proc}`。调用方只经 `sandbox.Start(ctx, name, cmd, policy)`：逐轴校验运行时能否给出要求的级别（不能就 `ErrUnavailable`，指明哪一轴），检查本机可用，再应用各运行时都一样的部分（credentials 的环境变量过滤、HOME），最后交给运行时。永不降级、永不退回宿主。`Proc` 与 agentboot 的 `process.Handle` 方法集相同。
+
+**各层只依赖接口**：
+- agentboot：`process.Sandbox{Runtime 名, Policy}`；`OSExecFactory` 只调 `sandbox.Start`。不含任何 bwrap 代码。
+- Projects：按线程构造 Policy（这是 Projects 的业务：线程该看到什么），运行时名存成字符串、用注册表校验；`/projects/runtime` 列出本构建带的运行时（名字、隔离等级、本机可用与原因、线程在其中各轴的级别）。带哪些运行时由一行 import 决定（`projects/internal/project/sandbox.go`）。
+- 前端：选项来自接口；不可用的灰掉并给原因；选中后显示各轴级别。轴和级别是固定词汇，新运行时不需要新文案（没有专门名字的就显示它的名字）。
+
+**加一个 shim 只需**：`sandbox/<名>/` 下实现 `Runtime`、`init` 里注册、一行 `conformance.Run(t, …)` 测试通过；在宿主程序里加一行 import。其它模块不动。
+
+**一致性测试**（每轴每级别一组，按运行时声明的支持项跑）：不支持的级别必须被拒绝；storage/confined：挂载外的文件不可见、只读挂载写不进、可写挂载写入落到宿主、HOME 为空、宿主家目录不可见；exec/confined：无 capability、NoNewPrivs、只看到少量进程、不能再建命名空间、kill 后后台进程不留；credentials/explicit：只剩点名的变量；network/none：连不上宿主回环上的监听；network/open：连得上。变异检查：去掉 bwrap 的 `--unshare-net` 或 `--unshare-pid`，相应用例失败（kill 用例确实抓到了残留进程）。
+
+**CI**：`sandbox/**` 触发 PR 检查；`daily.yml` 新增 `test-sandbox`（边界检查、vet、`-race` 测试，装 bubblewrap 并放开 Ubuntu 的 userns 限制，确认一致性测试没有被跳过）。
