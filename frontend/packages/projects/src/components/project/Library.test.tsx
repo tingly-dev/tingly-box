@@ -142,3 +142,38 @@ it('lists the threads scratch under .tmp, labelled as scratch', async () => {
     await screen.findByText('scratch.md');
     expect(requestedPaths()).toEqual(['', '.tmp', '.tmp/t1']);
 });
+
+it('asks for the files newest first by default, and reloads them when the order changes', async () => {
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('notes.md');
+    const sorts = () => m.fetch.mock.calls
+        .filter((c) => String(c[0]).includes('/library/tree'))
+        .map((c) => { const u = new URL(String(c[0]), 'http://x'); return `${u.searchParams.get('sort')}-${u.searchParams.get('order')}`; });
+    expect(sorts()).toEqual(['time-desc']);
+
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    fireEvent.click(await screen.findByRole('option', { name: 'library.sortNameAsc' }));
+    await waitFor(() => expect(sorts()).toEqual(['time-desc', 'name-asc']));
+    expect(localStorage.getItem('tingly-project.library.sort')).toBe('name-asc');
+});
+
+it('lists a name that can be read and downloads the file under it', async () => {
+    const click = vi.fn();
+    let download = '';
+    const URLspy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    const anchor = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { download = this.download; click(); });
+    // The server lists an upload under its original name, its id only in the path.
+    const entry = { name: 'report final.md', path: 'uploads/0123456789ab-report final.md', kind: 'file' as const, size: 12, updated_at: '2026-10-22T00:00:00Z', origin: 'upload' };
+    m.fetch.mockImplementation((url: string) => {
+        const u = new URL(url, 'http://x');
+        if (u.pathname.endsWith('/library/tree')) return Promise.resolve(json({ dir: '/lib', path: '', entries: [entry] }));
+        return Promise.resolve(new Response('data'));
+    });
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('report final.md');
+    fireEvent.click(within(screen.getByRole('treeitem', { name: 'report final.md' })).getByRole('button', { name: 'library.download' }));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(download).toBe('report final.md');
+    URLspy.mockRestore();
+    anchor.mockRestore();
+});

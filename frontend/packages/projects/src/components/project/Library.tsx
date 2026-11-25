@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { Box, Button, IconButton, LinearProgress, Tooltip, Typography } from '@mui/material';
+import { Box, Button, IconButton, LinearProgress, MenuItem, Select, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@tingly/ui';
-import { fontMono } from '@tingly/ui/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { api, apiFetch, unwrap, type LibraryEntry, type LibraryTree } from '../../client';
 import { Delete, Download, UploadFile } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
@@ -22,6 +22,17 @@ export const downloadName = (path: string): string => {
 };
 
 const toPreview = (n: Node): PreviewFile => ({ path: n.path, name: n.name, size: n.size });
+
+/** How the files of every open folder are ordered: by modified time or name, each way. */
+export type LibrarySort = 'time-desc' | 'time-asc' | 'name-asc' | 'name-desc';
+
+const SORTS: LibrarySort[] = ['time-desc', 'time-asc', 'name-asc', 'name-desc'];
+
+/** A browser remembers the last order picked; time, newest first, is the default. */
+const readSort = (): LibrarySort => {
+    const saved = readLocal('library.sort');
+    return SORTS.includes(saved as LibrarySort) ? (saved as LibrarySort) : 'time-desc';
+};
 
 /** The folders left open in a project's library, kept in this browser. */
 function useExpanded(projectId: string): [string[], (paths: string[]) => void] {
@@ -54,6 +65,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     const [dir, setDir] = useState('');
     const [uploading, setUploading] = useState(false);
     const [tick, setTick] = useState(0);
+    const [sort, setSort] = useState<LibrarySort>(readSort);
     const [expanded, setExpanded] = useExpanded(projectId);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
     // The images of the previewed file's folder, in the order the tree lists them.
@@ -61,13 +73,21 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     const listed = useRef(new Map<string, Node[]>());
 
     const load = useCallback(async (path: string): Promise<Node[]> => {
-        const res = await apiFetch(`/api/v1/projects/${projectId}/library/tree?path=${encodeURIComponent(path)}`);
+        const [by, order] = sort.split('-');
+        const res = await apiFetch(`/api/v1/projects/${projectId}/library/tree?path=${encodeURIComponent(path)}&sort=${by}&order=${order}`);
         if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
         const tree = (await res.json()) as LibraryTree;
         if (path === '') setDir(tree.dir);
         listed.current.set(path, tree.entries as Node[]);
         return tree.entries as Node[];
-    }, [projectId]);
+    }, [projectId, sort]);
+
+    // The order is a browser convenience; changing it reloads the open folders.
+    const changeSort = (next: LibrarySort) => {
+        writeLocal('library.sort', next);
+        setSort(next);
+        setTick((x) => x + 1);
+    };
 
     const upload = async (list: FileList) => {
         const form = new FormData();
@@ -89,13 +109,28 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     // authentication applies to downloads too, and a refusal (a folder over
     // the zip limits, say) is shown as the server's own message.
     const save = (url: string, filename: string) => saveFile(url, filename, (m) => notify(m, 'error'));
-    const download = (path: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, downloadName(path));
+    // A row already shows the server's display name (an upload without its
+    // stored id); the path-only callers still derive it from the path.
+    const download = (path: string, name?: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, name ?? downloadName(path));
     const downloadZip = (n: Node) => save(`/api/v1/projects/${projectId}/library/archive?path=${encodeURIComponent(n.path)}`, `${n.name}.zip`);
 
     return (
         <Box sx={{ p: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{t('library.intro')}</Typography>
+                <Select
+                    size="small"
+                    variant="standard"
+                    value={sort}
+                    onChange={(e) => changeSort(e.target.value as LibrarySort)}
+                    inputProps={{ 'aria-label': t('library.sort') }}
+                    sx={{ fontSize: fontSizes.sm }}
+                >
+                    <MenuItem value="time-desc">{t('library.sortTimeDesc')}</MenuItem>
+                    <MenuItem value="time-asc">{t('library.sortTimeAsc')}</MenuItem>
+                    <MenuItem value="name-asc">{t('library.sortNameAsc')}</MenuItem>
+                    <MenuItem value="name-desc">{t('library.sortNameDesc')}</MenuItem>
+                </Select>
                 <Button size="small" startIcon={<UploadFile />} onClick={() => input.current?.click()}>{t('library.add')}</Button>
             </Box>
             {dir && (
@@ -144,7 +179,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 ) : (
                     <>
                         <Tooltip title={t('library.download')}>
-                            <IconButton size="small" tabIndex={tabIndex} aria-label={t('library.download')} onClick={() => void download(n.path)}><Download fontSize="small" /></IconButton>
+                            <IconButton size="small" tabIndex={tabIndex} aria-label={t('library.download')} onClick={() => void download(n.path, n.name)}><Download fontSize="small" /></IconButton>
                         </Tooltip>
                         <Tooltip title={t('common.delete')}>
                             <IconButton size="small" tabIndex={tabIndex} aria-label={t('common.delete')} onClick={() => {

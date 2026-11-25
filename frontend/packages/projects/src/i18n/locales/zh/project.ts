@@ -169,6 +169,7 @@ export const project: Dict<typeof projectEn> = {
         add: '添加文件', empty: '还没有文件。', download: '下载', downloadZip: '下载为 zip', copyPath: '复制文件夹路径',
         tree: '资料库文件', tooLarge: '文件太大，无法预览。', notPreviewable: '无法预览此文件，请下载查看。',
         previousImage: '上一张', nextImage: '下一张', scratch: '线程临时文件',
+        sort: '文件排序', sortTimeDesc: '最新优先', sortTimeAsc: '最早优先', sortNameAsc: '名称 A–Z', sortNameDesc: '名称 Z–A',
     },
     projectSettings: {
         maxRunning: '同时运行的线程数',

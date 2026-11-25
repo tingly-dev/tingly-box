@@ -5,7 +5,7 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 ## 决定
 
 1. **逐层懒加载。** 只在打开文件夹时请求它那一层。资料库里有很多线程产出时，不再一次遍历整棵树。
-2. **新接口 `GET /projects/:id/library/tree?path=<dir>`**，返回 `{dir, path, entries[]}`，`entries` 是该目录的直接子项（`name`、`path`、`kind: dir|file`、`size`、`updated_at`、`origin`）。文件夹在前，之后文件，各按名字排序。旧的平铺 `GET /library` 仍在（上传接口还用它的返回形状），前端不再调用。
+2. **新接口 `GET /projects/:id/library/tree?path=<dir>&sort=time|name&order=desc|asc`**，返回 `{dir, path, entries[]}`，`entries` 是该目录的直接子项（`name`、`path`、`kind: dir|file`、`size`、`updated_at`、`origin`）。文件夹在前、按名字；文件按 `sort`/`order` 排，默认按修改时间倒序（见“上传的显示名与排序”）。旧的平铺 `GET /library` 仍在（上传接口还用它的返回形状），前端不再调用。
 3. **访问检查只收紧不放宽**（`Layout.ListLibraryDir`）：
    - 路径各段不能是 `..`，不能以 `.` 开头——**唯一例外是 `.tmp` 子树**（线程的 TMPDIR，见第 4 条），它既列出也可以直接请求；`.tmp` 之下的隐藏段（`.tmp/x/.h`）仍拒绝（400）。
    - 先走 `LibraryPath`（拒绝逃出资料库根），再 `EvalSymlinks` 确认真实路径仍在资料库内。
@@ -15,6 +15,24 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 4. **`.tmp` 子树可见（2026-11-17 改动，取代原“沿用隐藏”的决定）。** 线程留在 TMPDIR 里的文件此前在 UI 里完全不可见——“草稿”被划成了“看不见”。现在树里列出 `.tmp/`（每线程一个文件夹，`origin: "scratch"`），文件可以预览、下载、删除；`.tmp/<thread>` 文件夹在树里显示线程标题（handler 按 id 查线程），路径仍是真实路径。上传仍拒绝写入 `.tmp`（草稿归线程所有）。平铺 `GET /library` 同样列出（`origin: "scratch"`）。zip 下载按请求的路径生效：zip `.tmp/t` 可以，但根 zip 的扫描跳过点条目，所以交付物 zip 不会被 scratch 撑爆（200 文件 / 40 MB 限制只对直接请求的 scratch 文件夹生效）。其他点文件（`.hidden`、`outputs/.x`）同样隐藏。
 5. **来源 chip 去掉。** 平铺列表里每行一个“上传/线程产出”标签；树里 `outputs/` 目录本身已说明来源，标签只会增加噪音。`origin` 字段仍由接口返回。**2026-11-17：**`origin: "scratch"` 在树里重新用一个标签（“线程临时文件”），因为 scratch 的来源从路径看不出来了（见第 4 条）。
 6. **`.cache` 不列出（2026-11-17）。** 项目共享的工具缓存按约定住在 `library/.cache/`（线程靠提示词把 `GOMODCACHE` 等工具缓存变量指过去，见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10）。它与 `.tmp` 同为点目录，但归项目而非线程：树、平铺列表、文件下载和 zip 都不列出/不服务它；上传同样拒绝写入。
+
+## 上传的显示名与排序（2026-11-25）
+
+**问题。** 上传以 `uploads/<12 位十六进制 id>-<原文件名>` 落盘（`SaveAttachment`，id 只为保证唯一），树直接显示了磁盘名，列表全是 `013afc52a43f-pasted-text.txt` 这类前缀；文件顺序固定按名字，看不出时间，用户无法按时间浏览。
+
+**显示名。** 接口 `entries[].name` 现在是“给人看的名字”，`path` 仍是可直接下载/删除的真实路径：
+
+- `uploads/` 下**直接**放着、且匹配 `^[0-9a-f]{12}-.+$` 的**文件**，去掉一个前缀。只去**一个**：`SaveAttachment` 总是写 `<id>-<原名>`，所以原名本身以“12 位十六进制-”开头时存成 `<id>-<12 位>-…`，去掉第一个前缀正好还原原名（`uploads/` 之外不动，例如线程自己的 `outputs/0123456789ab-x.txt` 保持原样）。文件夹不剥前缀。
+- 判别不靠前端猜字符串：`displayLibraryName` 与下载文件名的 `DownloadName` 共用同一规则（`internal/project/attachment.go`），只在 API 层做。
+- `.tmp/<thread>` 文件夹仍由 handler 把 `name` 换成线程标题（`path` 不变）。
+
+**排序。** `ListLibraryDirOrdered`（`internal/project/library_root.go`）接受 `LibraryOrder{By: "time"|"name", Desc bool}`；`ListLibraryDir` 是默认的 `LibraryNewestFirst`（时间倒序）。
+
+- 文件夹永远在前；`By=time` 时文件夹按名字（目录 mtime 会随内容变化而抖动，不适合当排序键），`By=name` 时随方向。
+- 文件按 `updated_at` 或显示名排序，同值时按 `path`，结果稳定。
+- HTTP 层校验：`sort` 只能是 `time`/`name`，`order` 只能是 `asc`/`desc`，否则 400；缺省为 `time`+`desc`。
+
+**前端。** `Library.tsx` 头部有一个“排序”下拉（最新/最早/名称 A–Z/名称 Z–A），默认“最新优先”，按浏览器记在 `localStorage['tingly-project.library.sort']`。切换时把 `sort`/`order` 带给 `load()` 并触发已展开目录重新加载，行内下载直接用接口给的 `name` 作为保存文件名。
 
 ## 前端
 

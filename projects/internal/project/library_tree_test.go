@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,6 +108,66 @@ func TestListLibraryDirErrorKinds(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotDirectory)
 	_, err = l.ListLibraryDir("p", "..")
 	assert.ErrorIs(t, err, ErrInvalidLibraryPath)
+}
+
+// An upload is shown under the name it was given; only the id SaveAttachment
+// puts in front is dropped, and only for files directly in uploads/.
+func TestListLibraryDirShowsUploadsByTheirOriginalName(t *testing.T) {
+	l := Layout{Root: t.TempDir()}
+	lib := l.LibraryDir("p")
+	files := []string{
+		"uploads/0123456789ab-report final.pdf",
+		"uploads/0123456789ab-a-b.txt",
+		// An original name that itself looks like a stored one: the extra id is
+		// the only one removed, so the name the person gave it comes back.
+		"uploads/0123456789ab-fedcba987654-looks-stored.txt",
+		"uploads/notes.md",
+		"outputs/0123456789ab-x.txt",
+	}
+	for _, f := range files {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(lib, f)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(lib, f), []byte("x"), 0o644))
+	}
+
+	uploads, err := l.ListLibraryDirOrdered("p", "uploads", LibraryOrder{By: LibraryOrderName})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a-b.txt", "fedcba987654-looks-stored.txt", "notes.md", "report final.pdf"}, names(uploads))
+	// The real path is untouched: that is what downloads and deletes address.
+	assert.Equal(t, "uploads/0123456789ab-a-b.txt", uploads[0].Path)
+
+	outputs, err := l.ListLibraryDir("p", "outputs")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"0123456789ab-x.txt"}, names(outputs), "only uploads/ is rewritten")
+}
+
+func TestListLibraryDirOrder(t *testing.T) {
+	l := Layout{Root: t.TempDir()}
+	lib := l.LibraryDir("p")
+	times := map[string]time.Time{
+		"uploads/b.txt": time.Unix(300, 0),
+		"uploads/a.txt": time.Unix(100, 0),
+		"uploads/c.txt": time.Unix(200, 0),
+	}
+	for rel, at := range times {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(lib, rel)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(lib, rel), []byte("x"), 0o644))
+		require.NoError(t, os.Chtimes(filepath.Join(lib, rel), at, at))
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "uploads/z-dir"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, "uploads/a-dir"), 0o755))
+
+	order := func(o LibraryOrder) []string {
+		es, err := l.ListLibraryDirOrdered("p", "uploads", o)
+		require.NoError(t, err)
+		return names(es)
+	}
+
+	// Default: folders by name, files newest first.
+	assert.Equal(t, []string{"a-dir", "z-dir", "b.txt", "c.txt", "a.txt"}, order(LibraryNewestFirst))
+	assert.Equal(t, []string{"a-dir", "z-dir", "b.txt", "c.txt", "a.txt"}, order(LibraryOrder{}), "empty order means newest first")
+	assert.Equal(t, []string{"a-dir", "z-dir", "a.txt", "c.txt", "b.txt"}, order(LibraryOrder{By: LibraryOrderTime}))
+	assert.Equal(t, []string{"a-dir", "z-dir", "a.txt", "b.txt", "c.txt"}, order(LibraryOrder{By: LibraryOrderName}))
+	assert.Equal(t, []string{"z-dir", "a-dir", "c.txt", "b.txt", "a.txt"}, order(LibraryOrder{By: LibraryOrderName, Desc: true}))
 }
 
 // openRel opens a library file the way the HTTP layer does and returns its content.

@@ -169,6 +169,7 @@ export const project: PluralDict<typeof en> = {
         add: 'Добавить файлы', empty: 'Файлов пока нет.', download: 'Скачать', downloadZip: 'Скачать в zip', copyPath: 'Скопировать путь к папке',
         tree: 'Файлы Библиотеки', tooLarge: 'Файл слишком велик для просмотра.', notPreviewable: 'Этот файл нельзя просмотреть. Скачайте его.',
         previousImage: 'Предыдущее изображение', nextImage: 'Следующее изображение', scratch: 'Временные файлы (TMPDIR)',
+        sort: 'Сортировка файлов', sortTimeDesc: 'Сначала новые', sortTimeAsc: 'Сначала старые', sortNameAsc: 'Имя А–Я', sortNameDesc: 'Имя Я–А',
     },
     projectSettings: {
         maxRunning: 'Одновременно работающих потоков',
