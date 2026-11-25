@@ -25,6 +25,8 @@ import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { announceFeatureDisabled, FEATURE_DISABLED_EVENT } from './featureNotice';
 import { useUiShell } from '@/shell/uiShell';
+import { setTitleAttention, useDocumentTitle } from '@tingly/ui';
+import { pageLabel } from './pageTitle';
 
 // The eye in the Agent sidebar header introduces itself once: a callout
 // pointing at it until the user closes it (or uses the eye).
@@ -86,6 +88,11 @@ const LayoutInner = ({ children }: LayoutProps) => {
         () => resolveActiveActivity(activityItems, location.pathname, sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity')),
         [activityItems, location.pathname],
     );
+
+    // The tab names the page; pages with a finer focus (an open thread) name it themselves.
+    useDocumentTitle([pageLabel(activityItems, location.pathname, activeActivity, t('layout.bots'))], 0);
+    const projectsAttention = !!activityItems.find(item => item.key === 'projects')?.attention;
+    useEffect(() => setTitleAttention(projectsAttention), [projectsAttention]);
 
     // Persist the active activity for cross-session boot. Each activity
     // re-opens at its defaultPath (the scenario activity opens its overview).

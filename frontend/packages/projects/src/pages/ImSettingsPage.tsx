@@ -1,7 +1,7 @@
 import { ImChatLabel } from '../components/im/ImChatLabel';
 import { useCallback, useMemo, useState } from 'react';
 import { Box, Button, Link, Skeleton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
-import { EmptyState, PageHeader, Surface } from '@tingly/ui';
+import { EmptyState, PageHeader, Surface, useDocumentTitle } from '@tingly/ui';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ function Dot({ color }: { color: string }) {
  */
 export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {}) {
     const { t } = useTranslation('projects');
+    useDocumentTitle([t('im.settings.title')]);
     const notify = useNotify();
     const { im, paths, embedded } = useProjectsHost();
     const platformLabel = usePlatformLabel();

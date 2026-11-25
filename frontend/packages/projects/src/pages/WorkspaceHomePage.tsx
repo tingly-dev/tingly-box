@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CoachMark, PageHeader, Surface } from '@tingly/ui';
+import { CoachMark, PageHeader, Surface, useDocumentTitle } from '@tingly/ui';
 import { IM_SIDEBAR_ANCHOR_ID } from '../components/ProjectsSidebar';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -122,6 +122,7 @@ function ImLine({ bindings, directory, headerRef, onManage }: {
  */
 export default function WorkspaceHomePage() {
     const { t } = useTranslation('projects');
+    useDocumentTitle([t('workspace.title')]);
     const navigate = useNavigate();
     const { paths: routes, embedded, im } = useProjectsHost();
     const hasIm = !!(im && routes.im);

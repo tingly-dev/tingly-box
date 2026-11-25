@@ -8,13 +8,14 @@ import { ProjectCard } from '../components/project/ProjectCard';
 import { NewProjectDialog } from '../components/project/NewProjectDialog';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectsHost } from '../host/ProjectsHost';
-import { EmptyState, PageHeader } from '@tingly/ui';
+import { EmptyState, PageHeader, useDocumentTitle } from '@tingly/ui';
 
 // Search shows once a tab lists more projects than this.
 const SEARCH_FROM = 6;
 
 export default function ProjectsPage() {
     const { t } = useTranslation('projects');
+    useDocumentTitle([t('projects.title')]);
     const navigate = useNavigate();
     const notify = useNotify();
     const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();

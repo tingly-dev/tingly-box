@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDocumentTitle } from '@tingly/ui';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Popover, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +31,7 @@ import { useTranscript } from '../hooks/useTranscript';
 import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { readLocal, writeLocal } from '../utils/storage';
-import { needsUser } from '../components/project/threadStatus';
+import { needsUser, threadRef } from '../components/project/threadStatus';
 import { changesLiveTasks } from '../components/workdir/backgroundTasks';
 import { ControlTooltip } from '../components/ControlTooltip';
 import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../components/composerPicker';
@@ -252,6 +253,8 @@ export default function ProjectPage() {
     });
 
     const selected = threads.find((th) => th.id === threadId);
+    // The tab names the focus: the open thread, else the coordinator, then the project.
+    useDocumentTitle([selected ? threadRef(selected) : project && t('thread.backCoordinator'), project?.name]);
     const settings = useThreadSettings(selected, false, (saved) => setThreads((list) => list.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, false) : th)));
     // A turn is in flight while the thread works or waits on a request it
     // raised (approvals only exist inside a running turn).
