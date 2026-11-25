@@ -72,8 +72,10 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 
 // providerTransportChain layers the generic provider round-trippers (rule
 // flags, advisor loopback stamp, logging) over base. Shared by the OpenAI and
-// Anthropic constructors.
+// Anthropic constructors. The read-only recordTransport sits below the rule
+// flags so it observes the final wire headers and the provider's raw response.
 func providerTransportChain(base http.RoundTripper, provider *typ.Provider) http.RoundTripper {
+	base = wrapWithRecordTransport(base)
 	return wrapWithLogging(wrapWithAdvisorLoopback(wrapWithRuleFlags(base, provider, true)), provider)
 }
 

@@ -1,6 +1,7 @@
 package obs
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +41,45 @@ func TestFingerprintHeaders_AllowlistAndRedaction(t *testing.T) {
 		_, ok := got[k]
 		assert.False(t, ok, "%s must not survive fingerprint redaction", k)
 	}
+}
+
+func TestFingerprintUpstreamHeaders_AllowlistAndRedaction(t *testing.T) {
+	headers := map[string]string{
+		"Content-Type":                       "application/json",
+		"X-Request-Id":                       "req_0123456789abcdef",
+		"Cf-Ray":                             "8c1e-SJC",
+		"X-Ms-Request-Id":                    "abc-def",
+		"Anthropic-Ratelimit-Requests-Limit": "1000",
+		"Openai-Organization":                "org-account-id",
+		"X-Api-Key":                          "sk-secret",
+		"Set-Cookie":                         "sid=abc",
+		"X-Some-Internal-Debug-Header":       "nope",
+	}
+	got := FingerprintUpstreamHeaders(headers)
+	require.NotNil(t, got)
+	assert.Equal(t, "application/json", got["content-type"])
+	assert.Equal(t, "req_*", got["x-request-id"], "id-bearing headers are patternized")
+	assert.Equal(t, "8c1e-*", got["cf-ray"])
+	assert.Equal(t, "abc-*", got["x-ms-request-id"])
+	assert.Equal(t, "1000", got["anthropic-ratelimit-requests-limit"], "vendor rate-limit headers are kept")
+	for _, k := range []string{"openai-organization", "x-api-key", "set-cookie", "x-some-internal-debug-header"} {
+		_, ok := got[k]
+		assert.False(t, ok, "%s must not survive upstream redaction", k)
+	}
+}
+
+func TestFingerprintUpstreamHeaders_TruncatesValues(t *testing.T) {
+	got := FingerprintUpstreamHeaders(map[string]string{"Server": strings.Repeat("a", 400)})
+	require.NotNil(t, got)
+	assert.Len(t, got["server"], maxHeaderValueLen)
+}
+
+func TestBuildUpstreamResponse(t *testing.T) {
+	up := BuildUpstreamResponse(429, map[string]string{"Server": "envoy", "Set-Cookie": "x"})
+	require.NotNil(t, up)
+	assert.Equal(t, 429, up.StatusCode)
+	assert.Equal(t, "envoy", up.Headers["server"])
+	assert.NotContains(t, up.Headers, "set-cookie")
 }
 
 func TestRedactFullHeaders(t *testing.T) {

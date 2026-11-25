@@ -27,11 +27,19 @@ type ResponseFingerprint struct {
 	Protocol   string `json:"protocol,omitempty"`
 	StatusCode int    `json:"status_code,omitempty"`
 
-	// Headers are the response headers, already filtered to a safe allowlist
-	// and with id-bearing values reduced to patterns. Provider raw headers are
-	// NOT available through the SDK forwarding path (Phase 3 wire recorder);
-	// today these are the gateway's own response headers.
+	// Headers are the gateway's own response headers, already filtered to a
+	// safe allowlist and with id-bearing values reduced to patterns. The
+	// provider's raw headers are captured separately in UpstreamResponse by
+	// the read-only wire transport.
 	Headers map[string]string `json:"headers,omitempty"`
+
+	// UpstreamResponse is the provider's raw response status and allowlisted
+	// headers, captured read-only at the wire transport (recordTransport).
+	// Unlike Headers (the gateway's response), this is what the upstream
+	// actually sent, which is the strongest passive serving-path signal
+	// (model-fingerprinting.md §3.3/§5). Nil unless the wire tap saw a
+	// response for the final attempt.
+	UpstreamResponse *UpstreamResponse `json:"upstream_response,omitempty"`
 
 	// Model is the model string echoed in the response body. Caution: the
 	// gateway rewrites this to the response model, so it is not identity
@@ -57,6 +65,14 @@ type ResponseFingerprint struct {
 	Stream *StreamFingerprint `json:"stream,omitempty"`
 
 	ElapsedMs int64 `json:"elapsed_ms,omitempty"`
+}
+
+// UpstreamResponse is the provider's raw response metadata captured at the
+// wire transport: the status code plus the allowlisted, pattern-reduced
+// headers. The response body is never read or retained.
+type UpstreamResponse struct {
+	StatusCode int               `json:"status_code,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
 }
 
 // UsageFingerprint normalises the two common usage shapes (OpenAI
@@ -161,6 +177,83 @@ var idBearingHeaders = map[string]bool{
 	"x-amzn-requestid": true,
 }
 
+// upstreamResponseHeaderAllowlist is the provider-response subset kept in the
+// fingerprint's upstream_response. It is a deliberate allowlist rather than a
+// denylist because provider headers can carry account identity and secrets
+// (cookies, keys, org/project ids). It mirrors the gateway allowlist and adds
+// the edge / rate-limit / vendor headers that actually reveal a serving path:
+// official API vs aggregator, region, CDN and serving stack.
+//
+// Account-identifying headers that only appear on provider responses
+// (openai-organization, openai-project) are intentionally excluded: they say
+// which account was billed, not which path served the request.
+var upstreamResponseHeaderAllowlist = map[string]bool{
+	// Generic transport / cache / edge.
+	"content-type":      true,
+	"content-length":    true,
+	"cache-control":     true,
+	"server":            true,
+	"via":               true,
+	"date":              true,
+	"cf-cache-status":   true,
+	"x-served-by":       true,
+	"x-cache":           true,
+	"x-timer":           true,
+	"x-vercel-id":       true,
+	"x-goog-request-id": true,
+
+	// Request correlation ids (values are patternized, never stored raw).
+	"x-request-id":          true,
+	"request-id":            true,
+	"cf-ray":                true,
+	"x-amzn-requestid":      true,
+	"x-amz-apigw-id":        true,
+	"x-ms-request-id":       true,
+	"x-cloud-trace-context": true,
+
+	// Latency stamps emitted by common proxies/services.
+	"openai-processing-ms":          true,
+	"x-envoy-upstream-service-time": true,
+	"x-ms-region":                   true,
+
+	// Rate-limit surface: vendors (OpenAI, Anthropic, Azure) expose different
+	// header families here, so presence/shape is itself a serving-path clue.
+	"x-ratelimit-limit-requests":                  true,
+	"x-ratelimit-remaining-requests":              true,
+	"x-ratelimit-limit-tokens":                    true,
+	"x-ratelimit-remaining-tokens":                true,
+	"x-ratelimit-reset-requests":                  true,
+	"x-ratelimit-reset-tokens":                    true,
+	"retry-after":                                 true,
+	"anthropic-ratelimit-requests-limit":          true,
+	"anthropic-ratelimit-requests-remaining":      true,
+	"anthropic-ratelimit-requests-reset":          true,
+	"anthropic-ratelimit-tokens-limit":            true,
+	"anthropic-ratelimit-tokens-remaining":        true,
+	"anthropic-ratelimit-tokens-reset":            true,
+	"anthropic-ratelimit-input-tokens-limit":      true,
+	"anthropic-ratelimit-input-tokens-remaining":  true,
+	"anthropic-ratelimit-input-tokens-reset":      true,
+	"anthropic-ratelimit-output-tokens-limit":     true,
+	"anthropic-ratelimit-output-tokens-remaining": true,
+	"anthropic-ratelimit-output-tokens-reset":     true,
+}
+
+// upstreamResponseIDBearingHeaders are reduced to a prefix pattern in
+// upstream_response: they correlate one request but are not a serving-path
+// signal, so the raw value must not persist.
+var upstreamResponseIDBearingHeaders = map[string]bool{
+	"x-request-id":          true,
+	"request-id":            true,
+	"cf-ray":                true,
+	"x-amzn-requestid":      true,
+	"x-amz-apigw-id":        true,
+	"x-ms-request-id":       true,
+	"x-goog-request-id":     true,
+	"x-vercel-id":           true,
+	"x-cloud-trace-context": true,
+}
+
 // RedactFullHeaders copies headers for persistence on the full final_response:
 // sensitive names are dropped, values are truncated, and the map is bounded.
 // Unlike FingerprintHeaders it keeps non-sensitive headers (debugging value).
@@ -184,22 +277,37 @@ func RedactFullHeaders(h map[string]string) map[string]string {
 	return out
 }
 
-// FingerprintHeaders returns the allowlisted subset of response headers, with
-// id-bearing values reduced to patterns. Never returns raw ids.
+// FingerprintHeaders returns the allowlisted subset of the gateway's response
+// headers, with id-bearing values reduced to patterns. Never returns raw ids.
 func FingerprintHeaders(h map[string]string) map[string]string {
+	return filterHeaders(h, fingerprintHeaderAllowlist, idBearingHeaders)
+}
+
+// FingerprintUpstreamHeaders returns the allowlisted subset of the provider's
+// raw response headers, with id-bearing values reduced to patterns. It uses a
+// wider (vendor-aware) allowlist than FingerprintHeaders and drops anything
+// not named: provider headers can carry account identity or secrets.
+func FingerprintUpstreamHeaders(h map[string]string) map[string]string {
+	return filterHeaders(h, upstreamResponseHeaderAllowlist, upstreamResponseIDBearingHeaders)
+}
+
+// filterHeaders applies an allowlist to a header map: sensitive names and
+// names outside the allowlist are dropped, id-bearing values are patternized,
+// values are truncated, and the result is bounded.
+func filterHeaders(h map[string]string, allowlist, idBearing map[string]bool) map[string]string {
 	if len(h) == 0 {
 		return nil
 	}
 	out := make(map[string]string)
 	for k, v := range h {
 		lk := strings.ToLower(k)
-		if sensitiveHeaders[lk] || !fingerprintHeaderAllowlist[lk] {
+		if sensitiveHeaders[lk] || !allowlist[lk] {
 			continue
 		}
 		if len(out) >= maxFingerprintHeaders {
 			break
 		}
-		if idBearingHeaders[lk] {
+		if idBearing[lk] {
 			v = IDPattern(v)
 		}
 		out[lk] = truncate(v, maxHeaderValueLen)
@@ -208,6 +316,16 @@ func FingerprintHeaders(h map[string]string) map[string]string {
 		return nil
 	}
 	return out
+}
+
+// BuildUpstreamResponse reduces a provider response's status and headers to
+// the compact form stored on a fingerprint. The caller passes only a status
+// and headers — the body is never read.
+func BuildUpstreamResponse(statusCode int, headers map[string]string) *UpstreamResponse {
+	return &UpstreamResponse{
+		StatusCode: statusCode,
+		Headers:    FingerprintUpstreamHeaders(headers),
+	}
 }
 
 // IDPattern reduces a provider-issued id to a prefix pattern so the raw value

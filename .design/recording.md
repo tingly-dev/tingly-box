@@ -2,7 +2,8 @@
 
 > 适用对象:tingly-box 后端 / 前端贡献者。
 > 状态:**Phase 1、1.5、2 已落地;响应侧 `final_response` 已恢复并带指纹采集(§3.6);
-> Phase 3 wire(`upstream_response`)仍待实施。** 当前点位开放范围见 §3.5 / §3.6,历史问题与交付记录见 §3 / §6。obs 包内部的 pipeline 化重构规划见
+> Phase 3 wire 的响应头/status 部分已落地(provider 原始头进 `fingerprint.upstream_response`),
+> wire 请求字段与原始 body 仍待实施。** 当前点位开放范围见 §3.5 / §3.6,历史问题与交付记录见 §3 / §6。obs 包内部的 pipeline 化重构规划见
 > `internal/obs/PLANNING.md`(Phase 2),本文与其互补:PLANNING 管
 > "record 怎么被采集与导出",本文管 "record 由谁启用、在哪些层出现、
 > 与 rule flag 体系怎么融合"。
@@ -170,12 +171,13 @@ chain 级 StagePost 录的则是 SDK 参数形态(拿不到 wire header)。
 |------|------|----------|------|
 | `client_request` | 入站请求 | client 发来的原始请求(transform 前) | ✅ handler 入口 + StagePre |
 | `upstream_request` | 出站请求 | 发往 provider 的最终请求(transform 后) | ✅ StagePost |
-| `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ❌ 值域内、**UI 不放开**(无采集实现,Phase 3 wire recorder 落地时开放——不上死开关) |
+| `upstream_response` | 服务返回 | provider 的原始响应(wire 级) | ⚠️ **部分**:wire 级 `recordTransport` 已采 provider 的 status + 脱敏响应头,但只落在 `fingerprint.upstream_response`,该点位本身仍 **UI 不放开**(响应 body/wire 请求字段未采) |
 | `final_response` | 最终返回 | 返回给 client 的响应:状态码、脱敏响应头、限长 body;并附一条紧凑的 `fingerprint`(usage / finish_reason / id 模式 / system_fingerprint / chunk 结构与时序) | ✅ **已恢复**(§3.6)。流式在原生 Anthropic hooks 与 OpenAI chat/responses 透传路径都接上了 chunk tap |
 
-> **当前支持面 = 两个 request 点位 + `final_response`。** `upstream_response`
-> (provider 原始响应)仍暂停,待 Phase 3 wire recorder;provider 的原始响应头
-> 也属于这一层(见 §3.6 局限)。
+> **当前支持面 = 两个 request 点位 + `final_response`。** provider 原始响应的
+> status 与响应头已能从 wire transport 只读采到,并写入
+> `fingerprint.upstream_response`(§3.6);但独立的 `upstream_response`
+> 点位(provider 原始 body / wire 请求字段)仍暂停。
 
 > **命名:`final_response` 而非 `client_response`。** `client_request` 里
 > "client" 是来源(客户端发出的请求);若照抄成 `client_response`,"client"
@@ -238,6 +240,11 @@ tap 只保留结构与时间,**不缓存 chunk body**——既补上"质量",又
 - `headers`:响应头 allowlist + 值截断;id 类头(`x-request-id`/`cf-ray` 等)
   只落前缀模式(如 `req_*`);`authorization`/`set-cookie`/`cookie`/`*api-key`
   永不落盘
+- `upstream_response`:`{status_code, headers}` —— **provider 自己的**原始
+  status + 响应头,由只读的 wire `recordTransport` 采到(见下文"上游 headers
+  采集");`headers` 与上面 `headers` 分开,后者是网关自己的响应头。用的是
+  更宽的 upstream allowlist(含 vendor rate-limit / edge 头),但同样丢弃
+  敏感头、id 头只落模式、值截断。响应 body 绝不读取
 - `model`(响应 body 回显;经网关会被重写,见局限)、`id_pattern`
   (`chatcmpl-*`/`msg_*`)、`system_fingerprint`、`service_tier`
 - `finish_reasons`(去重)
@@ -255,6 +262,27 @@ tap 只保留结构与时间,**不缓存 chunk body**——既补上"质量",又
   **指纹在截断前计算**,截断不影响指纹。
 - 流式 chunk 只累计聚合统计,不保留 body;`inter_ms` 采样上限 4096,避免长流内存。
 - 只读观测:任何 tap/hook 错误都不会中断 client 流。
+
+**上游 headers 采集(wire `recordTransport`)**:
+
+- 插入点:`internal/client/record_transport.go` 的 `recordTransport` 是只读
+  `http.RoundTripper`,挂在 wire transport 最内层——`providerTransportChain`
+  的 rule-flag 层之内、`createSessionBoundTransport`(所有 vendor 链)之下,
+  Google 非 OAuth 分支单独挂。它看到的是所有 header 改写之后的出站请求和
+  provider 自己的响应。
+- 取用方式:recorder 由 `EnsureProtocolRecorder` 同时写入 gin ctx 和
+  `c.Request` 的 context(`recording.WithRecorder`);transport 用
+  `recording.RecorderFromContext` 取用,没有 recorder 的请求直接透传。
+- 开关:同一个 `final_response` 采集点位;`SetUpstreamResponse` 内部再判一次
+  `Wants(final_response)`,默认关闭与 §3.6 一致。
+- 只读:不读/不缓存/不替换/不关闭 `resp.Body`,不改变请求;failover 多次
+  尝试时后一次覆盖前一次(落最终实际服务的那次 attempt)。
+- 脱敏(`obs.FingerprintUpstreamHeaders`):显式 allowlist(通用 transport/
+  edge 头 + vendor rate-limit 头);`authorization`/`set-cookie`/`cookie`/
+  `*api-key` 永不落盘;`x-request-id`/`cf-ray`/`x-amzn-requestid`/
+  `x-ms-request-id`/`x-goog-request-id`/`x-vercel-id`/`x-cloud-trace-context`
+  等 id 头只落前缀模式;`openai-organization`/`openai-project` 这类账户
+  身份头(不是 serving-path)丢弃;值截断 256 字节,最多 32 个头。
 
 **落盘格式与轮转/清理**:
 
@@ -275,6 +303,7 @@ tap 只保留结构与时间,**不缓存 chunk body**——既补上"质量",又
 | `target.reported_model` | `fingerprint.model`(through_tb 下被网关重写) |
 | `t0.requests[].status` / `elapsed_ms` | `fingerprint.status_code` / `elapsed_ms` |
 | `headers.allowlist` | `fingerprint.headers`(仅网关响应头,见局限) |
+| provider 原始 `status` / `headers.allowlist` | `fingerprint.upstream_response.status_code` / `.headers`(wire `recordTransport` 采到) |
 | `id_patterns` | `fingerprint.id_pattern` |
 | `system_fingerprint` / `service_tier` | 同名 `fingerprint.*` |
 | `finish_reason_vocab` | `fingerprint.finish_reasons` |
@@ -284,10 +313,10 @@ tap 只保留结构与时间,**不缓存 chunk body**——既补上"质量",又
 
 **局限(诚实口径)**:
 
-- provider **原始响应头**拿不到:SDK 转发不回传上游 `http.Response`,网关也不透传
-  上游头——与 `.research/model-fingerprinting.md` §3.3 一致。`fingerprint.headers`
-  目前是**网关自己的**响应头,只能算弱 serving-path 线索;真正的上游头要等
-  Phase 3 的 wire `recordTransport`。
+- provider **原始响应头**现在由 wire `recordTransport` 只读采到,写入
+  `fingerprint.upstream_response`(见上文);`fingerprint.headers` 仍是
+  **网关自己的**响应头。目前只采 status + 头——provider 原始 body 与 wire
+  请求字段仍属 Phase 3 剩余部分。
 - `model` 在 through_tb 下被重写为 response model,不是身份证据。
 - OpenAI chat 的 `[DONE]` 被 SSE 解码器吞掉,`done_marker` 只对 Anthropic
   `message_stop` / Responses `response.completed` 生效。
@@ -374,7 +403,7 @@ tap 只保留结构与时间,**不缓存 chunk body**——既补上"质量",又
 | **Phase 1 清障 ✅(收窄范围)** | 已做:删 `RecordRoundTripper` 死代码与全部 `SetRecordSink` 机制;`ScenarioContextKey` 迁出(P7);删 `ClientPool.recordSink` / `server.recordSink` / `server.recordMode` / `WithRecordMode` / `WithRecording`;去除 CLI `--record-mode` / `--record-dir`(目录固定默认)。**刻意未动**:advisor/MCP 侧接线(`WithAdvisorRecordSink`、`HookDeps.GetScenarioSink`)与 P4 header 修复——单独小步处理 | `internal/client`、`internal/server`、`internal/command`、`gui/wails3`、`vmodel` | 低(删死代码,行为不变) |
 | **Phase 1.5 advisor 小步 ✅** | 修 P4(advisor ctx 标记 + 通用链只读 header transport,附单测);清 `WithAdvisorRecordSink` / `GetScenarioSink` 死数据注入 | `internal/client`、`mcp/runtime`、`servertool` | 低 |
 | **Phase 2 flag 融入 ✅(含点位模型重构)** | 采集点位多选模型(§3.5);`RuleFlags.Recording` 进 registry(multi_enum,Shared/override);继承 + 四个 handler 接线 + OpenAI 透传路径补 emit(修 P5);写入口校验/归一化;前端 multi_enum 控件 + `RecordingV2Control` 多选化 + codegen;flag 行为套件补 `recording` 用例 | `typ`、`obs`、`server`、`protocolserver`、`protocoltest`、frontend | 中 |
-| **Phase 3 wire 录制** | 新 `recordTransport` 挂 wire transport(含 vendor 链);recorder 经 request ctx 传播;record 模型加 wire 请求字段(修 P6) | `internal/client`、`obs` | 中 |
+| **Phase 3 wire 录制**(部分 ✅) | 已做:只读 `recordTransport` 挂 wire transport(含 vendor 链);recorder 经 request ctx 传播;provider 的 status + 脱敏响应头写入 `fingerprint.upstream_response`(§3.6)。剩余:wire 请求字段(`RecordRoundTripper` 替换,修 P6)、provider 原始 body | `internal/client`、`obs`、`recording` | 中 |
 | **Phase 3.5 `final_response` 恢复 ✅** | 恢复 `final_response` emit + UI 选项;OpenAI chat/responses 透传 chunk tap;`obs.ResponseFingerprint`(usage/finish/id 模式/system_fingerprint/chunk 时序);脱敏、body 上限、指纹 schema 对接;`GzipFileExporter` 7 天 / 1 GiB 保留策略(§3.6) | `internal/recording`、`obs`、`protocolserver`、`protocol/stream`、`typ` | 中 |
 | **Phase 4 obs 汇合** | 与 `internal/obs/PLANNING.md` Phase 2 合流(RecordCtx / EventTap / ModeFilterExporter);scenario 前端控件 registry 化 | `obs`、`transform`、frontend | 按其自身计划 |
 

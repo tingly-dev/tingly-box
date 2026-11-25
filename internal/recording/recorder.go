@@ -1,9 +1,11 @@
 package recording
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -45,6 +47,13 @@ type ProtocolRecorder struct {
 	transformedRequest *obs.RecordRequest
 	finalResponse      *obs.RecordResponse
 	fingerprint        *obs.ResponseFingerprint
+
+	// upstreamResponse is the provider's raw status/headers captured by the
+	// wire transport (client.recordTransport). Guarded because a request may
+	// fan out concurrent upstream calls (e.g. image batches) that share this
+	// recorder via the request context.
+	upstreamResponse *obs.UpstreamResponse
+	upstreamMu       sync.Mutex
 
 	transformSteps []string
 
@@ -277,6 +286,57 @@ func (sr *ProtocolRecorder) SetTransformSteps(steps []string) {
 	sr.transformSteps = steps
 }
 
+// SetUpstreamResponse records the provider's raw response status and headers
+// captured by the wire transport. It is a read-only observation: the body is
+// never read, and only the allowlisted header subset is retained. It is gated
+// by the same final_response capture point that emits the passive fingerprint,
+// so a recorder that will not emit one does no extra work. The last call wins,
+// which matches the failover loop: the emitted record reflects the attempt
+// that actually served the response.
+func (sr *ProtocolRecorder) SetUpstreamResponse(statusCode int, headers http.Header) {
+	if sr == nil || statusCode == 0 || !sr.Wants(typ.RecordFinalResponse) {
+		return
+	}
+	up := obs.BuildUpstreamResponse(statusCode, headerToMap(headers))
+	sr.upstreamMu.Lock()
+	sr.upstreamResponse = up
+	sr.upstreamMu.Unlock()
+}
+
+// getUpstreamResponse returns the captured upstream response, if any.
+func (sr *ProtocolRecorder) getUpstreamResponse() *obs.UpstreamResponse {
+	if sr == nil {
+		return nil
+	}
+	sr.upstreamMu.Lock()
+	defer sr.upstreamMu.Unlock()
+	return sr.upstreamResponse
+}
+
+// recorderCtxKey is the request-context key that carries the per-request
+// recorder to the outbound wire transport. The transport only sees the
+// *http.Request context, not the gin context the recorder was registered on.
+type recorderCtxKey struct{}
+
+// WithRecorder returns ctx carrying rec so the wire transport can find the
+// per-request recorder. A nil recorder returns ctx unchanged.
+func WithRecorder(ctx context.Context, rec *ProtocolRecorder) context.Context {
+	if rec == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, recorderCtxKey{}, rec)
+}
+
+// RecorderFromContext returns the recorder carried by ctx, or nil when the
+// request is not being recorded.
+func RecorderFromContext(ctx context.Context) *ProtocolRecorder {
+	if ctx == nil {
+		return nil
+	}
+	rec, _ := ctx.Value(recorderCtxKey{}).(*ProtocolRecorder)
+	return rec
+}
+
 // RecordResponse finalises provider/model and emits a Record to the sink.
 func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil {
@@ -398,6 +458,12 @@ func (sr *ProtocolRecorder) buildFingerprint() *obs.ResponseFingerprint {
 			fp.FinishReasons = tap.finishReasons
 		}
 	}
+	// Attach the provider's raw response metadata captured at the wire
+	// transport. fp.Headers above stays the gateway's own headers; this is the
+	// upstream's, the passive serving-path signal Phase 3 restores.
+	if up := sr.getUpstreamResponse(); up != nil {
+		fp.UpstreamResponse = up
+	}
 	return fp
 }
 
@@ -416,6 +482,9 @@ func (sr *ProtocolRecorder) release() {
 	sr.finalResponse = nil
 	sr.fingerprint = nil
 	sr.transformSteps = nil
+	sr.upstreamMu.Lock()
+	sr.upstreamResponse = nil
+	sr.upstreamMu.Unlock()
 	sr.c = nil
 }
 

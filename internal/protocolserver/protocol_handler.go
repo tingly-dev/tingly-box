@@ -267,6 +267,11 @@ func (ph *ProtocolHandler) determineRuleWithScenario(ctx *gin.Context, scenario 
 func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario string, provider *typ.Provider, model string, mode obs.RecordMode, bs []byte) *recording.ProtocolRecorder {
 	if rec, ok := recording.GetRecorderFromContext(c); ok {
 		rec.BindProvider(provider, model, mode)
+		// Keep the request context carrying the recorder so the wire transport
+		// can find it (the transport never sees the gin context).
+		if c.Request != nil {
+			c.Request = c.Request.WithContext(recording.WithRecorder(c.Request.Context(), rec))
+		}
 		return rec
 	}
 
@@ -286,5 +291,10 @@ func (ph *ProtocolHandler) EnsureProtocolRecorder(c *gin.Context, scenario strin
 	}
 	rec.BindProvider(provider, model, mode)
 	c.Set(constant.CtxKeyProtocolRecorder, rec)
+	// Ride the request context too: the outbound wire transport (and the
+	// read-only recordTransport) only sees *http.Request contexts, not gin's.
+	if c.Request != nil {
+		c.Request = c.Request.WithContext(recording.WithRecorder(c.Request.Context(), rec))
+	}
 	return rec
 }
