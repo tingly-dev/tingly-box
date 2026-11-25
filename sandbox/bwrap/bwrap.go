@@ -1,5 +1,6 @@
 // Package bwrap isolates a process with bubblewrap on Linux: storage and exec
-// confined, the network open or none. Importing it registers the runtime.
+// confined, the network open or none, and, through a transient systemd user
+// scope, memory and task limits. Importing it registers the runtime.
 package bwrap
 
 import (
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/sandbox"
@@ -25,13 +27,17 @@ type Runtime struct{}
 // lookPath finds bubblewrap; a variable for tests.
 var lookPath = func() (string, error) { return exec.LookPath("bwrap") }
 
-func (Runtime) Info() sandbox.Info {
+// lookSystemdRun finds systemd-run, which puts a limited process in a scope; a
+// variable for tests.
+var lookSystemdRun = func() (string, error) { return exec.LookPath("systemd-run") }
+
+func (Runtime) Info()sandbox.Info {
 	return sandbox.Info{Name: Name, Isolation: sandbox.IsolationProcess, Supports: map[sandbox.Axis][]sandbox.Level{
 		sandbox.AxisStorage:     {sandbox.StorageConfined},
 		sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone},
 		sandbox.AxisExec:        {sandbox.ExecConfined},
 		sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
-		sandbox.AxisResources:   {sandbox.ResourcesUnlimited},
+		sandbox.AxisResources:   {sandbox.ResourcesUnlimited, sandbox.ResourcesLimited},
 	}}
 }
 
@@ -48,6 +54,23 @@ func (Runtime) Check(ctx context.Context) error {
 	return nil
 }
 
+// CheckLimited reports whether a process can be started under limits: a
+// systemd user session that delegates the memory and pids controllers. It
+// starts a scope with both set and looks for the files that prove them.
+func CheckLimited(ctx context.Context) error {
+	bin, err := lookSystemdRun()
+	if err != nil {
+		return fmt.Errorf("systemd-run is not installed: resource limits need a systemd user session")
+	}
+	probe := `p=/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup); test -r "$p/memory.max" && test -r "$p/pids.max"`
+	out, err := exec.CommandContext(ctx, bin, "--user", "--scope", "--quiet", "--collect",
+		"-p", "MemoryMax=64M", "-p", "TasksMax=64", "--", "sh", "-c", probe).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("no systemd user scope with memory and pids limits here (%v: %s): needs a systemd user session whose cgroup delegates memory and pids", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sandbox.Proc, error) {
 	args, err := Args(p, cmd.Dir)
 	if err != nil {
@@ -57,10 +80,46 @@ func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sa
 	if err != nil {
 		return nil, fmt.Errorf("%w: bubblewrap (bwrap) is not installed", sandbox.ErrUnavailable)
 	}
-	cmd.Args = append(append([]string{bin}, args...), cmd.Args...)
+	prefix := []string{bin}
+	if p.Resources.Level == sandbox.ResourcesLimited {
+		// Never without the limits: if the scope cannot be had, do not start.
+		if err := CheckLimited(ctx); err != nil {
+			return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
+		}
+		run, err := lookSystemdRun()
+		if err != nil {
+			return nil, fmt.Errorf("%w: systemd-run is not installed", sandbox.ErrUnavailable)
+		}
+		// systemd-run reaches the user manager through the host's session
+		// variables; the process must get only cmd.Env, so env -i hands it
+		// exactly that inside the scope.
+		prefix = append(append(scopeArgs(run, p.Resources), "/usr/bin/env", "-i"), cmd.Env...)
+		prefix = append(prefix, bin)
+		cmd.Env = nil
+		for _, k := range []string{"XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"} {
+			if v, ok := os.LookupEnv(k); ok {
+				cmd.Env = append(cmd.Env, k+"="+v)
+			}
+		}
+	}
+	cmd.Args = append(append(prefix, args...), cmd.Args...)
 	// bwrap changes into cmd.Dir inside; outside it starts where we are.
 	cmd.Dir = ""
 	return sandbox.ExecCommand(ctx, cmd)
+}
+
+// scopeArgs is the command that runs what follows in a transient systemd user
+// scope with r's limits. A zero limit is left out. Swap is off with the memory
+// limit, so the process cannot outgrow it by swapping.
+func scopeArgs(run string, r sandbox.Resources) []string {
+	args := []string{run, "--user", "--scope", "--quiet", "--collect"}
+	if r.MemoryBytes > 0 {
+		args = append(args, "-p", "MemoryMax="+strconv.FormatInt(r.MemoryBytes, 10), "-p", "MemorySwapMax=0")
+	}
+	if r.Tasks > 0 {
+		args = append(args, "-p", "TasksMax="+strconv.Itoa(r.Tasks))
+	}
+	return append(args, "--")
 }
 
 // Args are the bubblewrap arguments for p, up to and including "--": an empty

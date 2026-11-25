@@ -349,4 +349,6 @@ sandbox/
 
 **一致性测试**（每轴每级别一组，按运行时声明的支持项跑）：不支持的级别必须被拒绝；storage/confined：挂载外的文件不可见、只读挂载写不进、可写挂载写入落到宿主、HOME 为空、宿主家目录不可见；exec/confined：无 capability、NoNewPrivs、只看到少量进程、不能再建命名空间、kill 后后台进程不留；credentials/explicit：只剩点名的变量；network/none：连不上宿主回环上的监听；network/open：连得上。变异检查：去掉 bwrap 的 `--unshare-net` 或 `--unshare-pid`，相应用例失败（kill 用例确实抓到了残留进程）。
 
+**resources: limited（bwrap，2026-11-25）**：bwrap 自己不限资源，由 `systemd-run --user --scope --quiet --collect -p MemoryMax=<字节> -p MemorySwapMax=0 -p TasksMax=<n> -- bwrap …` 把整个沙箱放进一个临时的 systemd 用户 scope（值为 0 的限制不写）；scope 里的进程被 cgroup 限住，内存超限时整个 scope 被杀（含 shell）。bwrap 的启动环境变量由 `env -i` 在 scope 内按 `Cmd.Env` 原样给出，宿主的 `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` 只给 systemd-run 用，不进沙箱。**失败即关闭**：`Start` 在 limited 时先跑一次探测 scope（要求 `systemd-run` 存在、用户会话可建 scope、cgroup 里有 `memory.max` 与 `pids.max`，即这两个控制器已委派），任一不满足就返回 `ErrUnavailable` 并写明原因，绝不在没有限制时启动；`Runtime.Check` 不变（不要求 systemd）。一致性测试 `resources/limited` 两组用例（64 MiB 下排序 200 MB 的单行必被杀；Tasks=20 下 fork 60 个必有失败）在 limited 起不来时跳过并带原因。CPU 限制尚未做。CI：GitHub 的 ubuntu runner 一般没有 systemd 用户会话（无 `XDG_RUNTIME_DIR`），这两组用例会跳过，不会失败；要在 CI 里真跑需要 `loginctl enable-linger` 并启动 `user@UID.service`，暂不做。
+
 **CI**：`sandbox/**` 触发 PR 检查；`daily.yml` 新增 `test-sandbox`（边界检查、vet、`-race` 测试，装 bubblewrap 并放开 Ubuntu 的 userns 限制，确认一致性测试没有被跳过）。
