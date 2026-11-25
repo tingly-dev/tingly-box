@@ -258,7 +258,7 @@ type Usage interface {
 | S2 | **记账与 OOM（已完成）**：bwrap 有 systemd 用户会话时一律进 scope，按 systemd 记录的 scope 结果（`oom-kill`）判定 `oom`，并实现 `Usage`（读 scope 的 cgroup）；microvm 按 guest 的 `oom_kill` 计数判定 `oom` | S1 |
 | S3 | **`internet`（bwrap 已完成）**：pasta + 命名空间内 nftables，通过 `network/internet`（上界：宿主回环与全部宿主地址不可达；下限：公网按名可达）；microvm 的 `internet` 待做 | S1 |
 | S4 | **Projects 默认切换（已完成）**：线程策略改为 `internet` + 自动 Expose；设置里的可用性按线程策略实测；live 测试：真实 CLI 在 internet 下完成回合，模型经 Expose，公网 200 | S2、S3 |
-| S5 | **配额**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
+| S5 | **配额（已完成）**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
 | S6 | **microvm 进 Projects**：VM `unlimited` 改为宿主规格；加入运行时列表 | S3、S4 |
 | S7 | 项目总额（slice）；已知缺口：运行中审批新增的目录挂进沙箱、`library/.cache` 线程间共享、主仓库 git 引用可写 | 按需 |
 
