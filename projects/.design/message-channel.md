@@ -41,7 +41,7 @@
 
 ### 权限与 auto 模式
 
-- 线程默认权限模式 `acceptEdits`（`DefaultPermissionMode`），可按项目 / 线程改成 `auto`。agentboot 启动带 `--permission-mode <mode>` 和 `--permission-prompt-tool stdio`；Claude Code 先按本地规则判定，只有结果为 **ask** 的调用才会产生 `can_use_tool` 控制请求，进入 `threadPrompter.OnApproval`（`agentboot/claude/settings_ask.go` 同一机制）。
+- 线程默认权限模式 `auto`（`DefaultPermissionMode`，Projects 的产品特性，新线程不继承上游配置），可按项目 / 线程改。agentboot 启动带 `--permission-mode <mode>` 和 `--permission-prompt-tool stdio`；Claude Code 先按本地规则判定，只有结果为 **ask** 的调用才会产生 `can_use_tool` 控制请求，进入 `threadPrompter.OnApproval`（`agentboot/claude/settings_ask.go` 同一机制）。
 - 线程设置文件（`workerSettings` / `sessionSettings` / `writeSettings`）已经会写 `permissions.additionalDirectories`、`permissions.allow`（Read/Edit 项目 library）和 `autoMode.{environment,allow}`（`library_access.go` 的 `grantLibrary`，用来让分类器放行写 library）。**这就是已有的“预批准”模式**，可以复用。
 - “允许本线程”目前按**工具名**记忆（`Threads.allow(threadID, req.ToolName)`）：对 Bash 点一次“本线程都允许”，等于放行该线程所有 Bash。这在默认模式下就是个过宽的授权，与下文的收紧方案有关。
 - agentboot 已有：`SetPermissionMode`（运行中切模式，`set_permission_mode` 控制请求）、`can_use_tool` 回复里的 `updatedPermissions`（目前只实现了 `addDirectories`）、`ResultMessage.PermissionDenials`（结构体字段是 `request_id/reason`，与 Claude Code 实际的 `tool_name/tool_use_id/tool_input` 不符，且 Projects 没有读取它）。

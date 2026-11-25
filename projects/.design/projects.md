@@ -136,7 +136,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
   - 未做：用真实模型验证回复预算和信封是否真的被遵守（harness 阶段 4）。
 - **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入；library 另有 `allow` 规则和 auto 模式分类器条目，见 `workspace.md`「共享上传目录（library）的授权」。
 - **连接**：全局连接为 Anthropic 风格时，线程继承它（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`），即默认走 Tingly Box；否则用本机 `claude` 自己的登录。
-- **权限模式**：默认 `acceptEdits`（编辑自动通过，命令等需审批 → Waiting on you）；项目设置可改为 `auto` / `bypassPermissions`。
+- **权限模式**：默认 `auto`（Projects 的产品特性：所有新建线程与文件夹会话都从 auto 开始，不读上游配置；已有线程不变）；项目设置或线程的权限选择器可手动改为 `acceptEdits` / `default` / `bypassPermissions`。
 - **审批**：prompter 把请求记为线程事件、线程进入 `waiting`、阻塞等待用户在线程里回答（权限审批不超时）；"本线程同类都允许"按工具名记住。
 - **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `delay:<分钟>` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 5 分钟后按推荐项回答，选择器末尾的“自定义…”可改成 1–60 分钟（存成 `delay:<分钟>`，同一个字符串字段，不加列；键入 5 仍存 `delay`；服务端 `parseAutoAnswer` 校验，非法值 400）。等待要早于常驻进程的空闲回收（默认 65 分钟），免得回答时进程已被收掉，所以自定义上限取 60 分钟；`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
 - **消息排队**：线程忙时收到的消息（用户或协调者）排队，当前轮结束后依次执行。
