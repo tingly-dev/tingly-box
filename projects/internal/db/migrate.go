@@ -195,9 +195,6 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 	if err = pinThreadSettings(tx); err != nil {
 		return fmt.Errorf("pin thread settings: %w", err)
 	}
-	if err = moveProjectsToAutoDefault(tx); err != nil {
-		return fmt.Errorf("projects default to auto: %w", err)
-	}
 	// Events written before updated_at existed (or moved in above) were last written when created.
 	if err = tx.Exec("UPDATE thread_events SET updated_at = created_at WHERE updated_at IS NULL").Error; err != nil {
 		return err
@@ -236,28 +233,6 @@ func pinThreadSettings(tx *gorm.DB) error {
 		}
 	}
 	return tx.Exec("INSERT INTO settings (key, value, updated_at) VALUES (?, '1', ?)", pinnedSettingsMarker, time.Now()).Error
-}
-
-// autoDefaultMarker is the settings key set once projects still on the old
-// default thread permission mode have moved to auto.
-const autoDefaultMarker = "migrations.projects_default_auto"
-
-// moveProjectsToAutoDefault is the one-shot move of every project whose
-// thread permission mode is empty or the old default (acceptEdits) to auto.
-// The old default was stamped on every project, so a project the user set to
-// acceptEdits by hand cannot be told apart and moves too; they can set it
-// back. It runs after pinThreadSettings, so threads already pinned to the
-// project's old mode keep it.
-func moveProjectsToAutoDefault(tx *gorm.DB) error {
-	var n int64
-	tx.Raw("SELECT COUNT(*) FROM settings WHERE key = ?", autoDefaultMarker).Scan(&n)
-	if n > 0 {
-		return nil
-	}
-	if err := tx.Exec("UPDATE projects SET thread_permission_mode = 'auto' WHERE COALESCE(thread_permission_mode, '') IN ('', '" + legacyThreadPermissionMode + "')").Error; err != nil {
-		return err
-	}
-	return tx.Exec("INSERT INTO settings (key, value, updated_at) VALUES (?, '1', ?)", autoDefaultMarker, time.Now()).Error
 }
 
 func count(tx *gorm.DB, query string, args ...any) int64 {
