@@ -148,6 +148,7 @@ export const project = {
     strip: {
         pr: 'PR', issue: 'Issue',
         title: 'Issues & PRs',
+        openPrs_one: '{{count}} open PR', openPrs_other: '{{count}} open PRs', needsLook: 'Failing checks or conflicts',
     },
     autoAnswer: {
         title: 'Auto-answer', menuTitle: 'When a question has a suggested answer',

@@ -8,6 +8,9 @@ import { peekRowSx, useLinkPeek } from './useLinkPeek';
 import { FilesButton } from './LinksCard';
 import { canShowFiles, PrDiffDialog } from './PrDiffDialog';
 import { radius } from '@tingly/ui/theme/radius';
+import { mobile } from '@tingly/ui/theme/mobile';
+import { DisclosureRow } from '../common/Disclosure';
+import { useGroupFolds } from '../../hooks/useGroupFolds';
 
 const clip = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 } as const;
 const ROW_H = 30;
@@ -54,22 +57,48 @@ interface Props {
     thread: Thread;
 }
 
+/** The folded strip's one-line summary: how many are listed, how many PRs are open, and a red dot when one of those has failing checks or conflicts. */
+function Summary({ links }: { links: ThreadLink[] }) {
+    const { t } = useTranslation('projects');
+    const openPrs = links.filter((l) => l.kind === 'pr' && l.state === 'open');
+    const broken = openPrs.some((l) => l.ci === 'failing' || l.merge_state === 'conflicts');
+    return (
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, fontWeight: 400, minWidth: 0 }}>
+            <span>{links.length}</span>
+            {openPrs.length > 0 && <span>· {t('strip.openPrs', { count: openPrs.length })}</span>}
+            {broken && <Box component="span" role="img" aria-label={t('strip.needsLook')} title={t('strip.needsLook')} sx={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, bgcolor: 'error.main' }} />}
+        </Box>
+    );
+}
+
 /**
  * The thread's issues and PRs, in a panel right above the message box: one
- * line each, all of them listed. Where the thread runs (folder, branch,
- * session) is the details rail's, and how it treats its questions is a
- * picker in the message box: this panel repeats neither. Without a link it
- * is not there.
+ * line each, all of them listed. The title row folds the whole panel to one
+ * line (the choice is kept for the browser, not per thread); open, the list
+ * scrolls inside a capped height so many links never crowd out the
+ * conversation. Where the thread runs (folder, branch, session) is the
+ * details rail's, and how it treats its questions is a picker in the message
+ * box: this panel repeats neither. Without a link it is not there.
  */
 export function ComposerStrip({ thread }: Props) {
     const { t } = useTranslation('projects');
+    const [folds, setFolds] = useGroupFolds('composer-strip');
     const links = stripLinks(thread.links);
     if (links.length === 0) return null;
+    const open = !folds.links;
 
     return (
         <Box data-testid="composer-strip" sx={{ mb: 0.75, py: 0.5, borderRadius: radius.card, bgcolor: 'action.hover', fontSize: fontSizes.sm, lineHeight: 1.4, color: 'text.secondary', overflow: 'hidden' }}>
-            <Box sx={{ px: 1.25, minHeight: ROW_H, display: 'flex', alignItems: 'center', fontWeight: 600 }}>{t('strip.title')}</Box>
-            {links.map((l) => <LinkLine key={linkKey(l)} link={l} thread={thread} />)}
+            <DisclosureRow open={open} onToggle={() => setFolds(['links'], open)} variant="header" aria-controls="composer-strip-body"
+                sx={{ px: 1.25, py: 0, minHeight: ROW_H, fontWeight: 600, '@media (pointer: coarse)': { minHeight: mobile.tapMin } }}>
+                <span>{t('strip.title')}</span>
+                {!open && <Summary links={links} />}
+            </DisclosureRow>
+            {open && (
+                <Box id="composer-strip-body" sx={{ maxHeight: `calc(${ROW_H}px * 5.5)`, overflowY: 'auto' }}>
+                    {links.map((l) => <LinkLine key={linkKey(l)} link={l} thread={thread} />)}
+                </Box>
+            )}
         </Box>
     );
 }

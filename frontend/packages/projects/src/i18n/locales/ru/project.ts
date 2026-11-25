@@ -151,6 +151,7 @@ export const project: PluralDict<typeof en> = {
     strip: {
         pr: 'PR', issue: 'Issue',
         title: 'Issues и PR',
+        openPrs_one: '{{count}} открытый PR', openPrs_few: '{{count}} открытых PR', openPrs_many: '{{count}} открытых PR', openPrs_other: '{{count}} открытых PR', needsLook: 'Есть упавшие проверки или конфликты',
     },
     autoAnswer: {
         title: 'Автоответ', menuTitle: 'Если у вопроса есть предложенный ответ',

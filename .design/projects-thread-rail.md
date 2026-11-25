@@ -42,9 +42,16 @@ behind a popover.
 - **Issues & PRs strip** (`ComposerStrip`, right above the message box): the
   same links as one line each (kind, `#12 title`, where it stands, Files
   changed / refresh / details), open PRs first, then open issues, then what
-  finished. Every link is listed and the strip does not fold: it is there only
-  when the thread has a link, so it is the short list worth seeing while
-  typing. It no longer carries the folder and branch (the Environment card
+  finished. Every link is listed. The title row is a `DisclosureRow` (same chevron
+  and header style as the thread-list groups) that folds the whole strip to
+  that one row, which then shows the count, the open-PR count and a red dot
+  when an open PR has failing checks or conflicts. The fold is remembered
+  globally in the browser (`useGroupFolds('composer-strip')`, not per
+  thread: it is a "this strip is in my way" preference, and a per-thread
+  choice would reset on every thread switch); the default is open. Open, the
+  list scrolls inside a cap of 5.5 rows, so many links never push the
+  conversation out. The strip is there only when the thread has a link, so
+  it is the short list worth seeing while typing. It no longer carries the folder and branch (the Environment card
   has them) nor the "answers itself at …" line (the question card says it).
 - **Issues & PRs under list rows** (`ThreadLinkRows`, in `ThreadsView`'s
   list: a project's Overview and a folder's sessions): the list is where a
