@@ -1,6 +1,6 @@
 # 协调者的线程状态工具与 reopen（讨论稿）
 
-> 状态：**讨论稿，未实施**（2026-11-26）。本稿只提方案，不改代码；要用户拍板的问题见 §8。
+> 状态：**方案已定，未实施**（2026-11-26）。本稿只提方案，不改代码；用户的决定见 §8。
 > 落地前先按本稿结论改 [thread-lifecycle.md](thread-lifecycle.md)（原则 4、§6.1、§11 的“暂缓”），再改代码。
 >
 > 相关：[thread-lifecycle.md](thread-lifecycle.md)（状态机现行设计）、[mcp-tools.md](mcp-tools.md)（Step 4 早已提出 `reopen_thread`，并否决了 `set_thread_state`）、[`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)（Archive / Restore / Delete）、`cite.go`（`quoteUser`）。
@@ -179,7 +179,7 @@ reopen_thread(thread_id, cite?)
 | 2 | `resolve_thread` 的授权落到代码（§4.3）：加 `cite`，无 `cite` 时校验“交接完成”；改描述；补测试（缺一条就拒绝，各条件做变异检查） | 中：会拒绝以前能过的调用，提示词里“用户授权后直接 resolve”的写法要同步更新 |
 | 可选 | `start_thread` 的 `from_thread`（给新线程一个指向旧线程转录的入口）；网页批量 Reopen | 视使用情况；`message_thread` 的 `reopen=true` 已决定不做 |
 
-## 8 已定与待定
+## 8 用户的决定
 
 用户 2026-11-26 的决定：
 
@@ -188,6 +188,6 @@ reopen_thread(thread_id, cite?)
 3. `message_thread` 不加 `reopen=true`，也不自动重开。
 4. 重开后授权清空、IM 绑定不迁回：保持现状，不加新记录。
 
-仍待确认：
+5. `resolve_thread`：带 `cite` 就校验并通过；没带 `cite` 时，系统检查 PR 已合并、没有未提交改动、线程没在跑，全部满足才放行，否则报错并说明缺哪一项（§4.3）。
 
-- `resolve_thread` 的授权：本稿仍按“`cite`，或系统验证交接完成”写（§4.3），即没有 `cite` 也能 resolve 已合并、无剩余工作的线程；如果你的意思是 `resolve_thread` 也完全不检查，请说一声。
+全部已定，无待确认项。
