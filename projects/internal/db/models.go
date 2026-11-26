@@ -146,6 +146,9 @@ const DefaultMaxRunningThreads = 4
 const (
 	ProjectProject = "project"
 	ProjectFolder  = "folder"
+	// ProjectChat is the one hidden project that holds the read-only chats
+	// (outside every project). It never appears in project or folder lists.
+	ProjectChat = "chat"
 )
 
 // Event sources: where an event came from. Empty is the web.

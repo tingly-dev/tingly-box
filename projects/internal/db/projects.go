@@ -4,10 +4,14 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// chatProjectMu serializes the lazy creation of the one chat project.
+var chatProjectMu sync.Mutex
 
 // ---- Projects ----
 
@@ -84,6 +88,32 @@ func (s *Store) GetProject(id string) (*Project, error) {
 	var p Project
 	if err := s.db.First(&p, "id = ?", id).Error; err != nil {
 		return nil, notFound(err)
+	}
+	return &p, nil
+}
+
+// ChatProject returns the hidden project that holds the read-only chats,
+// creating it if it does not exist yet. There is at most one: its type is
+// looked up, never its name.
+func (s *Store) ChatProject(name string) (*Project, error) {
+	chatProjectMu.Lock()
+	defer chatProjectMu.Unlock()
+	var p Project
+	err := s.db.First(&p, "type = ?", ProjectChat).Error
+	if err == nil {
+		return &p, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	p = Project{Type: ProjectChat, Name: name, GitHubAuto: []string{}}
+	if err := s.db.Create(&p).Error; err != nil {
+		// A concurrent create won the race: read the row it made.
+		var existing Project
+		if e := s.db.First(&existing, "type = ?", ProjectChat).Error; e == nil {
+			return &existing, nil
+		}
+		return nil, err
 	}
 	return &p, nil
 }

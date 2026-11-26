@@ -364,6 +364,12 @@ func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
 		apierr.Store(c, err, "project")
 		return nil, false
 	}
+	if p.Type == db.ProjectChat {
+		// The hidden Chats project has no project page: pause, archive,
+		// settings and library do not apply to it. Chats is served by /chats.
+		apierr.Message(c, http.StatusNotFound, "project not found")
+		return nil, false
+	}
 	return p, true
 }
 
@@ -386,6 +392,9 @@ func (h *Handler) list(c *gin.Context) {
 	}
 	out := make([]ProjectSummary, 0, len(projects))
 	for _, p := range projects {
+		if p.Type == db.ProjectChat {
+			continue // the hidden Chats project is served by /chats, never here
+		}
 		out = append(out, ProjectSummary{Project: projectView(p), Threads: db.CountsOf(all[p.ID])})
 	}
 	c.JSON(http.StatusOK, ProjectListResponse{Projects: out})

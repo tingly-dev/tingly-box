@@ -73,7 +73,7 @@ func TestResponsesOfAnEmptyWorkspaceCarryNoNull(t *testing.T) {
 		"/projects", "/projects?archived=true", "/projects/channel-bindings", "/projects/runtime", "/projects/models",
 		"/projects/" + p.ID, "/projects/" + f.ID, "/projects/" + p.ID + "/threads", "/projects/" + f.ID + "/threads",
 		"/projects/" + p.ID + "/memory", "/projects/" + p.ID + "/library", "/projects/" + p.ID + "/library/tree", "/projects/" + p.ID + "/usage",
-		"/threads/permission-modes", "/conversations", "/settings",
+		"/threads/permission-modes", "/conversations", "/settings", "/chats",
 		"/threads/" + th.ID, "/threads/" + fth.ID, "/threads/" + p.MainThreadID,
 		"/threads/" + th.ID + "/events", "/threads/" + th.ID + "/requests", "/threads/" + th.ID + "/subagents", "/threads/" + th.ID + "/cleanup",
 	} {

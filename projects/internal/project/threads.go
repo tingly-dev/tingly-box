@@ -239,6 +239,19 @@ func queuedPrompt(q queued, libraryDir string) string {
 
 func (m *Threads) threadPrompt(q queued, p *db.Project, t *db.Thread) string {
 	text := q.text
+	if p.Type == db.ProjectChat {
+		// Chat: the message plus relative paths of the attachments in its own
+		// folder, and no coordinator/relay framing.
+		text = literalPrompt(text)
+		note := chatAttachmentNote(m.layout, t.ID, q.atts)
+		if note == "" {
+			return text
+		}
+		if strings.TrimSpace(text) == "" {
+			return note
+		}
+		return text + "\n\n" + note
+	}
 	if q.relayed {
 		text = coordinatorNote + text
 	}
@@ -444,6 +457,11 @@ func pinThreadDefaults(p *db.Project, t *db.Thread) {
 }
 
 func permissionMode(p *db.Project) string {
+	if p.Type == db.ProjectChat {
+		// Chat is fixed at the read-only profile: default mode plus a prompter
+		// that denies, never auto or bypassPermissions.
+		return "default"
+	}
 	if p.ThreadPermissionMode != "" {
 		return p.ThreadPermissionMode
 	}
@@ -941,12 +959,46 @@ func (m *Threads) enqueue(threadID string, q queued) error {
 
 var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
 
+// chatLaunch builds a chat turn's launch options: the read-only profile, with
+// no MCP, no settings, no project prompt, and its own folder as the only root.
+// See .design/chat-mode.md §2.1.
+func (m *Threads) chatLaunch(ctx context.Context, t *db.Thread) (string, agentboot.ExecutionOptions, error) {
+	env, defModel := m.env.ThreadEnv(ctx)
+	env = setEnv(env,
+		"CLAUDE_CONFIG_DIR", m.layout.ChatConfigDir(t.ID),
+		"TMPDIR", m.layout.ChatTmpDir(t.ID),
+		"TMP", m.layout.ChatTmpDir(t.ID),
+		"TEMP", m.layout.ChatTmpDir(t.ID),
+	)
+	model := t.Model
+	if model == "" {
+		model = defModel
+	}
+	opts := agentboot.ExecutionOptions{
+		Model:              model,
+		PermissionMode:     "default",
+		Env:                env,
+		Entrypoint:         sessionEntrypoint,
+		Tools:              append([]string(nil), chatTools...),
+		AllowedTools:       append([]string(nil), chatTools...),
+		Restricted:         true,
+		SafeMode:           true,
+		StrictMcpConfig:    true,
+		CustomSystemPrompt: ChatSystemPrompt,
+	}
+	opts.Sandbox = m.chatSandboxFor(ctx, t, &opts)
+	return model, opts, nil
+}
+
 // turnLaunch builds one turn's launch options: env and settings (worker
 // profile included), model, effort, permission mode and session tools.
 // Shared by begin (a queued user message) and Retry (a failed turn). An
 // error means the turn cannot launch (a worker profile is unavailable); the
 // thread has already been marked failed and noted.
 func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread, p *db.Project, folder bool) (model string, opts agentboot.ExecutionOptions, err error) {
+	if p.Type == db.ProjectChat {
+		return m.chatLaunch(ctx, t)
+	}
 	env, defModel, settings := m.launchEnv(ctx, t, folder)
 	profile := t.Profile
 	if !folder {
@@ -1067,6 +1119,10 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 	a.slot = slot
 	prompt := m.threadPrompt(*a.current, p, t)
+	var chatAtts []Attachment
+	if p.Type == db.ProjectChat {
+		chatAtts = a.current.atts
+	}
 	m.mu.Unlock()
 	// Waiting for the slot can take a while: launch with what the owner
 	// picked since (profile, model, permission mode).
@@ -1085,6 +1141,9 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		slot.release()
 		m.giveUp(threadID, a)
 		return
+	}
+	if len(chatAtts) > 0 {
+		opts.Content = m.layout.chatContent(t.ID, chatAtts)
 	}
 	m.startMu.Lock()
 	if ctx.Err() != nil {
@@ -1380,7 +1439,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	if t.Branch != "" {
 		stats = Stats(context.Background(), t.Cwd, t.BaseBranch)
 	}
-	session := m.isFolder(t.ProjectID)
+	session := m.isFolder(t.ProjectID) || m.threadChat(t)
 	head := ""
 	if session {
 		head = HeadBranch(context.Background(), t.Cwd)
@@ -2345,6 +2404,11 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	// A chat is read-only: anything that reaches an approval is outside its
+	// tools and is denied outright, without a card or a wait.
+	if p.m.threadIsChat(p.threadID) {
+		return agentboot.ApprovalResponse{Approved: false, Reason: "This chat is read-only; that action is not available."}, nil
+	}
 	if req.ToolName == toolSendMessage {
 		// Decided here, never asked and never remembered: no card, no "allow
 		// for this thread" that could widen it.
@@ -2395,6 +2459,9 @@ func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
 }
 
 func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
+	if p.m.threadIsChat(p.threadID) {
+		return agentboot.AskResponse{Approved: false, Reason: "This chat is read-only and cannot ask questions."}, nil
+	}
 	id := req.ID
 	if id == "" {
 		id = uuid.NewString()
