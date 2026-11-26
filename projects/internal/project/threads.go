@@ -622,20 +622,12 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if err != nil {
 		return nil, err
 	}
+	var workspace string
 	if repo != nil {
-		effective := p.EffectiveRepo(*repo)
-		// Reject a directory whose type has changed since configuration rather than
-		// silently running in a different workspace than the user selected.
-		info, err := InspectDirectory(ctx, effective.Path)
-		if err != nil {
+		// A thread runs in the directory the user selected. Its identity is that
+		// directory's resolved path, not its Git state: see checkWorkspace.
+		if workspace, err = checkWorkspace(ctx, p.EffectiveRepo(*repo)); err != nil {
 			return nil, err
-		}
-		original, err := filepath.EvalSymlinks(effective.Path)
-		if err != nil {
-			return nil, err
-		}
-		if db.PathKey(info.Root) != db.PathKey(original) || info.Kind != effective.Kind {
-			return nil, fmt.Errorf("directory %q has changed since it was configured", effective.Path)
 		}
 	}
 	base, branch, err := chooseBranch(ctx, p, repo, spec)
@@ -653,7 +645,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 			t.BaseBranch = base
 		}
 		if p.EffectiveRepo(*repo).WorkspaceMode == db.WorkspaceShared {
-			t.Cwd = repo.Path
+			t.Cwd = workspace
 		} else {
 			t.Branch = branch
 			if t.Branch == "" {
