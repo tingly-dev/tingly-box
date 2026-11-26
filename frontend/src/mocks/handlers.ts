@@ -2647,27 +2647,70 @@ export const handlers = [
     http.get('/api/v1/provider-quota/history', ({ request }) => {
         const searchParams = new URL(request.url).searchParams
         const providerFilter = searchParams.get('provider')
-        const startTime = Date.parse(searchParams.get('start_time') || '') || 0
-        const endTime = Date.parse(searchParams.get('end_time') || '') || Number.MAX_SAFE_INTEGER
+        const daily = searchParams.get('daily') === 'true'
         const now = Date.now()
-        const ages = [20, 75, 180, 300]
+        let startTime = Date.parse(searchParams.get('start_time') || '')
+        let endTime = Date.parse(searchParams.get('end_time') || '')
+        if (!Number.isFinite(startTime)) startTime = now - 6 * 60 * 60 * 1000
+        if (!Number.isFinite(endTime) || endTime <= startTime) endTime = now
+        const span = endTime - startTime
+
+        // Deterministic wobble so mock screenshots are reproducible.
+        const wobble = (seed: number) => Math.sin(seed * 12.9898) * 43758.5453 % 1
+
+        // Older samples sit at a smaller share of the window's current usage
+        // (the allowance has been draining toward "now"); balances were higher.
+        const shrink = (window: any, frac: number, seed: number) => {
+            const jitter = 1 + (wobble(seed) - 0.5) * 0.06
+            if (window.limit > 0 && !window.unknown && !window.unlimited) {
+                const usedPercent = Math.max(0, Math.min(100, window.used_percent * (0.55 + 0.45 * frac) * jitter))
+                return { ...window, used_percent: usedPercent, used: window.limit * usedPercent / 100, available: window.limit - window.limit * usedPercent / 100 }
+            }
+            if (window.available != null) {
+                const available = Math.max(0, window.available * (1 + (1 - frac) * 0.5) * jitter)
+                return { ...window, available, used: 0 }
+            }
+            return window
+        }
+
+        // Sample times: long ranges give one morning + one evening sample per
+        // day (so the UI has a real daily low/high); short ranges sample ~every
+        // 30 minutes across the range.
+        const timePoints = (): number[] => {
+            if (daily) {
+                const out: number[] = []
+                const cursor = new Date(startTime)
+                cursor.setHours(0, 0, 0, 0)
+                for (let day = cursor.getTime(); day < endTime; day += 24 * 60 * 60 * 1000) {
+                    const morning = new Date(day); morning.setHours(9, 0, 0, 0)
+                    const evening = new Date(day); evening.setHours(20, 0, 0, 0)
+                    for (const t of [morning.getTime(), evening.getTime()]) if (t >= startTime && t < endTime) out.push(t)
+                }
+                if (!out.length) out.push(endTime - 1)
+                return out
+            }
+            const count = Math.max(2, Math.min(60, Math.round(span / (30 * 60 * 1000)) || 60))
+            return Array.from({ length: count }, (_, i) => Math.min(startTime + (span * i) / (count - 1), endTime - 1))
+        }
+
         const data = Object.values(mockQuotas)
-            .filter((quota: any) => !providerFilter || quota.provider_uuid === providerFilter)
-            .flatMap((quota: any, providerIndex) => ages.map((minutesAgo, index) => ({
-                ...quota,
-                fetched_at: new Date(now - (minutesAgo + providerIndex * 10) * 60_000).toISOString(),
-                windows: (quota.windows || []).map((window: any) => {
-                    if (!window.limit || window.unknown || window.unlimited) return window
-                    // Older samples have consumed less of the same quota window;
-                    // the remaining allowance should fall toward the latest sample.
-                    const usedPercent = Math.max(0, window.used_percent - index * 7)
-                    return {
-                        ...window,
-                        used_percent: usedPercent,
-                        used: window.limit * usedPercent / 100,
-                    }
-                }),
-            })))
+            .filter((quota: any) => (!providerFilter || quota.provider_uuid === providerFilter)
+                && !quota.last_error && (quota.windows || []).length)
+            .flatMap((quota: any, providerIndex: number) => {
+                const times = timePoints()
+                return times.flatMap((t, index) => {
+                    const frac = span > 0 ? (t - startTime) / span : 1
+                    // Codex carries a deliberate coverage gap mid-range so the
+                    // "no data" treatment is visible in mock mode.
+                    if (quota.provider_uuid === 'mock-oauth-codex' && frac > 0.3 && frac < 0.65) return []
+                    return [{
+                        ...quota,
+                        fetched_at: new Date(t).toISOString(),
+                        windows: (quota.windows || []).map((window: any, wi: number) =>
+                            shrink(window, frac, providerIndex * 31 + index * 7 + wi)),
+                    }]
+                })
+            })
             .filter((snapshot: any) => {
                 const fetchedAt = Date.parse(snapshot.fetched_at)
                 return fetchedAt >= startTime && fetchedAt < endTime
