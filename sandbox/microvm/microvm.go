@@ -75,11 +75,13 @@ type spec struct {
 type result struct {
 	Exit   int    `json:"exit"`
 	Signal int    `json:"signal,omitempty"`
+	OOM    bool   `json:"oom,omitempty"`
 	Error  string `json:"error,omitempty"`
 }
 
 // Guest size. The memory is the guest's RAM, allocated as it is touched.
-const (
+// Variables for tests.
+var (
 	guestCPUs     = 2
 	guestMemoryMB = 2048
 )
@@ -299,6 +301,8 @@ func (m *machine) watch(ctl net.Conn, vmmExited <-chan struct{}) {
 		m.waitErr = failed(fmt.Sprintf("bad result from the guest: %q", line))
 	case r.Error != "":
 		m.waitErr = failed(r.Error)
+	case r.OOM:
+		m.waitErr = &sandbox.ExitError{Code: max(r.Exit, 128+r.Signal), Reason: sandbox.EndOOM}
 	case r.Signal != 0:
 		m.waitErr = &sandbox.ExitError{Code: 128 + r.Signal, Reason: sandbox.EndSignaled}
 	case r.Exit != 0:

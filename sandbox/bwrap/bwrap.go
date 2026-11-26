@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/sandbox"
@@ -56,23 +55,6 @@ func (Runtime) Check(ctx context.Context) error {
 	return nil
 }
 
-// CheckLimited reports whether a process can be started under limits: a
-// systemd user session that delegates the memory and pids controllers. It
-// starts a scope with both set and looks for the files that prove them.
-func CheckLimited(ctx context.Context) error {
-	bin, err := lookSystemdRun()
-	if err != nil {
-		return fmt.Errorf("systemd-run is not installed: resource limits need a systemd user session")
-	}
-	probe := `p=/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup); test -r "$p/memory.max" && test -r "$p/pids.max"`
-	out, err := exec.CommandContext(ctx, bin, "--user", "--scope", "--quiet", "--collect",
-		"-p", "MemoryMax=64M", "-p", "TasksMax=64", "--", "sh", "-c", probe).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("no systemd user scope with memory and pids limits here (%v: %s): needs a systemd user session whose cgroup delegates memory and pids", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
 func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sandbox.Proc, error) {
 	bin, err := lookPath()
 	if err != nil {
@@ -109,72 +91,32 @@ func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sa
 // netDir is where the sandbox sees the host's endpoint sockets.
 const netDir = "/run/tb-sandbox-net"
 
-// start runs cmd in bubblewrap, with extra arguments after the mounts, inside
-// a limited systemd scope when p asks for limits.
+// start runs cmd in bubblewrap, with extra arguments after the mounts.
 func start(ctx context.Context, bin string, cmd sandbox.Cmd, p sandbox.Policy, extra []string) (sandbox.Proc, error) {
 	args, err := buildArgs(p, cmd.Dir, extra)
 	if err != nil {
 		return nil, err
 	}
+	// In a systemd scope: always when the host has one, for the accounting
+	// (the end reason oom); limits require it.
+	sc, err := newScope(ctx, p.Resources)
+	if err != nil {
+		return nil, err
+	}
 	prefix := []string{bin}
-	if p.Resources.Level == sandbox.ResourcesLimited {
-		// Never without the limits: if the scope cannot be had, do not start.
-		if err := CheckLimited(ctx); err != nil {
-			return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
-		}
-		run, err := lookSystemdRun()
-		if err != nil {
-			return nil, fmt.Errorf("%w: systemd-run is not installed", sandbox.ErrUnavailable)
-		}
-		// systemd-run reaches the user manager through the host's session
-		// variables and execs bwrap with its own environment. The process
-		// must get only cmd.Env, so bwrap puts those variables back as cmd.Env
-		// had them (never the environment on a command line: argv is public).
-		prefix = append(scopeArgs(run, p.Resources), bin)
+	if sc != nil {
 		var restore []string
-		for _, k := range []string{"XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"} {
-			if v, ok := envLookup(cmd.Env, k); ok {
-				restore = append(restore, "--setenv", k, v)
-			} else {
-				restore = append(restore, "--unsetenv", k)
-			}
-			if v, ok := os.LookupEnv(k); ok {
-				cmd.Env = append(slices.DeleteFunc(slices.Clone(cmd.Env), func(kv string) bool { return strings.HasPrefix(kv, k+"=") }), k+"="+v)
-			}
-		}
+		prefix, restore, cmd.Env = sc.wrap(bin, cmd.Env)
 		args = append(restore, args...)
 	}
 	cmd.Args = append(append(prefix, args...), cmd.Args...)
 	// bwrap changes into cmd.Dir inside; outside it starts where we are.
 	cmd.Dir = ""
-	return sandbox.ExecCommand(ctx, cmd)
-}
-
-func envLookup(env []string, name string) (string, bool) {
-	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, name+"="); ok {
-			return v, true
-		}
+	proc, err := sandbox.ExecCommand(ctx, cmd)
+	if err != nil || sc == nil {
+		return proc, err
 	}
-	return "", false
-}
-
-// scopeArgs is the command that runs what follows in a transient systemd user
-// scope with r's limits. A zero limit is left out. Swap is off with the memory
-// limit, so the process cannot outgrow it by swapping.
-func scopeArgs(run string, r sandbox.Resources) []string {
-	args := []string{run, "--user", "--scope", "--quiet", "--collect"}
-	if r.MemoryBytes > 0 {
-		args = append(args, "-p", "MemoryMax="+strconv.FormatInt(r.MemoryBytes, 10), "-p", "MemorySwapMax=0")
-	}
-	if r.Tasks > 0 {
-		args = append(args, "-p", "TasksMax="+strconv.Itoa(r.Tasks))
-	}
-	if r.CPU > 0 {
-		// CPUQuota is in percent of one core; at least 1%.
-		args = append(args, "-p", "CPUQuota="+strconv.Itoa(max(1, r.CPU/10))+"%")
-	}
-	return append(args, "--")
+	return sc.watch(proc), nil
 }
 
 // Args are the bubblewrap arguments for p, up to and including "--": an empty
