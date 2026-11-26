@@ -112,24 +112,31 @@
 .sess-comp .line .field { min-height: 44px; padding: 10px 16px; }
 .sess-comp .send { width: 44px; height: 44px; }
 
-/* long text: a measured line clamp with an in-place 展开/收起 (ClampedText).
-   Short text never gets the button; the full text stays in the DOM. */
-.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 10); overflow: hidden; line-height: 1.55; }
-.clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
-.clamp p { margin: 0 0 8px; }
-.clamp p:last-child { margin-bottom: 0; }
-.clamp ul, .clamp ol { margin: 0 0 8px; padding-left: 22px; }
-.clamp li { margin: 2px 0; }
-.msg.me .clamp code { background: rgba(255, 255, 255, .18); padding: 0 4px; border-radius: 4px; }
-.clampbtn { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; color: var(--primary); font-size: 14px; font-weight: 600; }
-.clampbtn.me { justify-content: flex-end; width: 100%; }
-.clampbtn .i { width: 16px; height: 16px; }
-/* a code block keeps its horizontal scroll; only its height is capped */
-.codebox { margin: 10px 0; }
-.codebox .code { max-height: 210px; overflow: auto; }
+/* long text: the 展开/收起 row is the block's last row, inside the bubble/card.
+   A bottom mask fades the last line into that row; the row has its own 44 px,
+   so it never covers the last full line. The full text stays in the DOM. */
+.clamp-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 10); overflow: hidden; line-height: 1.55; }
+.clamp-body.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.clamp-body:not(.open) { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent); }
+.clamp-body p { margin: 0 0 8px; }
+.clamp-body p:last-child { margin-bottom: 0; }
+.clamp-body ul, .clamp-body ol { margin: 0 0 8px; padding-left: 22px; }
+.clamp-body li { margin: 2px 0; }
+.msg.me .clamp-body code { background: rgba(255, 255, 255, .18); padding: 0 4px; border-radius: 4px; }
+.clamp-foot { display: flex; align-items: center; gap: 6px; min-height: 44px; width: 100%; font-size: 14px; font-weight: 600; color: var(--primary); text-align: left; }
+.clamp-foot .i { width: 16px; height: 16px; }
+/* the user bubble's row spans the bubble's bottom edge and inherits its corners */
+.msg.me .clamp-foot { color: #fff; border-top: 1px solid rgba(255, 255, 255, .22); margin: 8px -14px -10px; padding: 0 14px; width: calc(100% + 28px); border-radius: 0 0 4px 18px; }
+.msg.them .clamp-foot { border-top: 1px solid var(--divider); margin-top: 8px; }
+/* a code block keeps its horizontal scroll; only its height is capped, and its
+   own row (copy + expand) sits inside the box */
+.codebox { margin: 10px 0; border: 1px solid var(--divider); border-radius: 12px; overflow: hidden; background: var(--hover); }
+.codebox .code { border-radius: 0; margin: 0; background: transparent; max-height: 210px; overflow: auto; }
+.codebox:not(.open) .code { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
 .codebox.open .code { max-height: none; }
-.codeacts { display: flex; align-items: center; gap: 8px; }
-.codeacts .mini { min-height: 44px; padding: 0 10px; color: var(--text2); font-size: 13px; }
+.codefoot { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-top: 1px solid var(--divider); background: var(--paper); }
+.codefoot .mini { min-height: 44px; padding: 0 6px; color: var(--text2); font-size: 13px; }
+.codefoot .clamp-foot { width: auto; padding: 0; border: 0; margin: 0; }
 
 /* safe-area aware bottom */
 .sess-comp { padding-bottom: max(10px, env(safe-area-inset-bottom)); }

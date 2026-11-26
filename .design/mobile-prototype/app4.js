@@ -142,16 +142,20 @@ const LONG_CODE = [
 const longUserTurn = () => {
   const open = !!S.open['clamp-u'];
   return `<div class="turn me" data-clamp-id="u-long">
-    <div class="msg me"><div class="clamp ${open ? 'open' : ''}" id="clamp-u" style="--lines:10">${LONG_USER}</div></div>
-    <button class="clampbtn me" data-toggle="clamp-u" aria-expanded="${open ? 'true' : 'false'}" aria-controls="clamp-u">${open ? '收起' : '展开全文'}</button>
+    <div class="msg me">
+      <div class="clamp-body ${open ? 'open' : ''}" id="clamp-u" style="--lines:10">${LONG_USER}</div>
+      <button class="clamp-foot" data-clamp-id="u-long-end" data-toggle="clamp-u" aria-expanded="${open ? 'true' : 'false'}" aria-controls="clamp-u">${open ? '收起' : '展开全文'}${I(open ? 'up' : 'down', 's')}</button>
+    </div>
     <div class="meta">10:19<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div>
   </div>`;
 };
 const longAssistantTurn = () => {
   const open = !!S.open['clamp-a'];
   return `<div class="turn" data-clamp-id="a-long">
-    <div class="msg them"><div class="clamp ${open ? 'open' : ''}" id="clamp-a" style="--lines:12">${LONG_ASSISTANT}</div></div>
-    <button class="clampbtn" data-clamp-id="a-long-end" data-toggle="clamp-a" aria-expanded="${open ? 'true' : 'false'}" aria-controls="clamp-a">${open ? '收起' : '展开全文'}</button>
+    <div class="msg them">
+      <div class="clamp-body ${open ? 'open' : ''}" id="clamp-a" style="--lines:12">${LONG_ASSISTANT}</div>
+      <button class="clamp-foot" data-clamp-id="a-long-end" data-toggle="clamp-a" aria-expanded="${open ? 'true' : 'false'}" aria-controls="clamp-a">${open ? '收起' : '展开全文'}${I(open ? 'up' : 'down', 's')}</button>
+    </div>
     <div class="meta">10:20<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div>
   </div>`;
 };
@@ -161,7 +165,10 @@ const longCodeTurn = () => {
     <div class="msg them"><p>这是基准脚本，可以直接在 staging 跑：</p>
       <div class="codebox ${open ? 'open' : ''}" id="code-long">
         <pre class="code">${LONG_CODE}</pre>
-        <div class="codeacts"><button class="mini" data-toast="已复制完整代码">复制完整代码</button><button class="clampbtn" data-toggle="code-long" aria-expanded="${open ? 'true' : 'false'}" aria-controls="code-long">${open ? '收起代码' : '展开代码'}</button></div>
+        <div class="codefoot">
+          <button class="mini" data-toast="已复制完整代码">复制完整代码</button>
+          <button class="clamp-foot" data-clamp-id="code-long-end" data-toggle="code-long" aria-expanded="${open ? 'true' : 'false'}" aria-controls="code-long">${open ? '收起代码' : '展开代码'}${I(open ? 'up' : 'down', 's')}</button>
+        </div>
       </div>
     </div>
     <div class="meta">10:21<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div>

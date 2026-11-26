@@ -152,8 +152,8 @@ Two layers only:
 
 | Segment (`transcript/model.ts`) | Phone default | Tap | Where the detail lives |
 |---|---|---|---|
-| `user` | bubble; **clamp at 10 lines** with 展开/收起 (in place) | expand | attachments as a row above; author/IM source as a caption |
-| `assistant` (markdown) | reply; **clamp prose at 12 lines** with 展开/收起 (in place); **code blocks have their own height cap + their own 展开**, horizontal scroll untouched | expand | — |
+| `user` | bubble; **clamp at 10 lines** with the 展开/收起 row **inside the bubble's bottom edge** | expand | attachments as a row above; author/IM source as a caption |
+| `assistant` (markdown) | reply; **clamp prose at 12 lines** with the 展开/收起 row **inside the block's bottom edge**; **code blocks have their own height cap + their own 展开 inside the code box**, horizontal scroll untouched | expand | — |
 | `assistant` with files (`send_file`) | **one row**: up to 4 thumbnails + "N 个文件 · a 图 · b 文档"; a long caption clamps at 3 lines | file preview | file sheet / Library |
 | `activity` · thinking | folded into the run line (or B: one "思考 · Ns" row) | expand | process sheet, full text |
 | `activity` · tool call/result | **A:** one neutral run line "过程 · 3m" (no counts); **B:** one 44 px row per call | row | process sheet: counts, input/output per call, copy |
@@ -254,29 +254,39 @@ captions. It clamps by CSS line box (user 10 lines, assistant 12, notes/sheets
 content actually overflows** (measured with `scrollHeight > clientHeight` after
 layout/resize, so short messages get no button). The full text stays in the DOM
 and in the entry's `content`; copy (`messageCopyText`) always writes the original
-Markdown, never the clamped view. Expanding is in place: the row sits below the
-clamped content, so it grows downward, the transcript's `scrollTop` is not
-touched, and the stick-to-bottom rule is not triggered. The open state is keyed
-by the block/message id in the transcript (a `Set`/`Map`, not component-local),
-so it survives re-render and streaming deltas; a reply that starts short and
-grows gets its button when it crosses the threshold. The toggle is a native
-button with `aria-expanded`/`aria-controls` (`展开全文` / `收起`), and the clamped
-container keeps the full text for selection and assistive tech.
+Markdown, never the clamped view.
 
-Code blocks are **height**-capped (≈ 240 px) with their own `展开代码 / 收起`,
-not line-clamped: their `overflow-x: auto` and copy stay intact, and the copy
-button always copies the whole block. Tool output keeps its own 20-line cap in
-the process sheet; a subagent report shows a 3-line preview in the card and the
-full text (clamped at 10 lines with 展开) in its sheet. Assistant prose and a
-code block are clamped independently, so a long reply with code never clips the
-code's horizontal scroll.
+**The control is the block's last row, inside it — not a sibling below the
+block.** In the user bubble the row spans the bubble's bottom edge (it inherits
+the bubble's bottom corners and a hairline); in the assistant block it is the
+last row of the content with a hairline; in a code block the copy + expand row
+sits inside the code box. A bottom **mask** fades the last visible line into the
+row, so the truncated text and its control read as one unit. The row has its
+own 44 px (measured body→row gap 8–9 px), so it **never overlaps the last full
+line of text**; the faded line is the hint that there is more. Expanding is in
+place: the row stays at the end of the full text, the transcript's `scrollTop`
+is not touched, and the stick-to-bottom rule is not triggered. The open state is
+keyed by the block/message id in the transcript (a `Set`/`Map`, not
+component-local), so it survives re-render and streaming deltas; a reply that
+starts short and grows gets its row when it crosses the threshold. The toggle is
+a native button with `aria-expanded`/`aria-controls` (`展开全文` / `收起`), and
+the clamped container keeps the full text for selection and assistive tech.
+
+Code blocks are **height**-capped (≈ 210–240 px) with their own `展开代码 / 收起`
+row inside the code box, not line-clamped: their `overflow-x: auto` and full-code
+copy stay intact. Tool output keeps its own 20-line cap in the process sheet; a
+subagent report shows a 3-line preview in the card and the full text (clamped at
+10 lines with 展开) in its sheet. Assistant prose and a code block are clamped
+independently, so a long reply with code never clips the code's horizontal
+scroll.
 
 Screenshots: `mobile-session-option-a-390x844-{light,dark}-long-user.png`,
-`...-long-assistant.png`, `...-long-code.png` (collapsed) and the matching
-`-expanded.png`; `...-long-assistant-expanded-end.png` shows the 收起 row at the
-end of a long reply. Measured clamp: user 264 px shown of 445, assistant 316 of
-456, code 210 of 491; a programmatic toggle kept `scrollTop` at 944 → 944 (no
-jump).
+`...-long-assistant.png`, `...-long-code.png` (collapsed, the row inside the
+block) and the matching `-expanded.png`; `...-long-{user,assistant,code}-expanded-end.png`
+show the 收起 row at the end, still inside the block/code box. Measured clamp:
+user 264 px shown of 445, assistant 316 of 456, code 210 of 491; the row is
+44 px with an 8–9 px gap after the clamped body (no overlap); a programmatic
+toggle kept `scrollTop` at 944 → 944 (no jump).
 
 **Streaming and waiting.** Auto-stick to the bottom only while the reader is at
 the bottom (the existing `stick` ref, `ThreadPanel.tsx:574-580`); the "最新消息"
