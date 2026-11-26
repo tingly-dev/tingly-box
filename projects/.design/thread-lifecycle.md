@@ -8,6 +8,7 @@
 > - [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)：本设计落地前的代码现状图，含每条转移的行号、判定树、实测结果、缺口 G1–G14。
 > - `projects.md` §4.3：本文的摘要。
 > - [`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)：归档和删除（释放 worktree、删分支）。
+> - [`../../.design/chat-mode.md`](../../.design/chat-mode.md)：项目之外的纯聊天。它**不是**一种线程（无项目、无 cwd、无工具），见该文 §1、§6。
 > - `mcp-tools.md`：工具 URL 的发放和收回；`github-tools.md`：PR 记录（Links）和合并。
 
 ## 1 目的与原则
@@ -228,6 +229,8 @@ close(t, mark)  写 resolved + ResolvedAt（已有则保留）+ mark 的附加�
 | NEEDS_INPUT | 是 | 否：一轮结束直接歇着 | — |
 | Archive | 关闭并释放 worktree | 只加标志，不关闭；working / waiting 改为歇着，其余保留（failed 仍 failed） | — |
 | 给已关闭的线程发消息 | 拒绝 | IM 发来时在同一文件夹开新会话；网页拒绝 | — |
+
+纯 Chat 不在本表：它没有 Project、线程行、cwd 或工具，状态只有“有/没有进行中的回复”；见 [`../../.design/chat-mode.md`](../../.design/chat-mode.md)。
 
 项目主线程的显示状态由协调者队列推出（`coordinatorView`：忙时 working，有中断的输入待决定时 waiting，否则 idle），从不 resolved。
 
