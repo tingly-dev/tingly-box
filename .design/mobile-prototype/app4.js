@@ -43,19 +43,21 @@ const themTurn = (html, at) =>
   `<div class="turn"><div class="msg them">${html}</div><div class="meta">${at}<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div></div>`;
 
 function runA() {
-  return `<button class="proc" data-sheet="sactivity">${I('bolt', 's')}<span class="sum"><b>过程</b> 读 1 · 搜 1 · 改 1 · <span class="wait">1 待批准</span><span class="mut"> · 3m</span></span>${sessChev}</button>`;
+  // One neutral line: what layer it is and how long it took. No per-tool
+  // tallies; the counts and every call's input/output live in the sheet.
+  return `<button class="proc" data-sheet="sactivity">${I('bolt', 's')}<span class="sum"><b>过程</b><span class="mut"> · 3m</span></span>${sessChev}</button>`;
 }
 
 function runB() {
   const c1 = !!S.open.c1;
   return `<div class="grp">
-    <div class="hd">${I('bolt', 's')} 这一轮的过程 · 4 步 · 3m</div>
+    <div class="hd">${I('bolt', 's')} 这一轮的过程 · 3m</div>
     <div class="tline">
       ${callLine('info', '思考', '先确认连接池怎么建，再按峰值并发估算。', '<span class="ok">3s</span>', 'th1')}
-      ${callLine('file', 'Read', 'internal/db/pool.go', '<span class="ok">42 行</span>', 'c1')}
-      ${c1 ? `<div class="detail"><div class="k">输出</div><pre class="code" style="margin:0 0 8px">MaxOpenConns: 10\nMaxIdleConns: 2</pre><div class="actgrid"><button class="btn s">复制输出</button><button class="btn s">在轨迹中定位</button></div></div>` : ''}
-      ${callLine('eye', 'Grep', 'SetMaxOpenConns', '<span class="ok">1 处</span>', 'c2')}
-      ${callLine('sliders', 'Edit', 'internal/db/pool.go', '<span class="ok">+8 −4</span>', 'c3')}
+      ${callLine('file', 'Read', 'internal/db/pool.go', '', 'c1')}
+      ${c1 ? `<div class="detail"><div class="k">结果 · 42 行</div><pre class="code" style="margin:0 0 8px">MaxOpenConns: 10\nMaxIdleConns: 2</pre><div class="actgrid"><button class="btn grow">复制输出</button></div></div>` : ''}
+      ${callLine('eye', 'Grep', 'SetMaxOpenConns', '', 'c2')}
+      ${callLine('sliders', 'Edit', 'internal/db/pool.go', '', 'c3')}
       ${callLine('bolt', 'Bash', 'go test ./... -run Bench -staging', '<span class="wait">等待批准</span>')}
     </div>
   </div>`;
@@ -112,16 +114,12 @@ function sessDock() {
   </div>`;
 }
 
-const composerLine = () => `<div class="line"><button class="tap">${I('clip')}</button><div class="field" data-kb="1">给这个线程发消息…</div><button class="send stop">${I('stop', 's')}</button></div>`;
+const composerLine = () => `<div class="line"><button class="tap" aria-label="添加附件">${I('clip')}</button><button class="tap" data-sheet="ssettings" aria-label="会话设置">${I('sliders')}</button><div class="field" data-kb="1">给这个线程发消息…</div><button class="send stop">${I('stop', 's')}</button></div>`;
 
 function sessComposer() {
-  if (S.variant === 'A') {
-    return `<div class="composer sess-comp">${composerLine()}</div>`;
-  }
-  return `<div class="composer sess-comp">
-    <div class="chipbar"><button class="chip" data-sheet="ssettings">${I('sliders', 's')}haiku-4-5</button><button class="chip" data-sheet="ssettings">${I('lock', 's')}自动接受编辑</button><button class="chip" data-sheet="ssettings" aria-label="会话设置">${I('dots', 's')}</button></div>
-    ${composerLine()}
-  </div>`;
+  // No inline pickers: model, effort, permission and auto-answer live in the
+  // settings sheet, one tap from the composer. The field keeps the room.
+  return `<div class="composer sess-comp">${composerLine()}</div>`;
 }
 
 function sessionScreen() {
@@ -134,8 +132,7 @@ function sessionScreen() {
   return `<div class="bar sess-bar">
     <button class="tap pri" data-act="back">${I('back')}</button>
     <div class="ttl"><b>${SESSION.title}</b><span>${dot2()}等你处理 · #1 · ${SESSION.ago} 前</span></div>
-    <button class="tap" data-sheet="rail" aria-label="详情">${I('info')}</button>
-    <button class="tap" data-sheet="tmenu" aria-label="更多">${I('dots')}</button>
+    <button class="tap" data-sheet="stmenu" aria-label="更多">${I('dots')}</button>
   </div>
   ${kb ? '' : sessChecklist()}
   <div class="screen"><div class="scroll sess-scroll">${sessBody()}</div></div>
@@ -148,7 +145,16 @@ const dot2 = () => S.pending['t-pool'] ? '<span class="dot warn"></span>' : '<sp
 
 // Sheets: process detail, subagent, files, message actions, settings, error, checklist.
 Object.assign(SHEETS, {
-  schecklist: () => `<h3>进度 · 1/3</h3><div class="body">${SESSION.checklist.map((x) => `<div class="kv"><span>${x.t}</span><span>${x.s === 'done' ? '完成' : x.s === 'now' ? '进行中' : '待办'}</span></div>`).join('')}<div class="note">上一组任务（1 组）在轨迹里查看。</div></div>`,
+  // The ⋯ sheet holds only what a phone does: status/errors, the things the
+  // work produced, and finishing it. Desktop-only depth is named, not copied.
+  stmenu: () => `<h3>线程</h3><div class="body">
+    <button class="row" data-sheet="rail"><span class="main"><span class="t">线程详情</span><span class="d">分支 · 模型 · 上下文 · tokens</span></span>${sessChev}</button>
+    <button class="row" data-sheet="ssubagent"><span class="main"><span class="t">子代理 · 1</span><span class="d">Find pooling hotspots · 完成</span></span>${sessChev}</button>
+    <button class="row" data-sheet="sfiles"><span class="main"><span class="t">文件 · 3</span><span class="d">2 张图 · 1 个文档</span></span>${sessChev}</button>
+    <button class="row" data-act="done"><span class="main"><span class="t">标记为已解决</span></span></button>
+    <div class="note">完整轨迹、diff、展开所有工具调用、规则/条件编辑：请在电脑上查看。手机只做读对话、发消息、回答、看状态/错误、停止、找文件这些关键动作。</div>
+  </div>`,
+  schecklist: () => `<h3>进度 · 1/3</h3><div class="body">${SESSION.checklist.map((x) => `<div class="kv"><span>${x.t}</span><span>${x.s === 'done' ? '完成' : x.s === 'now' ? '进行中' : '待办'}</span></div>`).join('')}<div class="note">上一组任务在电脑上的轨迹里查看。</div></div>`,
   sactivity: () => `<h3>这一轮的过程</h3><div class="body">
     <div class="note">对话默认只显示结果；每一步的输入和输出在这里。整段可复制，长输出在自己的框里横向滚动。</div>
     <div class="tline">
@@ -168,10 +174,11 @@ Object.assign(SHEETS, {
     <div class="tline">${callLine('eye', 'Grep', 'pool|MaxOpenConns', '<span class="ok">4 处</span>')}${callLine('file', 'Read', 'internal/db/pool.go', '<span class="ok">42 行</span>')}</div>
     <div class="sec" style="margin:12px 4px 6px">报告</div>
     <div class="msg them">峰值时连接池饱和：MaxOpenConns=10 低于峰值并发 38，建议 40 打开 / 10 空闲。</div>
-    <div class="actgrid"><button class="btn grow">在轨迹中定位</button></div>
+    <div class="actgrid"><button class="btn grow">复制报告</button></div>
+    <div class="note">完整轨迹、并行子代理对比请在电脑上查看。</div>
   </div>`,
   sfiles: () => `<h3>发来的文件 · 3</h3><div class="body">${[['p99.png', '54 KB · 图'], ['throughput.png', '62 KB · 图'], ['report.md', '4.8 KB · 文档']].map(([n, m]) => `<button class="row">${thumb(n.endsWith('.png') ? 'image' : 'file')}<span class="main"><span class="t">${n}</span><span class="d">${m}</span></span>${sessChev}</button>`).join('')}<div class="note">点按预览；完整图片库在电脑上。</div></div>`,
-  smsg: () => `<h3>消息</h3><div class="body msgacts"><button class="row" data-toast="已复制">${I('copy', 's')}<span class="t main">复制文本</span></button><button class="row" data-toast="已复制">${I('info', 's')}<span class="main"><span class="t">复制时间</span><span class="d">今天 10:18</span></span></button><button class="row">${I('chart', 's')}<span class="t main">在轨迹中定位</span></button></div>`,
+  smsg: () => `<h3>消息</h3><div class="body msgacts"><button class="row" data-toast="已复制">${I('copy', 's')}<span class="t main">复制文本</span></button><button class="row" data-toast="已复制">${I('info', 's')}<span class="main"><span class="t">复制时间</span><span class="d">今天 10:18</span></span></button><div class="note">长按消息可选择任意文本。</div></div>`,
   ssettings: () => `<h3>会话设置</h3><div class="body"><div class="kv"><span>模型</span><span>claude-haiku-4-5 · 高</span></div><div class="kv"><span>权限</span><span>自动接受编辑</span></div><div class="kv"><span>自动回答</span><span>5 分钟后用推荐答案</span></div><div class="kv"><span>分支</span><span>${SESSION.branch}</span></div><div class="kv"><span>上下文</span><span>123k / 200k</span></div><div class="note">这些设置只在手机版里改；默认值是项目给的。</div></div>`,
   serror: () => `<h3>Bash 超时</h3><div class="body"><div class="kv"><span>命令</span><span style="font-family:ui-monospace,Menlo,monospace">go test ./store/...</span></div><div class="kv"><span>退出码</span><span style="color:var(--err)">124</span></div><div class="kv"><span>耗时</span><span>120s</span></div><pre class="code" style="margin-top:12px">panic: test timed out after 2m0s\n\trunning tests:\n\t\tTestIdempotencyStore (2m0s)</pre><button class="btn p" style="width:100%;margin-top:8px">重试这一步</button></div>`,
 });

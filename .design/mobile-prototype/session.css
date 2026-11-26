@@ -107,13 +107,10 @@
 .sess-wait { margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-bottom: 1px solid var(--divider); background: var(--paper); }
 .sess-wait .sum .mut { color: var(--text3); }
 
-/* composers: A one line, B one line + quick chips */
+/* composer: one line, attach + settings icons, field, send/stop */
 .sess-comp { padding: 8px 8px 10px; }
 .sess-comp .line .field { min-height: 44px; padding: 10px 16px; }
 .sess-comp .send { width: 44px; height: 44px; }
-.sess-comp .chipbar { display: flex; gap: 8px; padding: 0 4px 8px 52px; overflow-x: auto; }
-.sess-comp .chip { min-height: 44px; min-width: 44px; }
-.sess-comp .settings { margin-left: auto; }
 
 /* safe-area aware bottom */
 .sess-comp { padding-bottom: max(10px, env(safe-area-inset-bottom)); }

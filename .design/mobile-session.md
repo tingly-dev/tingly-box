@@ -12,6 +12,51 @@
 > keyboard handling"). It reuses the phone shell, `BottomSheet`, `GroupedList`,
 > `DockedActions`, `useIsPhone` / `usePhoneShell` and the `mobile` tokens.
 
+## The principle
+
+> 移动端的目的就是为了简化方便，不是为了完全等效的体验，但是又能完成关键的工作。
+>
+> Mobile exists to be **simpler and handier**, not a full-equivalence experience
+> of the desktop — but it must still get the **key work** done.
+
+The phone must complete exactly these jobs, first-class and fast:
+
+1. **Read the conversation** — the dialogue and the final report.
+2. **Send / steer a message** — one message, an instruction, a nudge; stop a run.
+3. **Approve or answer a blocking request** — without scrolling it away.
+4. **See status and errors** — what the thread is doing, what failed.
+5. **Stop a run** — the composer's stop is always there while a turn runs.
+6. **Find a file or output** — the files the agent sent, the outputs it produced.
+
+Everything else is **secondary**: at most one tap into a sheet, or explicitly
+"open on desktop". When a desktop affordance would shrink the conversation, drop
+or defer it rather than mirror it. This is why the session page has no project
+band, no IM banner, no links strip, no detail toggle, no inline model/permission
+pickers and no per-tool tallies in the collapsed run: each of those exists on the
+desktop to give *more control or more structure at once*; the phone gives the
+dialogue room and puts the rest one step away.
+
+**Intentionally not equivalent on mobile** (entry point in the app kept where it
+is cheap; otherwise the desktop is named):
+
+| Desktop capability | On the phone |
+|---|---|
+| Full diff / PR file review, side-by-side panes | read-only change summary in the info sheet; full diff on desktop |
+| Trajectory list/graph, "expand all tool calls" | the process/subagent sheets show what ran; the full trace is desktop |
+| Tool input/output, raw payloads | process sheet (one tap), copy per section; never in the collapsed row |
+| Branch / model / tokens / context / PRs | info sheet (read-only) |
+| Model, effort, permission, auto-answer pickers | one settings icon in the composer → settings sheet |
+| Rule / condition editing, drag-reorder, routing graph | view + change target in the rule sheet; editing/reorder desktop |
+| Provider / credential / Team bulk editing, tables | desktop |
+| Floating windows, placement, master-detail | one column only |
+| Detailed/concise toggle, hover time stamp, expand-all | not shown; the phone is concise-only, time/copy are the message action |
+| Checklist history, subagent full transcript inline | sheets |
+| Image inpainting canvas, drag-to-reorder references | desktop |
+| Full Library management (trees, uploads, zips) | preview a file; management desktop |
+
+Destructive actions still confirm (archive/delete/restart) through the existing
+confirmation sheet, because safety is not an "equivalence" feature.
+
 ## 0. The short version
 
 On a 390×844 phone the current session page gives the **conversation 5–29 % of
@@ -23,10 +68,9 @@ The proposal: **one compact session bar, a conversation-first transcript, a
 one-line composer with its settings in a sheet, and the pending decision docked
 above the composer**. Process (thinking, tool calls/results, subagent steps,
 checklist history) folds to a 44 px line and opens one tap deep. In the
-prototype this gives the transcript **53 %** of 390×844 with a request docked
-(**80 %** once nothing is pending) and **48 %** at 360×800 — with every tappable
-row at least 44 px (measured: 0 below 44 in option A; 0 in B after the chip
-fix).
+prototype this gives the transcript **57 %** of 390×844 with a request docked
+(**80 %** once nothing is pending) and **54 %** at 360×800 — with every tappable
+row at least 44 px (measured: 0 below 44 in both options).
 
 Two options are compared below; the recommendation is **A (conversation-first)
 with B's per-call rows inside the process sheet**, so nothing is hidden, only
@@ -112,8 +156,8 @@ Two layers only:
 | `assistant` (markdown) | full reply, never clamped; code scrolls in its box | — | — |
 | `assistant` with files (`send_file`) | **one row**: up to 4 thumbnails + "N 个文件 · a 图 · b 文档" | file preview | file sheet / Library |
 | `activity` · thinking | folded into the run line (or B: one "思考 · Ns" row) | expand | process sheet, full text |
-| `activity` · tool call/result | **A:** one run line "过程 · 读 1 · 搜 1 · 改 1 · 1 待批准 · 3m"; **B:** one 44 px row per call | row | process sheet: input/output per call, copy |
-| `agent` (subagent) | one card: description + type/status (+ usage in B) | open | subagent sheet: steps + report; "在轨迹中定位"; full-page focus for parity with `SubagentFocus` |
+| `activity` · tool call/result | **A:** one neutral run line "过程 · 3m" (no counts); **B:** one 44 px row per call | row | process sheet: counts, input/output per call, copy |
+| `agent` (subagent) | one card: description + type/status (+ usage in B) | open | subagent sheet: steps + report; the full trace is desktop |
 | `request` pending (approval/ask) | **docked above the composer**, 48 px allow/deny; "本线程都允许…" opens a sheet | — | sheet for extra options; the raw payload is behind "详情" |
 | `request` settled | one quiet line: "允许 Edit · bench/results.md · 已允许" | row | process sheet / message action |
 | `error` | one red line: "Bash 超时 · go test … · 120s" | row | error sheet: exit code, output, retry |
@@ -125,7 +169,7 @@ Two layers only:
 | time | time dividers (already) + exact time in the message meta | — | message action |
 | copy | per-message meta action (44 px) + code-block copy | — | — |
 | thread meta (branch, model, tokens, context) | **not on the page** | — | info sheet (the existing info rail content) |
-| files/links/PRs of the thread | one chip "变更 · 3 · 1 需要看" | — | sheet (the existing `ComposerStrip` + rail cards) |
+| files/links/PRs of the thread | not on the page | — | files in the ⋯ sheet; PRs/branch in the info sheet |
 
 Rules that decide the edge cases:
 
@@ -133,8 +177,12 @@ Rules that decide the edge cases:
   "等待批准 …" line above the composer (still one tap from allow/deny).
 - **A failed tool result is never silently folded** into a run summary: the run
   line carries a red "N failed" and stays one tap from the rows.
-- **Information is never destroyed, only moved.** Every folded line names what
-  it holds (counts, status, the summary field), so a reader knows whether to open it.
+- **Information is never destroyed, only moved.** A folded *run* says only that
+  it is process ("过程") and, if it fits, how long it took; the counts and the
+  summary field are in the sheet, so the reader opens it to see what happened.
+  A folded line that is itself one thing (a settled request, a command, an
+  error) still names that thing. A run with a failure shows its status (a red
+  dot / "有失败"), never silently disappears.
 - **One level of expansion.** A 44 px row expands inline; its input/output opens
   in a sheet, not another accordion. Subagent steps open as a sheet/page, never
   nested inside the conversation transcript.
@@ -146,10 +194,11 @@ Rules that decide the edge cases:
 **Touch targets.** Everything tappable is ≥ 44 px, primary/docked ≥ 48 px
 (`mobile.tapMin` / `tapPrimary`). Concretely: inline `DisclosureRow` gets
 `@media (pointer: coarse) { minHeight: 44 }` (the `ComposerStrip` header already
-does this, `ComposerStrip.tsx:95`); the detail toggle becomes a 44 px segmented
-control or a menu item; picker rows in the settings sheet are 44–56 px; the
-code-copy button is 44 px; the per-message action is 44 px. The visual glyph may
-stay 14–18 px — the hit area is the row.
+does this, `ComposerStrip.tsx:95`); the detail toggle is **not shown on a phone**
+(concise is the only view; details open per row/sheet), so it costs nothing here;
+the pickers are rows in the settings sheet, 44–56 px; the code-copy button is
+44 px; the per-message action is 44 px. The visual glyph may stay 14–18 px — the
+hit area is the row.
 
 **Expand/collapse.** Tap the whole row; the chevron is decoration. Only one detail
 open per run (opening another closes the previous) to keep the page short. The
@@ -168,10 +217,10 @@ capped (20 lines) with "在面板打开"; the checklist expands within the page 
 
 **Time and copy.** Group time dividers stay (day/hour). Each message group has a
 quiet meta row with its exact time and one `⋯` (44 px):
-`复制文本 · 复制时间 · 在轨迹中定位`. The copy writes the entry's raw Markdown
+`复制文本 · 复制时间`. The copy writes the entry's raw Markdown
 via the sibling branch's `messageCopyText()` (`.design/transcript-message-copy.md`),
 never the DOM; code blocks keep their own copy button. Long-press still selects
-and copies arbitrary text. On touch the meta row is **visible** (the time is not
+and copies arbitrary text; a "locate in trajectory" action is desktop-only. On touch the meta row is **visible** (the time is not
 hover-only), because a phone has no divider for every message.
 
 **Bottom safe area.** `viewport-fit=cover`; the composer's bottom padding is
@@ -246,8 +295,8 @@ keyboard handling, no tab bar. They differ in **how process is represented**.
 
 ### Option A — 极简对话流 (conversation-first)
 
-- One run = one 44 px line: "过程 · 读 1 · 搜 1 · 改 1 · 1 待批准 · 3m"; tap →
-  the process sheet (thinking, each call's input/output, copy).
+- One run = one neutral 44 px line: "过程 · 3m" (no per-tool tallies); tap →
+  the process sheet (counts, thinking, each call's input/output, copy).
 - Subagent = one card line (name + type + status); tap → the subagent sheet.
 - Checklist = one 44 px strip; tap → expand / sheet.
 - Composer = one line; model/effort/permission/auto-answer in the settings sheet.
@@ -259,36 +308,42 @@ Screenshots: `mobile-session-option-a-390x844-{light,dark}.png`,
 code, settled request, compaction and error `...-a-390x844-light-scrolled.png`;
 keyboard state `...-a-390x844-light-keyboard.png` (dock folded to one line).
 
-Measured: transcript **480 px = 53 %** at 390×844, **436 = 48 %** at 360×800;
+Measured: transcript **480 px = 57 %** at 390×844, **436 = 54 %** at 360×800;
 **676 = 80 %** at 390 once the request is resolved (docked removed); 0 of 18
-visible controls below 44 px.
+visible controls below 44 px. A 4-call run occupies **44 px** (one line), and the
+transcript content is **960 px** tall.
 
 ### Option B — 保留结构但折叠 (structure kept, folded)
 
 - Process stays visible as **one 44 px row per call** (思考 · Read · Grep · Edit ·
-  Bash), each opens inline; a small "这一轮的过程 · 4 步 · 3m" heading groups them.
+  Bash), each opens inline; the collapsed row names the tool and its target, and
+  the result/count appears only in the opened row. A small "这一轮的过程 · 3m"
+  heading groups them (no step/tool count).
 - Subagent card shows the report preview (2 lines).
-- Composer keeps two quick chips (model, permission) above the field; the rest in
-  the sheet.
 - Checklist is a card header (folded), expandable.
 
 Screenshots: `mobile-session-option-b-390x844-{light,dark}.png`,
 `...-360x800-{light,dark}.png`; inline expansion
 `...-b-390x844-light-expanded.png`; scrolled `...-b-390x844-light-scrolled.png`.
 
-Measured: transcript **428 px = 48 %** at 390×844, **384 = 43 %** at 360×800;
-**624 = 74 %** without the dock; 0 of 25 controls below 44 px.
+Measured: transcript **480 px = 57 %** at 390×844, **436 = 54 %** at 360×800
+(same chrome as A); **676 = 80 %** without the dock; 0 of 22 controls below
+44 px. The same 4-call run occupies **272 px** (4 rows + heading), so its
+transcript content is **1224 px** (+264 px over A): fewer messages fit without
+scrolling.
 
 ### Comparison
 
 | | A · conversation-first | B · structure kept |
 |---|---|---|
-| Transcript share (390 / 360) | **53 % / 48 %** | 48 % / 43 % |
-| Without a docked request | **80 %** | 74 % |
+| Transcript viewport share (390 / 360) | **57 % / 54 %** | **57 % / 54 %** (same chrome) |
+| Without a docked request | **80 %** | **80 %** |
 | Rows per 4-call run | 1 | 4 (+1 heading) |
-| Process at a glance | summary + status only | each call's name + value |
+| A 4-call run occupies | **44 px** | **272 px** |
+| Transcript content height (this conversation) | 960 px | 1224 px |
+| Process at a glance | a neutral "过程" label (+ duration) | each call's name + target |
 | To see one call's input/output | open the process sheet | tap that row |
-| Info loss in the default view | counts + status, not each call | none (each call is a line) |
+| Info loss in the default view | that a run happened and how long; what it did is one tap away | none (each call is a line) |
 | Risk | a reader may feel blind while a turn runs | process still occupies the page |
 | Best for | triage/read/answer on a phone | following the work, reviewing a run |
 
@@ -304,7 +359,7 @@ What is not on the default screen, and where it is found:
 
 | Not shown by default | Found at |
 |---|---|
-| thinking text, tool input/output | process sheet (per call), copy per section |
+| thinking text, tool input/output, per-tool counts | process sheet (per call), copy per section |
 | subagent steps/report | subagent sheet; "open on its own" = today's `SubagentFocus` page |
 | checklist history | progress sheet ("上一组任务") |
 | settled approvals/answers | one-line row → process sheet |
@@ -319,8 +374,8 @@ Cost (frontend only; no backend/API change; no new dependency):
 | Slice | What changes | Files | Cost |
 |---|---|---|---|
 | Gate + default | `usePhoneShell()` decides the session layout; `?ui=mobile` already exists; default detail = concise on a phone | `ThreadPanel.tsx`, `useMessageDetail.ts`, `Transcript.tsx` | XS |
-| Compact bar | hide the project/IM bands on the session page; bar = back, title, status, info, more; meta into the info sheet | `ProjectPage.tsx`, `ThreadPanel.tsx` | S |
-| Composer | one line; `MessageDetailControl` + pickers + `ComposerStrip` + status line into the settings/info sheets; safe area; keyboard fold | `ThreadPanel.tsx`, `Composer.tsx`, new `SessionSettingsSheet` | M |
+| Compact bar | hide the project/IM bands on the session page; bar = back, title + status, ⋯; thread details, subagents and files live in the ⋯ sheet, which names desktop-only depth | `ProjectPage.tsx`, `ThreadPanel.tsx` | S |
+| Composer | one line (attach · settings · field · send/stop); pickers into the settings sheet; `ComposerStrip` + status line into the info/⋯ sheets; the detail toggle is dropped (concise-only); safe area; keyboard fold | `ThreadPanel.tsx`, `Composer.tsx`, new `SessionSettingsSheet` | M |
 | Checklist strip | header-only 44 px on a phone; expand ≤ 40 vh; history sheet | `Transcript.tsx` `ChecklistCard`, `ThreadPanel.tsx:573` | S |
 | Process folding (A) | one run line; `ActivityRun` concise; process sheet reusing `BottomSheet`/`GroupedList` | `Transcript.tsx`, new `ActivitySheet` | M |
 | Per-call rows (B, inside the sheet) | the existing `ToolRow` with 44 px rows + input/output | `Transcript.tsx`, `Disclosure.tsx` | S |
@@ -341,12 +396,13 @@ row and the memoization.
 1. **Default density on a phone:** conversation-first (A) or structure-kept (B)?
    (Recommend A, with B one tap deep.)
 2. **Header:** may the session page drop the project title bar and the IM
-   banner, moving them into an info sheet? (Recommend yes; Back returns to the
-   workspace, the project name is in the sheet.)
+   banner, moving that context into the ⋯ sheet? (Recommend yes; Back returns to
+   the workspace, the project name is in the sheet.)
 3. **Tab bar on a pushed session:** hide it (composer owns the bottom) or keep
    it? (Recommend hide; it returns on Back.)
-4. **Composer pickers:** all in a settings sheet (A), or keep model + permission
-   as two quick chips (B)? (Recommend all in the sheet; the chips cost ~38 px.)
+4. **Composer settings:** all behind one settings icon → sheet (A and B both do
+   this now), or any inline picker? (The principle says settings are secondary;
+   recommend no inline pickers.)
 5. **Checklist:** a 44 px sticky strip (A) or a folded card header (B)? And may
    its history move to a sheet? (Recommend strip + sheet.)
 6. **Subagent:** a sheet (keeps the conversation) or a full page (today's
