@@ -8,7 +8,7 @@
 > - [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)：本设计落地前的代码现状图，含每条转移的行号、判定树、实测结果、缺口 G1–G14。
 > - `projects.md` §4.3：本文的摘要。
 > - [`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)：归档和删除（释放 worktree、删分支）。
-> - [`../../.design/chat-mode.md`](../../.design/chat-mode.md)：项目之外的纯聊天。它复用线程数据面（`Thread` / `ThreadEvent`）但由 afk 在进程内运行，只使用 `working` / `idle` / `failed` 子集，不进入协调者、waiting、ready 流程。
+> - [`../../.design/chat-mode.md`](../../.design/chat-mode.md)：项目之外的只读聊天。它复用线程数据面（`Thread` / `ThreadEvent`）并跑 Claude Code 的只读档位（`Read` / `Glob` / `Grep`，无写/执行/MCP），只使用 `working` / `idle` / `failed` 子集，不进入协调者、waiting、ready 流程。
 > - `mcp-tools.md`：工具 URL 的发放和收回；`github-tools.md`：PR 记录（Links）和合并。
 
 ## 1 目的与原则
@@ -230,7 +230,7 @@ close(t, mark)  写 resolved + ResolvedAt（已有则保留）+ mark 的附加�
 | Archive | 关闭并释放 worktree | 只加标志，不关闭；working / waiting 改为歇着，其余保留（failed 仍 failed） | — |
 | 给已关闭的线程发消息 | 拒绝 | IM 发来时在同一文件夹开新会话；网页拒绝 | — |
 
-纯 Chat 复用线程的数据面，但只使用 `working` / `idle` / `failed` 三个值：没有协调者、`ready`（无提交）或 `waiting`（无审批/提问工具），由 afk 在宿主进程内运行；见 [`../../.design/chat-mode.md`](../../.design/chat-mode.md)。
+纯 Chat 复用线程的数据面，但只使用 `working` / `idle` / `failed` 三个值：没有协调者、`ready`（无提交）或 `waiting`（只读工具免审批），跑 Claude Code 的只读档位；见 [`../../.design/chat-mode.md`](../../.design/chat-mode.md)。
 
 项目主线程的显示状态由协调者队列推出（`coordinatorView`：忙时 working，有中断的输入待决定时 waiting，否则 idle），从不 resolved。
 
