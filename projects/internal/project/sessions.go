@@ -164,8 +164,11 @@ func (m *Threads) startFolderThread(spec FolderThreadSpec, beforeStart func(*db.
 	return t, nil
 }
 
-// SetPermissionMode saves the mode for the thread's next started turn.
-// The engine applies it live then, or reopens with --resume if that fails.
+// SetPermissionMode saves the mode and, when the thread has a live process,
+// applies it to that process now: the running turn stops using the old mode
+// (a tightened one must not wait for a turn that may run for hours). The next
+// turn still applies it from launch options, which covers a failed push, a
+// process started later, and the default mode an empty mode means.
 // Empty resets the thread to its project's (or folder's) current mode: a
 // copy, not a link.
 func (m *Threads) SetPermissionMode(id, mode string) (*db.Thread, error) {
@@ -186,8 +189,25 @@ func (m *Threads) SetPermissionMode(id, mode string) (*db.Thread, error) {
 	out, err := m.update(id, func(t *db.Thread) { t.PermissionMode = mode })
 	if err == nil {
 		m.addEvent(out, &db.ThreadEvent{Kind: db.EvSystem, Content: "permission mode: " + orDefault(mode)})
+		m.applyPermissionMode(out, mode)
 	}
 	return out, err
+}
+
+// applyPermissionMode pushes mode to the thread's live process, without a
+// restart (the process may be running the turn whose permissions changed).
+// A push the process refuses is noted and left to the next turn, which
+// applies it through the launch options as before: the saved mode is the
+// truth, and the process catches up rather than the thread running on a mode
+// nobody chose. With no live process there is nothing to push: the next turn
+// starts with the saved mode.
+func (m *Threads) applyPermissionMode(t *db.Thread, mode string) {
+	if mode == "" || m.engine == nil {
+		return
+	}
+	if _, err := m.engine.SetPermissionMode(m.sessionOf(t.ID), mode); err != nil {
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "the running process did not take the new permission mode; it applies from the next turn: " + err.Error()})
+	}
 }
 
 // SetAutoAnswer sets when the thread's questions with a suggested answer

@@ -1,0 +1,27 @@
+=== mode probe tighten (CLI 2.1.259 (Claude Code), model demo-sonnet)
+  0.00 SEND {"type": "user", "message": {"role": "user", "content": "Run the two probe commands."}}
+  0.43 RECV system init permissionMode=default
+  0.48 REQ  main#1
+  0.49 RECV assistant ["Bash"]
+  0.50 SEND {"type": "control_response", "response": {"subtype": "success", "request_id": "d77c539b-cb49-4a0a-b476-584dde95e1d8", "response": {"behavior": "allow", "updatedInput": {"command": "./tool.sh FIRST 3",
+  0.50 RECV control_request can_use_tool Bash
+  1.00 SEND {"type": "control_request", "request_id": "probe-mode", "request": {"subtype": "set_permission_mode", "mode": "plan"}}
+  1.00 RECV control_response {"subtype": "success", "request_id": "probe-mode", "response": {"mode": "plan"}}
+  1.00 RECV system status
+  3.56 RECV system task_started
+  3.57 RECV system task_notification
+  3.58 RECV user [{"tool_use_id": "toolu_5dc39ae021ed480ca596", "type": "tool_result", "content": "(Bash completed with no output)", "is_error": false}]
+  3.61 REQ  main#2
+  3.62 RECV assistant ["Bash"]
+  3.64 REQ  main#3
+  3.65 REQ  main#4
+  3.65 RECV system permission_denied
+  3.66 RECV user [{"type": "tool_result", "content": "demo-sonnet is temporarily unavailable, so auto mode cannot determine the safety of Bash right now. Wait a moment and then try this action again. If it keeps failing, continue with other tasks that don't require this action
+  3.67 REQ  main#5
+  3.69 RECV assistant ["DONE"]
+  3.70 RECV result result subtype=success is_error=False
+--- summary
+can_use_tool requests: [('Bash', './tool.sh FIRST 3')]
+switch ack: {'subtype': 'success', 'request_id': 'probe-mode', 'response': {'mode': 'plan'}}
+FIRST ran: True; SECOND ran: False
+error tool_results: ['demo-sonnet is temporarily unavailable, so auto mode cannot determine the safety of Bash right now. Wait a moment and th']

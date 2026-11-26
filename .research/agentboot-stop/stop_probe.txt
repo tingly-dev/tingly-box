@@ -1,0 +1,47 @@
+=== stop probe (CLI 2.1.259 (Claude Code), model demo-sonnet)
+  0.00 SEND {"type": "user", "message": {"role": "user", "content": "Start the background task."}}
+  0.43 RECV system init permissionMode=bypassPermissions
+  0.49 REQ  main#1 last_tool_result=''
+  0.49 RECV assistant ["Bash"]
+  0.57 RECV system {"type": "system", "subtype": "background_tasks_changed", "tasks": [{"task_id": "bbhpji0qs", "task_type": "local_bash", "description": "background probe"}]}
+  0.57 RECV system {"type": "system", "subtype": "task_started", "task_id": "bbhpji0qs", "tool_use_id": "toolu_9185d816097b40e19851", "description": "background probe", "is_backgrounded": true, "task_type": "local_bash"}
+  0.66 RECV user [{"tool_use_id": "toolu_9185d816097b40e19851", "type": "tool_result", "content": "Command running in background with ID: bbhpji0qs. Output is being written to: /tmp/claude-1002/-home-x0079--tingly-box
+  0.68 REQ  main#2 last_tool_result='Command running in background with ID: bbhpji0qs. Output is being written to: /tmp/claude-1002/-home-x0079--tingly-box-project-projects-81e5270d-025f-4325-983e-8929e981de58-library--tmp-a89d969b-8b8d-'
+  0.70 RECV assistant ["STARTED"]
+  0.70 RECV result #1 subtype=success is_error=False result=STARTED
+  0.80 NOTE turn1 done=True
+  1.30 SEND {"type": "user", "message": {"role": "user", "content": "Now run the long one."}}
+  1.35 RECV system init permissionMode=bypassPermissions
+  1.37 REQ  main#3 last_tool_result='Command running in background with ID: bbhpji0qs. Output is being written to: /tmp/claude-1002/-home-x0079--tingly-box-project-projects-81e5270d-025f-4325-983e-8929e981de58-library--tmp-a89d969b-8b8d-'
+  1.38 RECV assistant ["Bash"]
+  3.80 NOTE before interrupt: process alive=True
+  3.81 SEND {"type": "control_request", "request_id": "probe-interrupt", "request": {"subtype": "interrupt"}}
+  3.81 RECV control_response {"subtype": "success", "request_id": "probe-interrupt", "response": {"still_queued": []}}
+  3.83 RECV user [{"type": "tool_result", "content": "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what y
+  3.83 RECV user [{"type": "text", "text": "[Request interrupted by user for tool use]"}]
+  3.83 RECV result #2 subtype=error_during_execution is_error=True result=None
+  5.81 NOTE after interrupt: process alive=True interrupt_ack={'subtype': 'success', 'request_id': 'probe-interrupt', 'response': {'still_queued': []}}
+  5.81 SEND {"type": "control_request", "request_id": "probe-alive", "request": {"subtype": "set_model", "model": "demo-sonnet"}}
+  5.81 RECV control_response {"subtype": "success", "request_id": "probe-alive"}
+  7.31 SEND {"type": "user", "message": {"role": "user", "content": "Are you still there? Reply YES."}}
+  7.32 RECV system init permissionMode=bypassPermissions
+  7.34 REQ  main#4 last_tool_result="The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to"
+  7.34 RECV assistant ["TURN2-END"]
+  7.34 RECV result #3 subtype=success is_error=False result=TURN2-END
+  7.51 NOTE after interrupt, another user message reached the model: True (main requests 3->4)
+  8.58 RECV system {"type": "system", "subtype": "background_tasks_changed", "tasks": []}
+  8.58 RECV system task_updated
+  8.58 RECV system {"type": "system", "subtype": "task_notification", "task_id": "bbhpji0qs", "tool_use_id": "toolu_9185d816097b40e19851", "status": "completed", "output_file": "/tmp/claude-1002/-home-x0079--tingly-box-project-projects-81e5270d-025f-4325-983e-8929e981de58-library--tmp-a89d969b-8b8d-4b10-b56f-b4daa2b8a
+  8.66 RECV system init permissionMode=bypassPermissions
+  8.68 REQ  main#5 last_tool_result="The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to"
+  8.68 RECV assistant ["TURN2-END"]
+  8.69 RECV result #4 subtype=success is_error=False result=TURN2-END
+ 10.51 NOTE background task output file exists=True
+--- summary
+turn1 (background task started) done: True
+turn2 result reported after interrupt: True error_during_execution
+interrupt ack: {'subtype': 'success', 'request_id': 'probe-interrupt', 'response': {'still_queued': []}}
+process alive after interrupt: True
+new user message reached the model after interrupt: True
+background task survived (bg.txt): True
+task notifications: 1

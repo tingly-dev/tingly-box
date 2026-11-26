@@ -9,6 +9,7 @@
 > - `projects.md` §4.3：本文的摘要。
 > - [`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)：归档和删除（释放 worktree、删分支）。
 > - `mcp-tools.md`：工具 URL 的发放和收回；`github-tools.md`：PR 记录（Links）和合并。
+> - [`../../.research/agentboot-stop-and-permissions.md`](../../.research/agentboot-stop-and-permissions.md)：Stop 与关进程分别丢什么、后台任务的存活边界、以及备选的“优雅收尾 / 保留运行”方案（§1）。
 
 ## 1 目的与原则
 

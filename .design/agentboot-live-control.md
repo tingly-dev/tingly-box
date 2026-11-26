@@ -65,6 +65,27 @@ falls back to the old path: evict, then reopen with `--resume`, which picks
 the settings up at launch. A failed live change therefore costs a restart,
 never a stale setting.
 
+### A permission mode change while a turn runs
+
+`applyLive` only runs when a turn starts, so a mode changed while a thread
+works waits for the next message — up to hours on a long turn.
+`Engine.SetPermissionMode(id, mode)` (`agentboot/engine/engine.go`) pushes it
+to the resident process now, no restart, and remembers it only if the process
+took it (a refusal leaves the old mode in `launchState`, so the next turn's
+`applyLive` tries again; `auto` on a model without it lands in `acceptEdits`
+with the same note as the turn path). Projects calls it from
+`Threads.SetPermissionMode`, and notes a refusal in the transcript. The
+bypassPermissions auto-approval wrapper reads the mode at each request
+instead of at turn start, so tightening stops the engine approving on the
+user's behalf at once. What a live change cannot do: stop a command or
+background task already running (modes gate tool calls, not processes); take
+back an allow rule the process started with (see "Settings" below, which
+applies only from the next start); and widen to `bypassPermissions`, which the
+CLI refuses unless the process was started with
+`--dangerously-skip-permissions` — that one falls back to the next turn's
+restart, which launches with the mode. The analysis, the measurements and the
+remaining gaps are in `.research/agentboot-stop-and-permissions.md` §2.
+
 ### A mode Claude Code cannot run (auto)
 
 Claude Code runs `--permission-mode auto` as **default** mode, silently, when

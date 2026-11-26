@@ -292,6 +292,63 @@ func (e *Engine) Inject(id, prompt string) error {
 	return nil
 }
 
+// SetPermissionMode applies mode to id's live process now, with a
+// set_permission_mode control request and no restart, so a change reaches the
+// turn in flight instead of waiting for the next one (a turn can run for
+// hours). It reports applied=true when the process has the mode; applied=false
+// with a nil error means there was nothing to apply it to (no resident
+// process, or the session is being restarted) and the next turn applies it as
+// before. A refusal is returned: the mode stays what it was, and the next
+// turn's applyLive tries again (with the auto fallback, if any).
+//
+// The mode is not remembered unless the process took it, so a failed push
+// can never leave the engine believing the process runs a mode it refused.
+func (e *Engine) SetPermissionMode(id, mode string) (bool, error) {
+	if mode == "" {
+		// The launch default has no name to send live (see applyLive).
+		return false, nil
+	}
+	res, ok := e.residentFor(id)
+	if !ok {
+		return false, nil
+	}
+	e.mu.Lock()
+	restarting := e.restarting[id]
+	e.mu.Unlock()
+	if restarting {
+		return false, nil
+	}
+	return e.setModeLive(id, res.c, mode)
+}
+
+// setModeLive is SetPermissionMode for the process ctl controls.
+func (e *Engine) setModeLive(id string, ctl liveController, mode string) (bool, error) {
+	e.mu.Lock()
+	have, known := e.launch[id]
+	e.mu.Unlock()
+	if !known {
+		// A process the engine did not launch (nothing to remember it by).
+		return false, nil
+	}
+	if have.mode == mode {
+		return true, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
+	defer cancel()
+	if err := ctl.SetPermissionMode(ctx, mode); err != nil {
+		// A mode this model cannot have is no reason to fail the change: the
+		// process moves to the fallback mode and the transcript says why, the
+		// same way applyLive does it.
+		if modeUnavailable(err) && e.fallBack(id, ctl, have, launchState{mode: mode, model: have.model}) {
+			return true, nil
+		}
+		return false, err
+	}
+	have.mode, have.refused = mode, ""
+	e.setLaunch(id, have)
+	return true, nil
+}
+
 // Injectable reports whether a message sent to id now would join the turn in
 // flight: a turn is running on a live process whose agent reads input
 // mid-turn. False means Inject would refuse it with ErrNotInjectable, and the
@@ -449,17 +506,23 @@ func (e *Engine) appendError(id, text string) {
 	e.store.Append(id, Entry{Kind: KindError, Content: text, Timestamp: time.Now()})
 }
 
-// prompterFor is the prompter a turn of id answers with, before the
-// bypassPermissions wrapper: the host's, or the engine's own wp.
+// prompterFor is the prompter a turn of id answers with: the host's, or the
+// engine's own wp, wrapped so that a bypassPermissions session approves tool
+// use without asking. The wrapper reads the session's mode at each request
+// (SetPermissionMode is live), falling back to mode — the turn's launch mode —
+// when the host does not report one.
 func (e *Engine) prompterFor(id string, wp *webPrompter, mode string) agentboot.Prompter {
 	var p agentboot.Prompter = wp
 	if e.hostPrompter != nil {
 		p = e.hostPrompter(id)
 	}
-	if autoApproves(mode) {
-		p = autoApprovePrompter{inner: p}
+	live := func() string {
+		if e.permissionMode != nil {
+			return e.permissionMode(id)
+		}
+		return mode
 	}
-	return p
+	return autoApprovePrompter{inner: p, mode: live}
 }
 
 func (e *Engine) turnEnded(id string, end TurnEnd) {
