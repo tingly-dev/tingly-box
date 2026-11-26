@@ -100,6 +100,8 @@ const threads = [
     threadWithUsage({ id: 't-backoff', seq: 5, title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
     threadWithUsage({ id: 't-trace', seq: 6, title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20),
         links: [link({ number: 201, title: 'Add tracing spans to /charge', head: 'projects/t-trace', base: 'main', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
+    // A long conversation for the phone's ClampedText / code-cap screenshots.
+    threadWithUsage({ id: 't-long', seq: 7, title: 'Write the migration notes', status: 'ready', task: 'Turn the migration review into notes the team can follow at cutover.', turns: 4, input_tokens: 60_000, output_tokens: 4_200, files_changed: 1, updated_at: ago(30) }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
@@ -158,6 +160,47 @@ const threadEvents = (th: (typeof threads)[number]) => {
             // Sent while the turn runs: Claude reads it at its next step. The next one is held for after the turn.
             ev('user', 'Also log each dropped retry at debug level.', 1, { payload: JSON.stringify({ injected: true }) }),
             ev('queued', 'When it passes, write the rollout notes into docs/retries.md.', 1, { payload: JSON.stringify({ state: 'held' }) }),
+        ]
+    }
+    if (th.id === 't-long') {
+        const longBrief = 'A few details from the review, so the notes match what actually happened, not the original plan.\n\n'
+            + '1. The cutover runs per service, not per database. Orders can move on Tuesday; the ledger waits for the reconciliation window on Wednesday.\n\n'
+            + '2. Each service keeps its old connection string behind a flag for 48 hours. The flag is removed only after the p99 chart is flat for a full business day.\n\n'
+            + '3. The rollback is a flag flip, not a restore. Restoring a snapshot loses the writes made during the cutover, so we do not do that unless the ledger itself is corrupt.\n\n'
+            + '4. The on-call rotation needs one person from the database team and one from payments for the whole window. Do not schedule it against a release train.\n\n'
+            + '5. If the replica lag passes 30 seconds, stop and wait. The lag is the early warning; a failed health check is already too late.\n\n'
+            + '6. Write the notes for the person who joins at 03:00 with no context: exact commands, exact dashboards, and what "stop" looks like.'
+        const longAnswer = 'I will write the notes around the rollout as it actually runs, in the order the on-call person needs it.\n\n'
+            + 'The first section is the go/no-go checklist: replica lag, connection counts on the old and new pools, the p99 chart, and the two flags that must be in the right state before the first service moves. Each line names the dashboard and the exact value that means stop.\n\n'
+            + 'The second section walks one service through the cutover: flip the flag, watch the pool for five minutes, compare the p99 with the same hour last week, then move to the next service. Orders first; the ledger only after the reconciliation window opens.\n\n'
+            + 'The third section is the rollback. It is a flag flip back to the old connection string, not a restore. The snapshot is a last resort and it loses writes, so the notes say plainly when it is allowed and who can call it.\n\n'
+            + 'The fourth section is the watch list for the next two days: the old pool draining, the flag count, the p99 by route, and the replica lag. The flags come out only when all four are flat for a business day.\n\n'
+            + 'I will keep the original review as an appendix for the reasoning, but the main body is the checklist and the commands. The person at 03:00 should not have to read a design document to decide whether to stop.'
+        const script = 'Here is the cutover helper, with the stop conditions on the first screen:\n\n'
+            + '```bash\n'
+            + '#!/usr/bin/env bash\n'
+            + 'set -euo pipefail\n\n'
+            + 'SERVICE="${1:?service name}"\n'
+            + 'OLD_POOL="pool-old"\n'
+            + 'NEW_POOL="pool-new"\n\n'
+            + 'echo "== go/no-go =="\n'
+            + 'curl -fsS "$DASH/replica-lag" | awk \'{ if ($1 > 30) exit 1 }\'\n'
+            + 'curl -fsS "$DASH/old-connections" | awk \'{ if ($1 > 80) exit 1 }\'\n\n'
+            + 'echo "== flip $SERVICE =="\n'
+            + 'feature_flag set "$SERVICE" use_new_pool true\n\n'
+            + 'for i in 1 2 3 4 5; do\n'
+            + '  sleep 60\n'
+            + '  curl -fsS "$DASH/p99?service=$SERVICE"\n'
+            + 'done\n\n'
+            + 'echo "== stop =="\n'
+            + 'echo "any value above 300 ms or a replica lag above 30s: flip the flag back"\n'
+            + '```'
+        return [
+            brief,
+            ev('assistant', 'I will draft the notes from the review, in the order the on-call person needs them.', 27),
+            ev('user', longBrief, 26),
+            ev('assistant', longAnswer, 24),
+            ev('assistant', script, 22),
         ]
     }
     if (th.id === 't-cache') {

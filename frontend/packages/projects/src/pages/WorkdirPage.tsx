@@ -20,6 +20,7 @@ import { ThreadPanel } from '../components/project/ThreadPanel';
 import type { StatusGroup } from '../components/workspace/StatusGroups';
 import { ThreadsView } from '../components/workspace/ThreadsView';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { MoreVert } from '../components/icons';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useNotify } from '../hooks/useNotify';
@@ -60,6 +61,7 @@ export default function WorkdirPage() {
     const notify = useNotify();
     const { onProjectsChanged: refresh, embedded, session: slots } = useProjectsHost();
     const [params, setParams] = useSearchParams();
+    const phone = usePhoneShell();
     const scope = params.get('path') ?? '';
     const sessionId = params.get('session') ?? '';
     const pane = useWorkspacePane('folder.');
@@ -304,6 +306,7 @@ export default function WorkdirPage() {
         <>
             <WorkspaceLayout
                 pane={pane}
+                hideHeader={phone && !!sessionId}
                 headerInsetXs={embedded ? 2 : 6}
                 paneLabel={t('session.sessions')}
                 paneAttention={waitingHere}
@@ -323,7 +326,7 @@ export default function WorkdirPage() {
                         </Menu>
                     </>
                 )}
-                notice={(error || im) && (
+                notice={phone && sessionId && !error ? undefined : (error || im) && (
                     <>
                         {error && (
                             <Alert severity="warning" action={<Button color="inherit" size="small" onClick={() => void loadSessions()}>{t('common.retry')}</Button>}>

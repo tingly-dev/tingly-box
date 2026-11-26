@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>04 · 长文本（展开）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column;background:#f6f7fb;color:#1e293b;font-family:system-ui,-apple-system,'PingFang SC','Noto Sans SC',sans-serif;overflow:hidden">
+  <div style="flex:none;background:#ffffff;border-bottom:1px solid #e2e8f0;padding:6px 8px 8px">
+    <div style="display:flex;align-items:center;gap:4px;min-height:44px">
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#5a6577"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Write the migration notes</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#5a6577;margin-top:1px"><span style="width:8px;height:8px;border-radius:50%;border:2px solid #5a6577;background:transparent"></span><span>可以 review · #7</span></div>
+      </div>
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#5a6577"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5h.01M12 12h.01M12 19h.01"/></svg></div>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:6px 16px 0;overflow:hidden">
+<div style="text-align:center;font-size:12px;color:#5a6577;margin:4px 0 10px">今天 · 12:25</div><div style="font-size:12px;color:#5a6577;text-align:center;margin:0 0 10px">（展开后 · 末尾）</div><div style="display:flex;justify-content:flex-end"><div style="max-width:88%;background:#e8f0ff;border:1px solid #d7e5ff;border-radius:16px 16px 4px 16px;overflow:hidden">
+      <div style="padding:9px 13px 2px;font-size:15px;line-height:1.55;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:100;overflow:hidden"><p style="margin:0 0 8px">3. The rollback is a flag flip, not a restore. Restoring a snapshot loses the writes made during the cutover, so we do not do that unless the ledger itself is corrupt.</p><p style="margin:0 0 8px">4. The on-call rotation needs one person from the database team and one from payments for the whole window. Do not schedule it against a release train.</p><p style="margin:0 0 8px">5. If the replica lag passes 30 seconds, stop and wait. The lag is the early warning; a failed health check is already too late.</p><p style="margin:0 0 8px">6. Write the notes for the person who joins at 03:00 with no context: exact commands, exact dashboards, and what "stop" looks like.</p></div>
+      <div style="display:flex;align-items:center;gap:6px;height:44px;padding:0 13px;border-top:1px solid #cfe0ff;color:#2563eb;font-size:14px;font-weight:600">收起 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></div>
+    </div></div><div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:3px 0 0;color:#5a6577;font-size:12px"><span>12:29</span><span style="display:flex;color:#5a6577"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></span></div>
+  </div>
+  <div style="flex:none;background:#ffffff;border-top:1px solid #e2e8f0;padding:8px 8px 10px">
+    <div style="display:flex;align-items:center;gap:2px">
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#5a6577"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 11.5 20a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L10 18.5a2 2 0 0 1-3-3L15 7.5"/></svg></div>
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#5a6577"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M17 6h3M4 12h4M12 12h8M4 18h11M19 18h1M16 4v4M9 10v4M18 16v4"/></svg></div>
+      <div style="flex:1;min-width:0;height:44px;border:1px solid #e2e8f0;border-radius:22px;background:#f6f7fb;display:flex;align-items:center;padding:0 14px;color:#5a6577;font-size:15px">给这个线程发消息…</div>
+      <div style="width:44px;height:44px;border-radius:50%;background:#1e293b;color:#ffffff;display:flex;align-items:center;justify-content:center;flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

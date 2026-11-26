@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>08 · 判断与取舍</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;color:#16181d;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+<div style="width:1240px;height:640px;box-sizing:border-box;background:#f7f7f4;padding:34px 42px;display:flex;flex-direction:column;gap:18px">
+  <div>
+    <div style="font-size:27px;font-weight:700;letter-spacing:-0.3px">手机版会话 · 为什么这样</div>
+    <div style="font-size:14px;color:#4a4f5a;margin-top:5px">定稿：方案 A（对话优先），过程一层点开；桌面布局不变。</div>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e5e5e0;border-radius:12px;padding:14px 18px;display:flex;gap:16px;align-items:flex-start">
+    <div style="width:3px;align-self:stretch;background:#2563eb;border-radius:2px"></div>
+    <div>
+      <div style="font-size:16px;font-weight:600;line-height:1.5">「移动端的目的就是为了简化方便，不是为了完全等效的体验，但是又能完成关键的工作。」</div>
+      <div style="font-size:13px;color:#4a4f5a;margin-top:4px;line-height:1.5">Mobile exists to be simpler and handier, not a full-equivalence experience of the desktop — but it must still get the key work done.</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.1fr 1fr 0.9fr;gap:16px;flex:1;min-height:0">
+    <div style="background:#ffffff;border:1px solid #e5e5e0;border-radius:12px;padding:14px 18px;display:flex;flex-direction:column">
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">手机必须完成的 6 件事</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #eeeee9"><span style="width:22px;color:#2563eb;font-weight:700">1</span><span style="font-size:14px;line-height:1.45">读对话与最终报告</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #eeeee9"><span style="width:22px;color:#2563eb;font-weight:700">2</span><span style="font-size:14px;line-height:1.45">发一句话 / 引导 / 停止</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #eeeee9"><span style="width:22px;color:#2563eb;font-weight:700">3</span><span style="font-size:14px;line-height:1.45">批准或回答阻塞请求</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #eeeee9"><span style="width:22px;color:#2563eb;font-weight:700">4</span><span style="font-size:14px;line-height:1.45">看状态与错误</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #eeeee9"><span style="width:22px;color:#2563eb;font-weight:700">5</span><span style="font-size:14px;line-height:1.45">找到文件与输出</span></div>
+        <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #eeeee9"><span style="width:22px;color:#2563eb;font-weight:700">6</span><span style="font-size:14px;line-height:1.45">在手机上完成以上全部，不横向溢出</span></div>
+      </div>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e5e0;border-radius:12px;padding:14px 18px;display:flex;flex-direction:column">
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">其余是次要的</div>
+      <div style="font-size:13.5px;line-height:1.6;color:#4a4f5a;display:flex;flex-direction:column;gap:7px">
+        <div><b style="color:#16181d">过程</b>：思考、工具输入/输出、子代理步骤 → 一层 sheet</div>
+        <div><b style="color:#16181d">长文本</b>：默认 10/12 行，展开/收起在 block 内</div>
+        <div><b style="color:#16181d">复制/时间</b>：右侧 44px icon，时间在 meta</div>
+        <div><b style="color:#16181d">设置</b>：模型/effort/权限/自动回答 → 一个设置 sheet</div>
+        <div><b style="color:#16181d">线程详情</b>：分支/上下文/用量 → ⋯ 里的只读 sheet</div>
+        <div style="padding:8px 10px;border-radius:8px;background:#f4f6fb;color:#2563eb;font-weight:600">原则：能一层的，不铺在页面上；桌面才需要的，明确说「在电脑上」。</div>
+      </div>
+    </div>
+    <div style="background:#16181d;color:#f3f5f9;border-radius:12px;padding:14px 18px;display:flex;flex-direction:column">
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">结果</div>
+      <div style="font-size:34px;font-weight:700;line-height:1.1;color:#93c5fd">57%</div>
+      <div style="font-size:12px;color:rgba(243,245,249,.66);margin-bottom:2px">对话区占 390×844（现状 5–29%）</div>
+      <div style="font-size:34px;font-weight:700;line-height:1.1;color:#93c5fd;margin-top:10px">54%</div>
+      <div style="font-size:12px;color:rgba(243,245,249,.66);margin-bottom:2px">对话区占 360×800（现状 4–16%）</div>
+      <div style="font-size:34px;font-weight:700;line-height:1.1;color:#93c5fd;margin-top:10px">80%</div>
+      <div style="font-size:12px;color:rgba(243,245,249,.66)">无待批准请求时</div>
+      <div style="margin-top:auto;font-size:12px;color:rgba(243,245,249,.58);line-height:1.5">44px 触控 · 安全区 · 键盘/100dvh · 深色同一层级</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:#4a4f5a">
+    <span style="font-weight:600;color:#16181d">有意不搬：</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">完整 diff / PR 文件</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">轨迹图</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">原始 tool payload</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">规则/条件编辑</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">浮动窗口 / master-detail</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">详细/简洁切换</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">图片画布</span>
+    <span style="padding:5px 9px;border:1px solid #e5e5e0;border-radius:999px;background:#fff">完整文件库管理</span>
+    <span style="margin-left:auto;color:#5a6577">危险操作仍确认（归档/删除/重启）——安全不是等效。</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1240,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

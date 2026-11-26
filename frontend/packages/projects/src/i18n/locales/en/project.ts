@@ -75,6 +75,7 @@ export const project = {
         bulkFailedSuffix: ' · {{count}} refused',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved', archived: 'Archived' },
     },
+    phone: { settings: 'Session settings', messagePlaceholder: 'Message this thread…', sessionPlaceholder: 'Message this session…', checklist: 'Progress', desktopNote: 'Full trace and diffs are on the desktop.', expandCode: 'Show full code', collapseCode: 'Collapse code', copyFailed: 'Could not copy' },
     thread: {
         status: { waiting: 'Waiting on you', ready: 'Ready for review', working: 'Working', queued: 'Queued', idle: 'Idle', resolved: 'Resolved', failed: 'Failed' },
         commits_one: '{{count}} commit', commits_other: '{{count}} commits',

@@ -83,7 +83,7 @@ export function ThreadTitle({ title, onSave }: { title: string; onSave: (title: 
                     edit();
                 }
             }}
-            sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: radius.row, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}
+            sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: radius.row, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' }, '@media (pointer: coarse)': { minHeight: 44 } }}
         >
             <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{shown}</Typography>
             <Pencil className="edit-hint" sx={{ fontSize: 13, flexShrink: 0, opacity: 0, transition: 'opacity 0.15s', color: 'text.secondary' }} />

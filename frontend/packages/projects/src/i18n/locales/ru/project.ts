@@ -78,6 +78,7 @@ export const project: PluralDict<typeof en> = {
         bulkFailedSuffix: ' · отказано: {{count}}',
         group: { waiting: 'Ждут вас', failed: 'С ошибкой', ready: 'Готовы к проверке', working: 'В работе', idle: 'Простаивают', resolved: 'Решены', archived: 'В архиве' },
     },
+    phone: { settings: 'Настройки сеанса', messagePlaceholder: 'Написать в поток…', sessionPlaceholder: 'Написать в сеанс…', checklist: 'Прогресс', desktopNote: 'Полная трассировка и diff — на компьютере.', expandCode: 'Показать код', collapseCode: 'Свернуть код', copyFailed: 'Не удалось скопировать' },
     thread: {
         status: { waiting: 'Ждёт вас', ready: 'Готов к проверке', working: 'В работе', queued: 'В очереди', idle: 'Простаивает', resolved: 'Решён', failed: 'Ошибка' },
         commits_one: '{{count}} коммит', commits_few: '{{count}} коммита', commits_many: '{{count}} коммитов', commits_other: '{{count}} коммитов',
