@@ -6,6 +6,10 @@
 > few deliberate deviations are in §10.
 > The prototype is in `.design/mobile-prototype/` (`app4.js` + `session.css`; open
 > `index.html?s=work,session&variant=A|B&theme=dark&w=390&h=844&frame=0`).
+> Canvas: `.design/mobile-session/` (a Tingly Design project; open with
+> `npx tingly-design open .design/mobile-session`); exported previews:
+> `.design/images/mobile-session/*@2x.png` (01 session, 02 process sheet,
+> 03/04 long text, 05 folder, 06 menu, 07 dark, 08 rationale).
 > Screenshots: `library/outputs/tb-sign/mobile-session-{current,option}-*.png` (the
 > design/prototype) and `mobile-impl-*.png` (the implementation), in the shared upload dir.
 >
@@ -543,6 +547,7 @@ Deliberate deviations from the design text:
    OS keyboard), so it demonstrates the composer/safe-area geometry, not the
    keyboard pixels.
 
+Canvas: `.design/mobile-session/` (8 boards; previews `.design/images/mobile-session/`).
 Screenshots: `mobile-impl-*` in `library/outputs/tb-sign/` — 390×844 and
 360×800, light/dark: `pool` (docked approval), `checklist` (folder session),
 `long` (clamped user/assistant), `code` (capped code + right copy),

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>07 · 深色</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;color:#eef2f7;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column;background:#0b0e14;color:#eef2f7;font-family:system-ui,-apple-system,'PingFang SC','Noto Sans SC',sans-serif;overflow:hidden">
+  <div style="flex:none;background:#12151d;border-bottom:1px solid rgba(255,255,255,.12);padding:6px 8px 8px">
+    <div style="display:flex;align-items:center;gap:4px;min-height:44px">
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:rgba(238,242,247,.66)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Tune the DB connection pool</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:rgba(238,242,247,.66);margin-top:1px"><span style="width:8px;height:8px;border-radius:50%;background:#fbbf24"></span><span>等你处理 · #1</span></div>
+      </div>
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:rgba(238,242,247,.66)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5h.01M12 12h.01M12 19h.01"/></svg></div>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:6px 16px 0;overflow:hidden">
+    <div style="text-align:center;font-size:12px;color:rgba(238,242,247,.66);margin:4px 0 10px">今天 · 12:24</div>
+    <div style="display:flex;justify-content:flex-end"><div style="max-width:82%;background:#182338;border:1px solid #233250;border-radius:16px 16px 4px 16px;padding:9px 13px;font-size:15px;line-height:1.5">Profile /charge and size the connection pool for peak load.</div></div>
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:3px 0 12px;color:rgba(238,242,247,.66);font-size:12px"><span>12:24</span><span style="display:flex;color:rgba(238,242,247,.66)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></span></div>
+    <div style="font-size:15.5px;line-height:1.55">Profiling /charge first, then I will size the pool from the numbers.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0 10px;color:rgba(238,242,247,.66);font-size:12px"><span>12:42</span><span style="display:flex;color:rgba(238,242,247,.66)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></span></div>
+    <div style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#12151d;margin:8px 0;color:rgba(238,242,247,.66)">
+      <span style="display:flex;color:rgba(238,242,247,.66)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11v6M12 7h.01M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/></svg></span>
+      <span style="font-size:14px;font-weight:600;color:#eef2f7">过程</span>
+      <span style="font-size:12px;color:rgba(238,242,247,.66)">· 3m 0s</span>
+      <span style="flex:1"></span>
+      <span style="display:flex;color:rgba(238,242,247,.66)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
+    </div>
+    <div style="font-size:15.5px;line-height:1.55">Raised the pool to 40 open / 10 idle. To confirm under load I need to run the benchmark against staging.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0 10px;color:rgba(238,242,247,.66);font-size:12px"><span>12:49</span><span style="display:flex;color:rgba(238,242,247,.66)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></span></div>
+    <div style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#12151d;margin:8px 0;color:rgba(238,242,247,.66)">
+      <span style="display:flex;color:rgba(238,242,247,.66)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11v6M12 7h.01M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/></svg></span>
+      <span style="font-size:14px;font-weight:600;color:#eef2f7">过程</span>
+      <span style="flex:1"></span>
+      <span style="display:flex;color:rgba(238,242,247,.66)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin:8px 0 0;color:rgba(238,242,247,.66);font-size:13px;min-width:0">
+      <span style="display:flex;flex:none;color:rgba(238,242,247,.66)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4zM8 10l2 2-2 2M13 14h3"/></svg></span>
+      <span style="font-weight:600;color:#eef2f7;flex:none">Bash</span>
+      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">go test ./... -run Bench -staging</span>
+      <span style="color:rgba(238,242,247,.66);flex:none">未回答</span>
+    </div>
+  </div>
+  <div style="flex:none;padding:8px 16px 10px;background:#12151d;border-top:1px solid rgba(255,255,255,.12)">
+    <div style="border:1px solid #2563eb;border-radius:16px;padding:12px 14px;background:#12151d">
+      <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:#eef2f7">
+        <span style="display:flex;color:#3b82f6"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4zM8 10l2 2-2 2M13 14h3"/></svg></span>
+        允许 Edit？
+      </div>
+      <div style="margin:8px 0 4px;padding:8px 10px;border-radius:10px;background:#161b26;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#eef2f7">bench/results.md</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:rgba(238,242,247,.66);padding:4px 0 8px">详情 <span style="display:flex;color:rgba(238,242,247,.66)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;height:48px;padding:0 13px;border-radius:12px;background:#2563eb;color:#ffffff;font-size:14px;font-weight:600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>允许</div>
+        <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:48px;padding:0 11px;border-radius:12px;border:1px solid rgba(255,255,255,.12);font-size:13px;color:#eef2f7;white-space:nowrap">本线程都允许 Edit</div>
+        <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;height:48px;padding:0 11px;border-radius:12px;border:1px solid rgba(255,255,255,.12);font-size:14px;color:#eef2f7"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>不允许</div>
+      </div>
+    </div>
+  </div>
+  <div style="flex:none;background:#12151d;border-top:1px solid rgba(255,255,255,.12);padding:8px 8px 10px">
+    <div style="display:flex;align-items:center;gap:2px">
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:rgba(238,242,247,.66)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 11.5 20a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L10 18.5a2 2 0 0 1-3-3L15 7.5"/></svg></div>
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:rgba(238,242,247,.66)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M17 6h3M4 12h4M12 12h8M4 18h11M19 18h1M16 4v4M9 10v4M18 16v4"/></svg></div>
+      <div style="flex:1;min-width:0;height:44px;border:1px solid rgba(255,255,255,.12);border-radius:22px;background:#0f1219;display:flex;align-items:center;padding:0 14px;color:rgba(238,242,247,.66);font-size:15px">给这个线程发消息…</div>
+      <div style="width:44px;height:44px;border-radius:50%;background:#eef2f7;color:#0b0e14;display:flex;align-items:center;justify-content:center;flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
