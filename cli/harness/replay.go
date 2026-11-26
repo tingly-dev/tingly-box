@@ -261,10 +261,8 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocolte
 		// duo functional phase.
 		assertions = append(assertions, protocoltest.StreamShapeForAgent(agentType))
 	}
-	for _, a := range assertions {
-		if aerr := a.Check(result); aerr != nil {
-			row.Failures = append(row.Failures, fmt.Sprintf("%s: %v", a.Name, aerr))
-		}
+	for _, failure := range protocoltest.EvaluateAssertions(result, assertions) {
+		row.Failures = append(row.Failures, failure.Error())
 	}
 
 	row.Passed = len(row.Failures) == 0

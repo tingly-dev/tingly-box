@@ -101,7 +101,8 @@ func AllDefinitions() []Definition {
 		if _, exists := values[id]; exists {
 			id = "scenario-" + s.Name
 		}
-		values[id] = Definition{ID: id, Name: s.Name, Description: s.Description, Kind: Builtin, Builtin: "scenario/" + s.Name, Tags: s.Tags, SkipTransitive: s.SkipTransitive}
+		expect, structural := scenario.BuiltinExpectations(s.Name)
+		values[id] = Definition{ID: id, Name: s.Name, Description: s.Description, Kind: Builtin, Builtin: "scenario/" + s.Name, Tags: s.Tags, SkipTransitive: s.SkipTransitive, Expect: expect, Structural: structural}
 	}
 	return sortedDefinitions(values)
 }

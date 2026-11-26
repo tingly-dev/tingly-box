@@ -93,8 +93,8 @@ func (env *DuoEnv) functionalPass(route DuoRoute, bodyBytes int, streaming bool,
 	}
 
 	for _, a := range assertions {
-		if aerr := a.Check(result); aerr != nil {
-			add(prefix+"/"+a.Name, false, aerr.Error())
+		if failed := EvaluateAssertions(result, []Assertion{a}); len(failed) != 0 {
+			add(prefix+"/"+a.Name, false, failed[0].Err.Error())
 		} else {
 			add(prefix+"/"+a.Name, true, "")
 		}

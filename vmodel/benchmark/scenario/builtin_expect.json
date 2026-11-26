@@ -1,0 +1,225 @@
+{
+  "text": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "role_equals(\"assistant\")", "path": "role", "op": "eq", "value": "assistant"},
+        {"name": "content_contains(\"Paris\")", "path": "content", "op": "contains", "value": "Paris"}
+      ],
+      "checks": [
+        "responses_item_ids_canonical",
+        "content_non_empty",
+        "usage_non_zero"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200}
+      ],
+      "checks": [
+        "content_non_empty"
+      ]
+    }
+  },
+  "tool_use": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "has_tool_calls(1)", "path": "tool_call_count", "op": "eq", "value": 1},
+        {"name": "tool_call_name[0](\"get_weather\")", "path": "tool_calls.0.name", "op": "eq", "value": "get_weather"},
+        {"name": "tool_call_args[0](\"location\"=\"Paris\")", "path": "tool_calls.0.arguments.location", "op": "eq", "value": "Paris"}
+      ],
+      "checks": [
+        "responses_item_ids_canonical",
+        "usage_non_zero"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "has_tool_calls(1)", "path": "tool_call_count", "op": "eq", "value": 1}
+      ]
+    }
+  },
+  "tool_result": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "role_equals(\"assistant\")", "path": "role", "op": "eq", "value": "assistant"},
+        {"name": "content_contains(\"Paris\")", "path": "content", "op": "contains", "value": "Paris"}
+      ],
+      "checks": [
+        "content_non_empty",
+        "usage_non_zero"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200}
+      ],
+      "checks": [
+        "content_non_empty"
+      ]
+    }
+  },
+  "thinking": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "role_equals(\"assistant\")", "path": "role", "op": "eq", "value": "assistant"},
+        {"name": "content_contains(\"Paris\")", "path": "content", "op": "contains", "value": "Paris"}
+      ],
+      "checks": [
+        "content_non_empty",
+        "usage_non_zero"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200}
+      ],
+      "checks": [
+        "content_non_empty"
+      ]
+    }
+  },
+  "multi_turn": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "role_equals(\"assistant\")", "path": "role", "op": "eq", "value": "assistant"},
+        {"name": "content_contains(\"Paris\")", "path": "content", "op": "contains", "value": "Paris"}
+      ],
+      "checks": [
+        "content_non_empty",
+        "usage_non_zero"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200}
+      ],
+      "checks": [
+        "content_non_empty"
+      ]
+    }
+  },
+  "streaming_text": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "stream_event_count(>=3)", "path": "stream_event_count", "op": "gte", "value": 3},
+        {"name": "role_equals(\"assistant\")", "path": "role", "op": "eq", "value": "assistant"},
+        {"name": "content_contains(\"Paris\")", "path": "content", "op": "contains", "value": "Paris"}
+      ],
+      "checks": [
+        "responses_item_ids_canonical",
+        "content_non_empty"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "stream_event_count(>=1)", "path": "stream_event_count", "op": "gte", "value": 1}
+      ],
+      "checks": [
+        "content_non_empty"
+      ]
+    }
+  },
+  "streaming_tool_use": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "stream_event_count(>=3)", "path": "stream_event_count", "op": "gte", "value": 3},
+        {"name": "has_tool_calls(1)", "path": "tool_call_count", "op": "eq", "value": 1},
+        {"name": "tool_call_name[0](\"get_weather\")", "path": "tool_calls.0.name", "op": "eq", "value": "get_weather"},
+        {"name": "tool_call_args[0](\"location\"=\"Paris\")", "path": "tool_calls.0.arguments.location", "op": "eq", "value": "Paris"}
+      ],
+      "checks": [
+        "responses_item_ids_canonical"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "stream_event_count(>=1)", "path": "stream_event_count", "op": "gte", "value": 1},
+        {"name": "has_tool_calls(1)", "path": "tool_call_count", "op": "eq", "value": 1}
+      ]
+    }
+  },
+  "incomplete": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "role_equals(\"assistant\")", "path": "role", "op": "eq", "value": "assistant"},
+        {"name": "content_contains(\"truncated\")", "path": "content", "op": "contains", "value": "truncated"}
+      ],
+      "checks": [
+        "content_non_empty",
+        "usage_non_zero"
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200}
+      ],
+      "checks": [
+        "content_non_empty"
+      ]
+    }
+  },
+  "error": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(>=400)", "path": "http_status", "op": "gte", "value": 400},
+        {"name": "error_message_contains(\"rate limit\")", "path": "raw_body", "op": "contains", "value": "rate limit"}
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(>=400)", "path": "http_status", "op": "gte", "value": 400}
+      ]
+    }
+  },
+  "error-500": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(>=400)", "path": "http_status", "op": "gte", "value": 400},
+        {"name": "error_message_contains(\"upstream\")", "path": "raw_body", "op": "contains", "value": "upstream"}
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(>=400)", "path": "http_status", "op": "gte", "value": 400}
+      ]
+    }
+  },
+  "error-auth-401": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(401)", "path": "http_status", "op": "eq", "value": 401},
+        {"name": "error_message_contains(\"authentication\")", "path": "raw_body", "op": "contains", "value": "authentication"}
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(>=400)", "path": "http_status", "op": "gte", "value": 400}
+      ]
+    }
+  },
+  "error-midstream-close": {
+    "expect": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200},
+        {"name": "stream_error", "path": "stream_error", "op": "ne", "value": ""},
+        {"name": "stream_not_completed", "path": "stream_completed", "op": "eq", "value": false}
+      ]
+    },
+    "structural": {
+      "rules": [
+        {"name": "http_status(200)", "path": "http_status", "op": "eq", "value": 200}
+      ]
+    }
+  }
+}

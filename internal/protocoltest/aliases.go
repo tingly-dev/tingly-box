@@ -30,6 +30,7 @@ type (
 // ─── check: assertion library ──────────────────────────────────────────────────
 
 var (
+	EvaluateAssertions         = check.Evaluate
 	AssertContentEquals        = check.AssertContentEquals
 	AssertContentContains      = check.AssertContentContains
 	AssertContentNonEmpty      = check.AssertContentNonEmpty

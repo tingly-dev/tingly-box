@@ -212,6 +212,12 @@ func (d *Definition) Normalize() error {
 	if blocks != 1 {
 		return fmt.Errorf("exactly one behavior block is required")
 	}
+	if err := d.Expect.Validate(); err != nil {
+		return fmt.Errorf("expect: %w", err)
+	}
+	if err := d.Structural.Validate(); err != nil {
+		return fmt.Errorf("structural: %w", err)
+	}
 	switch d.Kind {
 	case Mock:
 		if d.Mock == nil {

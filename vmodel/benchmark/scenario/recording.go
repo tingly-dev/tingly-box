@@ -1,15 +1,13 @@
 package scenario
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/tidwall/gjson"
-	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
+	"github.com/tingly-dev/tingly-box/vmodel/validate"
 )
 
 // Response stores either JSON body data or an exact raw body, plus SSE lines in
@@ -27,6 +25,8 @@ type Response struct {
 // Expect maps a small declarative vocabulary onto the existing check library.
 // Pointers distinguish an omitted assertion from an explicit empty/zero value.
 type Expect struct {
+	Checks          []string                   `json:"checks,omitempty"`
+	Rules           []validate.Rule            `json:"rules,omitempty"`
 	JSONFields      map[string]json.RawMessage `json:"json_fields,omitempty"`
 	BodyContains    *string                    `json:"body_contains,omitempty"`
 	HTTPStatus      *int                       `json:"http_status,omitempty"`
@@ -38,6 +38,23 @@ type Expect struct {
 	StreamEvents    []string                   `json:"stream_events,omitempty"`
 }
 
+func (e *Expect) Validate() error {
+	if e == nil {
+		return nil
+	}
+	for _, name := range e.Checks {
+		if _, ok := check.NamedAssertion(name); !ok {
+			return fmt.Errorf("unknown named check %q", name)
+		}
+	}
+	for i, rule := range e.Rules {
+		if err := rule.Validate(); err != nil {
+			return fmt.Errorf("rules[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 func (e *Expect) Assertions() []check.Assertion {
 	if e == nil {
 		return nil
@@ -46,7 +63,7 @@ func (e *Expect) Assertions() []check.Assertion {
 	if e.BodyContains != nil {
 		want := *e.BodyContains
 		out = append(out, check.Assertion{Name: "body_contains", Check: func(r *check.RoundTripResult) error {
-			if !strings.Contains(string(r.RawBody), want) {
+			if !validate.Contains(string(r.RawBody), want) {
 				return fmt.Errorf("body does not contain %q", want)
 			}
 			return nil
@@ -60,32 +77,7 @@ func (e *Expect) Assertions() []check.Assertion {
 	for _, path := range keys {
 		expected := append(json.RawMessage(nil), e.JSONFields[path]...)
 		out = append(out, check.Assertion{Name: "json_field(" + path + ")", Check: func(r *check.RoundTripResult) error {
-			if !json.Valid(r.RawBody) {
-				return fmt.Errorf("response body is not JSON")
-			}
-			actual := gjson.GetBytes(r.RawBody, path)
-			if !actual.Exists() {
-				return fmt.Errorf("missing JSON field %s", path)
-			}
-			decode := func(raw []byte) (any, error) {
-				var value any
-				decoder := json.NewDecoder(bytes.NewReader(raw))
-				decoder.UseNumber()
-				err := decoder.Decode(&value)
-				return value, err
-			}
-			want, err := decode(expected)
-			if err != nil {
-				return err
-			}
-			got, err := decode([]byte(actual.Raw))
-			if err != nil {
-				return err
-			}
-			if !reflect.DeepEqual(want, got) {
-				return fmt.Errorf("JSON field %s: got %s, want %s", path, actual.Raw, expected)
-			}
-			return nil
+			return (validate.Rule{Path: path, Op: "eq", Value: expected}).Match(r.RawBody)
 		}})
 	}
 	if e.HTTPStatus != nil {
@@ -108,6 +100,16 @@ func (e *Expect) Assertions() []check.Assertion {
 	}
 	if len(e.StreamEvents) > 0 {
 		out = append(out, check.AssertStreamEventsContain(e.StreamEvents...))
+	}
+	for _, rule := range e.Rules {
+		out = append(out, check.AssertRule(rule))
+	}
+	for _, name := range e.Checks {
+		if a, ok := check.NamedAssertion(name); ok {
+			out = append(out, a)
+		} else {
+			out = append(out, check.Assertion{Name: name, Check: func(*check.RoundTripResult) error { return fmt.Errorf("unknown named check %q", name) }})
+		}
 	}
 	return out
 }

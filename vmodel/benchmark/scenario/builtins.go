@@ -2,8 +2,6 @@ package scenario
 
 import (
 	"time"
-
-	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 )
 
 // ─── Text ──────────────────────────────────────────────────────────────────────
@@ -20,18 +18,8 @@ func TextScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
+		Assertions: builtinContract("text").Expect.Assertions(),
+		Structural: builtinContract("text").Structural.Assertions(),
 	}
 }
 
@@ -125,18 +113,8 @@ func ToolUseScenario() Scenario {
 			FormatAnthropic:       anthropicToolUseResponse(),
 			FormatGoogle:          googleToolUseResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertHasToolCalls(1),
-			check.AssertToolCallName(0, "get_weather"),
-			check.AssertToolCallArgs(0, "location", "Paris"),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertHasToolCalls(1),
-		},
+		Assertions: builtinContract("tool_use").Expect.Assertions(),
+		Structural: builtinContract("tool_use").Structural.Assertions(),
 	}
 }
 
@@ -249,17 +227,8 @@ func ToolResultScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
+		Assertions: builtinContract("tool_result").Expect.Assertions(),
+		Structural: builtinContract("tool_result").Structural.Assertions(),
 	}
 }
 
@@ -277,17 +246,8 @@ func ThinkingScenario() Scenario {
 			FormatOpenAIResponses: openAIResponsesTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
+		Assertions: builtinContract("thinking").Expect.Assertions(),
+		Structural: builtinContract("thinking").Structural.Assertions(),
 	}
 }
 
@@ -334,17 +294,8 @@ func MultiTurnScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
+		Assertions: builtinContract("multi_turn").Expect.Assertions(),
+		Structural: builtinContract("multi_turn").Structural.Assertions(),
 	}
 }
 
@@ -362,19 +313,8 @@ func StreamingTextScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(3),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(1),
-			check.AssertContentNonEmpty(),
-		},
+		Assertions: builtinContract("streaming_text").Expect.Assertions(),
+		Structural: builtinContract("streaming_text").Structural.Assertions(),
 	}
 }
 
@@ -392,19 +332,8 @@ func StreamingToolUseScenario() Scenario {
 			FormatAnthropic:       anthropicToolUseResponse(),
 			FormatGoogle:          googleToolUseResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(3),
-			check.AssertHasToolCalls(1),
-			check.AssertToolCallName(0, "get_weather"),
-			check.AssertToolCallArgs(0, "location", "Paris"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(1),
-			check.AssertHasToolCalls(1),
-		},
+		Assertions: builtinContract("streaming_tool_use").Expect.Assertions(),
+		Structural: builtinContract("streaming_tool_use").Structural.Assertions(),
 	}
 }
 
@@ -425,17 +354,8 @@ func IncompleteScenario() Scenario {
 			FormatAnthropic:       anthropicIncompleteResponse(),
 			FormatGoogle:          googleIncompleteResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("truncated"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
+		Assertions: builtinContract("incomplete").Expect.Assertions(),
+		Structural: builtinContract("incomplete").Structural.Assertions(),
 	}
 }
 
@@ -619,13 +539,8 @@ func ErrorScenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec429),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec429),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-			check.AssertErrorMessageContains("rate limit"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-		},
+		Assertions: builtinContract("error").Expect.Assertions(),
+		Structural: builtinContract("error").Structural.Assertions(),
 	}
 }
 
@@ -643,13 +558,8 @@ func Error500Scenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec500),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec500),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-			check.AssertErrorMessageContains("upstream"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-		},
+		Assertions: builtinContract("error-500").Expect.Assertions(),
+		Structural: builtinContract("error-500").Structural.Assertions(),
 	}
 }
 
@@ -667,13 +577,8 @@ func ErrorAuth401Scenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec401),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec401),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(401),
-			check.AssertErrorMessageContains("authentication"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-		},
+		Assertions: builtinContract("error-auth-401").Expect.Assertions(),
+		Structural: builtinContract("error-auth-401").Structural.Assertions(),
 	}
 }
 
@@ -691,19 +596,8 @@ func ErrorMidStreamCloseScenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, specClose),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, specClose),
 		},
-		Assertions: []check.Assertion{
-			// A mid-stream cut must be handled gracefully: the response stays
-			// 200 (headers were already sent) and the stream terminates in a
-			// client-consumable way. The client must preserve the events it
-			// already received, report the stream error explicitly, and never
-			// present the truncated turn as normally completed.
-			check.AssertHTTPStatus(200),
-			check.AssertStreamError(),
-			check.AssertStreamNotCompleted(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-		},
+		Assertions: builtinContract("error-midstream-close").Expect.Assertions(),
+		Structural: builtinContract("error-midstream-close").Structural.Assertions(),
 	}
 }
 

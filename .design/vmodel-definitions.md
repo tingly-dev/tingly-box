@@ -166,3 +166,27 @@ four SDK drivers, virtual/vmodel replay, LB, duo including default memory
 checks, routing and catalog checks, plus the harness/protocoltest package
 suites. Registered skips and two existing FP3 recording gaps remain visible;
 live-provider credentials and missing real agent CLIs were outside that run.
+
+## Output validation evolution
+
+The configuration contract remains `Definition`; `expect` and `structural`
+are independent of response generation. `vmodel/validate` owns value matching
+and named check execution, without protocol or serving dependencies. Adapters
+(`benchmark/check`, `script`, and test runners) project their own observations
+and retain domain-specific invariants. Built-in expectations are declarative
+and are exported as part of the definition inventory.
+
+- Phase 1: shared rule vocabulary; bridge legacy expectations; migrate core
+  scenario, matrix/replay and scripted conversation validation. Compare JSON
+  tool arguments structurally. Do not change wire golden data or comparison.
+- Phase 2: CLI agent output, load-balancer expectations, Projects live journeys
+  and other specialized checks reuse the matcher where their semantics overlap.
+- Phase 3: Golden adapter projects captured request/response and SSE framing
+  into observations; add scoped dynamic-value captures/references and snapshot
+  diffs. Keep an independent exact-wire comparison mode. Never derive expected
+  output from the same execution that is being validated.
+
+The first phase supports intra-observation references. Cross-event capture scope,
+full SSE framing validation, schema validation and structured snapshot updates
+are subsequent capabilities; a decoded event payload list is not a substitute
+for a wire snapshot.

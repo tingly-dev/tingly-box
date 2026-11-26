@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/vmodel"
+	"github.com/tingly-dev/tingly-box/vmodel/validate"
 )
 
 // Script is one scene.
@@ -112,14 +113,15 @@ type Background struct {
 
 // Match is a predicate on a request. Every set field must hold.
 type Match struct {
-	Class             []string `json:"class,omitempty"`
-	Model             string   `json:"model,omitempty"`
-	SystemContains    string   `json:"system_contains,omitempty"`
-	SystemRegex       string   `json:"system_regex,omitempty"`
-	FirstUserContains string   `json:"first_user_contains,omitempty"`
-	LastUserContains  string   `json:"last_user_contains,omitempty"`
-	LastUserRegex     string   `json:"last_user_regex,omitempty"`
-	LastTextContains  string   `json:"last_text_contains,omitempty"`
+	Rules             []validate.Rule `json:"rules,omitempty"`
+	Class             []string        `json:"class,omitempty"`
+	Model             string          `json:"model,omitempty"`
+	SystemContains    string          `json:"system_contains,omitempty"`
+	SystemRegex       string          `json:"system_regex,omitempty"`
+	FirstUserContains string          `json:"first_user_contains,omitempty"`
+	LastUserContains  string          `json:"last_user_contains,omitempty"`
+	LastUserRegex     string          `json:"last_user_regex,omitempty"`
+	LastTextContains  string          `json:"last_text_contains,omitempty"`
 	// InsertedContains matches a message the user wrote while the turn ran:
 	// Claude Code puts it in a role "system" entry after our last reply.
 	InsertedContains string            `json:"inserted_contains,omitempty"`
@@ -134,9 +136,10 @@ type Match struct {
 
 // ResultMatch is a predicate on a tool result.
 type ResultMatch struct {
-	Contains string `json:"contains,omitempty"`
-	Regex    string `json:"regex,omitempty"`
-	IsError  *bool  `json:"is_error,omitempty"`
+	Rules    []validate.Rule `json:"rules,omitempty"`
+	Contains string          `json:"contains,omitempty"`
+	Regex    string          `json:"regex,omitempty"`
+	IsError  *bool           `json:"is_error,omitempty"`
 }
 
 // Extract reads one value: the first group of Regex (or the whole match)
@@ -384,6 +387,11 @@ func (m *Match) compile() error {
 	if m == nil {
 		return nil
 	}
+	for i, rule := range m.Rules {
+		if err := rule.Validate(); err != nil {
+			return fmt.Errorf("rules[%d]: %w", i, err)
+		}
+	}
 	for _, c := range m.Class {
 		switch c {
 		case ClassMain, ClassSubagent, ClassAuxiliary:
@@ -412,6 +420,11 @@ func (m *Match) compile() error {
 func (r *ResultMatch) compile() error {
 	if r == nil {
 		return nil
+	}
+	for i, rule := range r.Rules {
+		if err := rule.Validate(); err != nil {
+			return fmt.Errorf("rules[%d]: %w", i, err)
+		}
 	}
 	return compileRegex(r.Regex)
 }

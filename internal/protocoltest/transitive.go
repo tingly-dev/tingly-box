@@ -1,10 +1,13 @@
 package protocoltest
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/vmodel/validate"
 )
 
 // TransitiveChain represents a two-hop conversion path: A→B then B→C.
@@ -90,12 +93,6 @@ func skipTransitiveScenario(s Scenario) bool {
 	return s.SkipTransitive
 }
 
-// normalizeJSON strips whitespace from a JSON string for comparison.
-// Falls back to trimmed string comparison if the input is not valid JSON.
-func normalizeJSON(s string) string {
-	return strings.Join(strings.Fields(s), "")
-}
-
 // ExecuteAllTransitive runs two-hop chain tests without requiring testing.T.
 // It is the CLI-compatible counterpart of RunTransitive, returning []TestResult.
 // Name format: "scenario/A→B→C/mode".
@@ -165,21 +162,11 @@ func (m *Matrix) executeTransitiveChain(env *TestEnv, scenario Scenario, chain T
 	}
 
 	var errs []AssertionError
-	for _, a := range scenario.Assertions {
-		if checkErr := a.Check(r1); checkErr != nil {
-			errs = append(errs, AssertionError{
-				Assertion: "hop1:" + a.Name,
-				Error:     checkErr.Error(),
-				Context:   truncate(string(r1.RawBody), 300),
-			})
-		}
-		if checkErr := a.Check(r2); checkErr != nil {
-			errs = append(errs, AssertionError{
-				Assertion: "hop2:" + a.Name,
-				Error:     checkErr.Error(),
-				Context:   truncate(string(r2.RawBody), 300),
-			})
-		}
+	for _, failure := range EvaluateAssertions(r1, scenario.Assertions) {
+		errs = append(errs, AssertionError{Assertion: "hop1:" + failure.Name, Error: failure.Err.Error(), Context: truncate(string(r1.RawBody), 300)})
+	}
+	for _, failure := range EvaluateAssertions(r2, scenario.Assertions) {
+		errs = append(errs, AssertionError{Assertion: "hop2:" + failure.Name, Error: failure.Err.Error(), Context: truncate(string(r2.RawBody), 300)})
 	}
 	errs = append(errs, semanticEquivalenceErrors(chain.String(), r1, r2)...)
 
@@ -199,21 +186,21 @@ func semanticEquivalenceErrors(label string, r1, r2 *RoundTripResult) []Assertio
 		errs = append(errs, AssertionError{Assertion: "equiv:" + name, Error: fmt.Sprintf("[%s] %s", label, msg)})
 	}
 
-	if r1.Role != r2.Role {
+	if validate.Value("eq", r1.Role, r2.Role) != nil {
 		add("role", fmt.Sprintf("hop1=%q hop2=%q", r1.Role, r2.Role))
 	}
 	c1, c2 := strings.TrimSpace(r1.Content), strings.TrimSpace(r2.Content)
-	if c1 != c2 {
+	if validate.Value("eq", c1, c2) != nil {
 		add("content", fmt.Sprintf("hop1=%q hop2=%q", truncate(c1, 200), truncate(c2, 200)))
 	}
-	if len(r1.ToolCalls) != len(r2.ToolCalls) {
+	if validate.Value("eq", len(r1.ToolCalls), len(r2.ToolCalls)) != nil {
 		add("tool_call_count", fmt.Sprintf("hop1=%d hop2=%d", len(r1.ToolCalls), len(r2.ToolCalls)))
 	} else {
 		for i := range r1.ToolCalls {
-			if r1.ToolCalls[i].Name != r2.ToolCalls[i].Name {
+			if validate.Value("eq", r1.ToolCalls[i].Name, r2.ToolCalls[i].Name) != nil {
 				add(fmt.Sprintf("tool_call[%d].name", i), fmt.Sprintf("hop1=%q hop2=%q", r1.ToolCalls[i].Name, r2.ToolCalls[i].Name))
 			}
-			if normalizeJSON(r1.ToolCalls[i].Arguments) != normalizeJSON(r2.ToolCalls[i].Arguments) {
+			if !equivalentArguments(r1.ToolCalls[i].Arguments, r2.ToolCalls[i].Arguments) {
 				add(fmt.Sprintf("tool_call[%d].arguments", i), fmt.Sprintf("hop1=%s hop2=%s", r1.ToolCalls[i].Arguments, r2.ToolCalls[i].Arguments))
 			}
 		}
@@ -229,4 +216,12 @@ func semanticEquivalenceErrors(label string, r1, r2 *RoundTripResult) []Assertio
 // TestName builds a TestResult name for this chain in a given scenario/mode.
 func (c TransitiveChain) TestName(scenario string, streaming bool) string {
 	return fmt.Sprintf("%s/%s/%s", scenario, c, streamMode(streaming))
+}
+
+// Compare valid JSON structurally; malformed payloads still compare literally.
+func equivalentArguments(a, b string) bool {
+	if json.Valid([]byte(a)) && json.Valid([]byte(b)) {
+		return validate.EqualJSON([]byte(a), []byte(b)) == nil
+	}
+	return a == b
 }

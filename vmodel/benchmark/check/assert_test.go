@@ -92,3 +92,14 @@ func TestAssertStreamFailure(t *testing.T) {
 		t.Fatal("expected completed stream to fail")
 	}
 }
+
+func TestToolCallArgsStructured(t *testing.T) {
+	r := &RoundTripResult{ToolCalls: []ToolCallResult{{Arguments: `{"location" : "Paris"}`}}}
+	if err := AssertToolCallArgs(0, "location", "Paris").Check(r); err != nil {
+		t.Fatal(err)
+	}
+	r.ToolCalls[0].Arguments = `{"nested":{"location":"Paris"}}`
+	if err := AssertToolCallArgs(0, "location", "Paris").Check(r); err == nil {
+		t.Fatal("nested field matched top-level expectation")
+	}
+}

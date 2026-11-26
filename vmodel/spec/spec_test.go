@@ -369,3 +369,32 @@ func TestExplicitToolStreamingContentIsRetained(t *testing.T) {
 		t.Fatalf("stream behavior changed: %q", streamText.String())
 	}
 }
+
+func TestDeclarativeRules(t *testing.T) {
+	r := compile(t, `id: rules
+kind: mock
+mock: {content: hello}
+expect:
+  rules:
+    - {path: http_status, op: eq, value: 200}
+    - {path: content, op: regex, value: '^hello$'}
+  checks: [content_non_empty]
+`)
+	result := &check.RoundTripResult{HTTPStatus: 200, Content: "hello"}
+	if err := r.Check("rules", result); err != nil {
+		t.Fatal(err)
+	}
+	result.Content = "wrong"
+	if err := r.Check("rules", result); err == nil {
+		t.Fatal("unexpected pass")
+	}
+	if _, err := spec.Decode([]byte(`id: bad
+kind: mock
+mock: {content: hello}
+expect:
+  rules:
+    - {path: content, op: typo, value: hello}
+`)); err == nil {
+		t.Fatal("unknown operator accepted")
+	}
+}
