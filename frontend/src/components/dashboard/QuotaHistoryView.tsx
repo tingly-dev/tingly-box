@@ -27,7 +27,7 @@ import {
     quotaToWindows,
     type ProviderQuota,
 } from '@/types/quota';
-import { getReadableAccent, getStatusColor, quotaTone, type StatusTone } from '@tingly/ui/theme/status';
+import { quotaTone, type StatusTone } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius, radiusPx } from '@tingly/ui/theme/radius';
 import {
@@ -55,6 +55,25 @@ interface ProviderSeries {
 
 const number = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const DANGER_PERCENT = 20;
+
+// Quota colours come from the theme's own status palette (MUI
+// success/warning/error), not the brighter @tingly/ui "fill" set, so the charts
+// read as part of the theme. `main` clears the 3:1 graphics target on each
+// surface in both modes (light 3.19–4.83:1, dark 4.89–5.78:1); caption text
+// uses the adjacent variant to clear 4.5:1 (see the PR's contrast table).
+type StatusKey = 'success' | 'warning' | 'error' | 'info';
+const statusKey = (tone: StatusTone): StatusKey | null =>
+    tone === 'success' || tone === 'warning' || tone === 'error' || tone === 'info' ? tone : null;
+
+/** Solid mark colour (line, band stroke, chip dot, sparkline). */
+const markColor = (theme: Theme, tone: StatusTone): string => {
+    const key = statusKey(tone);
+    return key ? theme.palette[key].main : theme.palette.text.secondary;
+};
+
+/** Coloured *text* needs a stronger step than a mark: dark on light, light on dark. */
+const statusText = (theme: Theme, key: StatusKey): string =>
+    theme.palette.mode === 'dark' ? theme.palette[key].light : theme.palette[key].dark;
 
 function groupSnapshots(snapshots: ProviderQuota[]): ProviderSeries[] {
     const groups = new Map<string, ProviderQuota[]>();
@@ -115,7 +134,11 @@ function formatCountdown(ms: number): string {
 
 function StatusChip({ tone, label }: { tone: StatusTone; label: string }) {
     const theme = useTheme();
-    const fill = tone === 'neutral' ? theme.palette.text.secondary : getStatusColor(theme, tone);
+    const key = statusKey(tone);
+    const fill = markColor(theme, tone);
+    // Neutral (balances) use a theme surface tint rather than alpha() of the
+    // translucent secondary text colour.
+    const background = key ? alpha(fill, 0.12) : theme.palette.action.hover;
     return (
         <Box
             sx={{
@@ -125,7 +148,7 @@ function StatusChip({ tone, label }: { tone: StatusTone; label: string }) {
                 px: 1,
                 py: 0.25,
                 borderRadius: radius.pill,
-                backgroundColor: alpha(fill, 0.12),
+                backgroundColor: background,
                 whiteSpace: 'nowrap',
             }}
         >
@@ -265,15 +288,15 @@ function QuotaChart({ series, language, daily }: { series: QuotaSeries; language
     if (!latest) return null;
 
     const tone: StatusTone = isPercent ? quotaTone(latest.value) : 'neutral';
-    const lineColor = isPercent ? getStatusColor(theme, tone) : getReadableAccent(theme, 'primary');
-    const dangerFill = getStatusColor(theme, 'error');
+    const lineColor = isPercent ? markColor(theme, tone) : theme.palette.primary.main;
+    const dangerTint = alpha(theme.palette.error.main, 0.07);
     const axisColor = theme.palette.divider;
     const tickStyle = axisTick(theme);
 
     const delta = seriesDelta([...series.samples].sort((a, b) => a.time - b.time));
     const deltaUnit = isPercent ? '%' : ` ${latest.window.currency_code || latest.window.unit || ''}`;
     const deltaText = `${delta > 0 ? '+' : delta < 0 ? '-' : ''}${number(Math.abs(delta))}${deltaUnit}`;
-    const deltaColor = delta > 0 ? getReadableAccent(theme, 'success') : delta < 0 ? getReadableAccent(theme, 'error') : theme.palette.text.secondary;
+    const deltaColor = delta > 0 ? statusText(theme, 'success') : delta < 0 ? statusText(theme, 'error') : theme.palette.text.secondary;
 
     const resetsAt = latest.window.resets_at ? Date.parse(latest.window.resets_at) : NaN;
     const countdown = Number.isFinite(resetsAt) && resetsAt > Date.now() ? formatCountdown(resetsAt - Date.now()) : undefined;
@@ -309,7 +332,7 @@ function QuotaChart({ series, language, daily }: { series: QuotaSeries; language
                 <ResponsiveContainer width="100%" height="100%">
                     {chart.kind === 'band' ? (
                         <ComposedChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barCategoryGap="18%">
-                            {isPercent && <ReferenceArea y1={0} y2={DANGER_PERCENT} fill={dangerFill} fillOpacity={0.08} />}
+                            {isPercent && <ReferenceArea y1={0} y2={DANGER_PERCENT} fill={dangerTint} fillOpacity={1} />}
                             <CartesianGrid vertical={false} stroke={axisColor} strokeDasharray="3 3" strokeOpacity={0.6} />
                             <XAxis dataKey="label" tick={tickStyle} tickLine={false} minTickGap={16} height={26} />
                             <YAxis domain={isPercent ? [0, 100] : [0, 'auto']} tickFormatter={yTick} tick={tickStyle} tickLine={false} width={46} />
@@ -319,8 +342,7 @@ function QuotaChart({ series, language, daily }: { series: QuotaSeries; language
                                 {chart.data.map((d: any, i: number) => (
                                     <Cell
                                         key={i}
-                                        fill={d.hasData ? (isPercent ? getStatusColor(theme, quotaTone(d.latest)) : getReadableAccent(theme, 'primary')) : 'transparent'}
-                                        fillOpacity={0.55}
+                                        fill={d.hasData ? alpha(isPercent ? markColor(theme, quotaTone(d.latest)) : theme.palette.primary.main, 0.3) : 'transparent'}
                                     />
                                 ))}
                             </Bar>
@@ -331,12 +353,12 @@ function QuotaChart({ series, language, daily }: { series: QuotaSeries; language
                         </ComposedChart>
                     ) : (
                         <LineChart data={chart.data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                            {isPercent && <ReferenceArea y1={0} y2={DANGER_PERCENT} fill={dangerFill} fillOpacity={0.08} />}
+                            {isPercent && <ReferenceArea y1={0} y2={DANGER_PERCENT} fill={dangerTint} fillOpacity={1} />}
                             <CartesianGrid vertical={false} stroke={axisColor} strokeDasharray="3 3" strokeOpacity={0.6} />
                             <XAxis dataKey="time" type="number" domain={[chart.t0, chart.t1]} allowDataOverflow tickFormatter={tickTime} tick={tickStyle} tickLine={false} minTickGap={32} height={26} />
                             <YAxis domain={isPercent ? [0, 100] : [0, 'auto']} tickFormatter={yTick} tick={tickStyle} tickLine={false} width={46} />
                             <Tooltip cursor={{ stroke: axisColor }} content={<LineTooltip series={series} language={language} />} />
-                            {resetMarker && <ReferenceLine x={resetMarker} stroke={axisColor} strokeDasharray="4 4" />}
+                            {resetMarker && <ReferenceLine x={resetMarker} stroke={theme.palette.text.disabled} strokeDasharray="4 4" />}
                             <Line type="linear" dataKey="value" stroke={lineColor} strokeWidth={2} dot={false} activeDot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />
                         </LineChart>
                     )}
@@ -356,7 +378,7 @@ function DeltaText({ series }: { series: QuotaSeries }) {
     const delta = seriesDelta(sorted);
     const unit = series.mode === 'percent' ? '%' : ` ${sorted[0]?.window.currency_code || sorted[0]?.window.unit || ''}`;
     const text = `${delta > 0 ? '+' : delta < 0 ? '-' : ''}${number(Math.abs(delta))}${unit}`;
-    const color = delta > 0 ? getReadableAccent(theme, 'success') : delta < 0 ? getReadableAccent(theme, 'error') : theme.palette.text.secondary;
+    const color = delta > 0 ? statusText(theme, 'success') : delta < 0 ? statusText(theme, 'error') : theme.palette.text.secondary;
     return (
         <Typography variant="caption" sx={{ color }}>
             {t('dashboard.quotaHistory.rangeDelta', { value: text, defaultValue: '{{value}} over range' })}
@@ -427,7 +449,7 @@ function Watchboard({ providers }: { providers: ProviderSeries[] }) {
                         <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{valueText(r.series, r.sample)}</Typography>
                         <DeltaText series={r.series} />
                     </Box>
-                    <Sparkline samples={r.series.samples} color={r.tone === 'neutral' ? theme.palette.text.secondary : getStatusColor(theme, r.tone)} />
+                    <Sparkline samples={r.series.samples} color={markColor(theme, r.tone)} />
                 </Box>
             ))}
             </Box>
