@@ -109,3 +109,18 @@ func TestRefusesToStartWithoutBwrap(t *testing.T) {
 		t.Fatalf("err = %v, want ErrUnavailable: never run unconfined", err)
 	}
 }
+
+// Elsewhere than Linux, bwrap is unavailable and says why, not that a tool is
+// missing.
+func TestLinuxOnly(t *testing.T) {
+	defer func(old string) { goos = old }(goos)
+	goos = "darwin"
+	err := Runtime{}.Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "Linux only (this is darwin)") {
+		t.Errorf("Check: %v", err)
+	}
+	_, err = Runtime{}.Start(context.Background(), sandbox.Cmd{Args: []string{"true"}}, policy())
+	if !errors.Is(err, sandbox.ErrUnavailable) || !strings.Contains(err.Error(), "Linux only") {
+		t.Errorf("Start: %v", err)
+	}
+}

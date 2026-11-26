@@ -85,6 +85,7 @@ export default {
       "topModels": "Топ моделей",
       "topProviders": "Топ провайдеров",
       "others": "Прочие",
+      "share": "Доля",
       "noUsageHintShort": "Попробуйте более длинный период.",
       "noUsersHint": "Попробуйте другой запрос или другой период."
     },

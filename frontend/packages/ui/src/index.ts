@@ -25,5 +25,5 @@ export type { SelectOption, CustomSpec, SelectWithCustomProps } from './componen
 export { default as CustomValueDialog } from './components/CustomValueDialog';
 export type { CustomValueDialogProps } from './components/CustomValueDialog';
 export { formatDurationShort } from './utils/duration';
-export { useDocumentTitle, setTitleAttention, composeTitle, truncatePart } from './utils/documentTitle';
+export { useDocumentTitle, composeTitle, truncatePart } from './utils/documentTitle';
 export type { TitlePart } from './utils/documentTitle';

@@ -75,6 +75,7 @@ export default {
       "topModels": "Top models",
       "topProviders": "Top providers",
       "others": "Others",
+      "share": "Share",
       "noUsageHintShort": "Try a longer time range.",
       "noUsersHint": "Try a different search term or time range."
     },
