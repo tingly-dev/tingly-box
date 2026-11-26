@@ -80,14 +80,14 @@ func TestWorkerLaunchKeepsDefaultsOfItsStartAfterWaitingForCapacity(t *testing.T
 	}, time.Second, time.Millisecond)
 	p, err := f.store.GetProject(f.project.ID)
 	require.NoError(t, err)
-	p.ThreadModel, p.ThreadPermissionMode = "fresh-default", "auto"
+	p.ThreadModel, p.ThreadPermissionMode = "fresh-default", "default"
 	require.NoError(t, f.store.SaveProject(p))
 	release()
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	launches := f.agent.Launches()
 	assert.Equal(t, "default-model", launches[0].Model, "the project's later default does not reach a thread that already started")
-	assert.Equal(t, "acceptEdits", launches[0].PermissionMode)
+	assert.Equal(t, "auto", launches[0].PermissionMode)
 }
 
 func TestWorkerHandoffUsesConfiguredModelNotLastObservedModel(t *testing.T) {

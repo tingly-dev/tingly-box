@@ -44,6 +44,7 @@ func TestAutoModeThreadMayPushItsOwnBranchAndAsksToPublish(t *testing.T) {
 
 func TestOtherPermissionModesGetNoGitRules(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	f.project.ThreadPermissionMode = "acceptEdits"
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Fix login", Task: "fix"})
 	require.NoError(t, err)
 	f.report(t)
@@ -57,6 +58,7 @@ func TestOtherPermissionModesGetNoGitRules(t *testing.T) {
 
 func TestSwitchingToAutoModeRefreshesThreadSettingsOnNextTurn(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	f.project.ThreadPermissionMode = "acceptEdits"
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Fix login", Task: "fix"})
 	require.NoError(t, err)
 	f.report(t)
@@ -97,6 +99,7 @@ func TestGrantAutoGitKeepsTheHostsRulesAndSkipsUnsafeBranches(t *testing.T) {
 
 func TestWriteSettingsLeavesAnUnchangedFileAlone(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	f.project.ThreadPermissionMode = "acceptEdits"
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Fix login", Task: "fix"})
 	require.NoError(t, err)
 	f.report(t)

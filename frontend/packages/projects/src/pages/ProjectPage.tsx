@@ -372,11 +372,11 @@ export default function ProjectPage() {
             canSend={settings.canSend}
             railExtra={selected && session?.railCards?.({ thread: selected, launch: { profile: selected.profile_override ?? project?.thread_profile ?? '', model: selected.model_override || '' } })}
             configuredModel={selected?.model_override || t('threadSettings.defaultModel')}
-            permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
+            permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'auto'}`)}`}
             modelControl={selected && (
                 session?.workerLaunchPickers ? session.workerLaunchPickers({ profileOverride: selected.profile_override ?? null, projectProfile: project?.thread_profile ?? '', model: selected.model_override || '', disabled: blocked || selected.status === 'resolved' || settings.saving, onChange: (profile, model) => void settings.setWorkerLaunch(profile, model) }) : <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
                     modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
-                    followsProject={false} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    followsProject={false} defaultPermissionMode={project?.thread_permission_mode || 'auto'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
             )}
             belowComposer={selected && !session?.workerLaunchPickers && !!(selected.profile_override ?? project?.thread_profile) && (
@@ -394,7 +394,7 @@ export default function ProjectPage() {
             composerContext={selected && (
                 <ThreadSettingsPickers show="permission" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
                     modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
-                    followsProject={false} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    followsProject={false} defaultPermissionMode={project?.thread_permission_mode || 'auto'}
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
             )}
             onBack={closeThread}
@@ -537,7 +537,7 @@ export default function ProjectPage() {
                                     </Select>
                                 </ControlTooltip>}
                                 <PermissionModeSelect
-                                    value={project.thread_permission_mode || 'acceptEdits'}
+                                    value={project.thread_permission_mode || 'auto'}
                                     modes={THREAD_MODES}
                                     allowInherit={false}
                                     label={t('threadSettings.defaultPermissions')}

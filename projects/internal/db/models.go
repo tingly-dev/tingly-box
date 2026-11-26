@@ -128,7 +128,10 @@ type Project struct {
 
 // DefaultThreadPermissionMode is the permission mode a thread starts in when
 // its project names none.
-const DefaultThreadPermissionMode = "acceptEdits"
+const DefaultThreadPermissionMode = "auto"
+
+// legacyThreadPermissionMode is what rows from before threads pinned a mode were backfilled with; the default has since moved to auto, but those threads keep this.
+const legacyThreadPermissionMode = "acceptEdits"
 
 // DefaultMaxRunningThreads is how many threads a project runs at once until
 // its owner changes it.

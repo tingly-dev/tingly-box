@@ -99,7 +99,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [goal, setGoal] = useState(project.goal);
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
-    const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
+    const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'auto') as Mode);
     const [sandbox, setSandbox] = useState<string>(project.thread_sandbox || '');
     const savedGithub = GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g));
     const [github, setGithub] = useState<string[]>(savedGithub);
@@ -114,7 +114,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
     const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || sandbox !== (project.thread_sandbox || '') || github.join() !== savedGithub.join();
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'auto') || sandbox !== (project.thread_sandbox || '') || github.join() !== savedGithub.join();
 
     return (
         <Stack spacing={2.5}>

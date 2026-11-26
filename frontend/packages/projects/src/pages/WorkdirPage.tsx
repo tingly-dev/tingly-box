@@ -360,7 +360,7 @@ export default function WorkdirPage() {
                         disabled={threadBlocked}
                         settingsSaving={settings.saving}
                         canSend={settings.canSend}
-                        permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.defaultPermissions')} · ${t(`session.mode.${selectedFolder?.thread_permission_mode || 'acceptEdits'}`)}`}
+                        permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.defaultPermissions')} · ${t(`session.mode.${selectedFolder?.thread_permission_mode || 'auto'}`)}`}
                         onBack={() => openNew()}
                         backLabel={t('session.new')}
                         liveTasks={liveTasks}
@@ -374,7 +374,7 @@ export default function WorkdirPage() {
                         }}
                         modelControl={selected && (
                             <ThreadSettingsPickers folder show="model" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
-                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
+                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'auto'}
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
                         )}
@@ -385,7 +385,7 @@ export default function WorkdirPage() {
                         )}
                         composerContext={selected && (
                             <ThreadSettingsPickers folder show="permission" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
-                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
+                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'auto'}
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
                         )}

@@ -19,7 +19,7 @@ interface Props {
 }
 
 /** The same independent choices for a new folder thread and every open thread. */
-export function ThreadSettingsPickers({ value, permissionMode, modes, onLaunchChange, onPermissionChange, disabled, folder = false, followsProject = !folder, defaultModel, defaultPermissionMode = 'acceptEdits', show = 'all' }: Props) {
+export function ThreadSettingsPickers({ value, permissionMode, modes, onLaunchChange, onPermissionChange, disabled, folder = false, followsProject = !folder, defaultModel, defaultPermissionMode = 'auto', show = 'all' }: Props) {
     const { t } = useTranslation('projects');
     const { session } = useProjectsHost();
     const modelDefault = !followsProject ? t('threadSettings.defaultModel')

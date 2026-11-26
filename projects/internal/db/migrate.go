@@ -226,7 +226,7 @@ func pinThreadSettings(tx *gorm.DB) error {
 		"UPDATE threads SET model_override = " + own("thread_model") + " WHERE " + workers + " AND profile_override IS NULL AND COALESCE(model_override, '') = ''",
 		"UPDATE threads SET effort_override = " + own("thread_effort") + " WHERE " + workers + " AND COALESCE(effort_override, '') = ''",
 		"UPDATE threads SET profile_override = " + own("thread_profile") + " WHERE " + workers + " AND profile_override IS NULL",
-		"UPDATE threads SET permission_mode = COALESCE(NULLIF((SELECT thread_permission_mode FROM projects WHERE projects.id = threads.project_id), ''), '" + DefaultThreadPermissionMode + "') WHERE agent <> '" + AgentLLM + "' AND COALESCE(permission_mode, '') = ''",
+		"UPDATE threads SET permission_mode = COALESCE(NULLIF((SELECT thread_permission_mode FROM projects WHERE projects.id = threads.project_id), ''), '" + legacyThreadPermissionMode + "') WHERE agent <> '" + AgentLLM + "' AND COALESCE(permission_mode, '') = ''",
 	} {
 		if err := tx.Exec(q).Error; err != nil {
 			return err
