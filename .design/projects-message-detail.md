@@ -52,3 +52,12 @@ conversation, not the trajectory. Request draft/submission storage is unchanged,
 so switching detail levels cannot repeat an accepted decision.
 
 No API/schema or backend setting is needed for this per-browser convenience.
+
+## Live status line
+
+Concise hides calls, not the fact that work is going on. The same `WorkingLine`
+(spinner, verb, elapsed) ends the transcript in both levels, and "running"
+covers more than the turn: while a request waits, concise keeps a one-line
+"Waiting for your reply" under the card (detailed has the card and call rows),
+and background subagents/tasks keep a "N background tasks running" line after
+the turn ends, in both levels. The line goes away when none of these remain.

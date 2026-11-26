@@ -116,6 +116,8 @@ export default {
       "verb_searching": "Ищет в интернете",
       "verb_thinking": "Думает",
       "verb_working": "Работает",
+      "verb_waiting": "Ждёт вашего ответа",
+      "verb_background": "Фоновых задач: {{count}}",
       "viewTrajectory": "Траектория",
       "working": "Выполняется…"
     }
