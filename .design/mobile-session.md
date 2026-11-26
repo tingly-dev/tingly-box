@@ -4,14 +4,12 @@
 > phone shell; the desktop layout is unchanged). The design was approved
 > (option A with B's per-call rows in the process sheet); implementation and the
 > few deliberate deviations are in §10.
-> The prototype is in `.design/mobile-prototype/` (`app4.js` + `session.css`; open
-> `index.html?s=work,session&variant=A|B&theme=dark&w=390&h=844&frame=0`).
 > Canvas: `.design/mobile-session/` (a Tingly Design project; open with
-> `npx tingly-design open .design/mobile-session`); exported previews:
-> `.design/images/mobile-session/*@2x.png` (01 session, 02 process sheet,
-> 03/04 long text, 05 folder, 06 menu, 07 dark, 08 rationale).
-> Screenshots: `library/outputs/tb-sign/mobile-session-{current,option}-*.png` (the
-> design/prototype) and `mobile-impl-*.png` (the implementation), in the shared upload dir.
+> `npx tingly-design open .design/mobile-session`; 8 boards: session, process
+> sheet, long text, folder, ⋯ menu, dark, rationale). Exported previews are kept
+> in the project library (`outputs/tb-sign/mobile-canvas-*@2x.png`).
+> Screenshots (implementation) are in the same library (`mobile-impl-*.png`);
+> none are committed to the repo.
 >
 > This continues `.design/mobile-ui.md` decision 8 ("Concise by default") and
 > rollout item 3 ("Workspace screens: … thread page with docked actions, sheets,
@@ -74,7 +72,7 @@ The proposal: **one compact session bar, a conversation-first transcript, a
 one-line composer with its settings in a sheet, and the pending decision docked
 above the composer**. Process (thinking, tool calls/results, subagent steps,
 checklist history) folds to a 44 px line and opens one tap deep. In the
-prototype this gives the transcript **57 %** of 390×844 with a request docked
+implementation this gives the transcript **57 %** of 390×844 with a request docked
 (**80 %** once nothing is pending) and **54 %** at 360×800 — with every tappable
 row at least 44 px (measured: 0 below 44 in both options).
 
@@ -248,7 +246,7 @@ divider for every message.
 sheets pin their actions above the home indicator. The session is a pushed
 screen: the shell's tab bar is **hidden** on it (it comes back on Back), so the
 composer owns the bottom edge. This is a change from today's always-on tab bar;
-it is what the prototype shows and is called out as a decision.
+it is what the canvas shows and is called out as a decision.
 
 **Keyboard.** The shell already tracks `visualViewport` and sets
 `--phone-viewport-height` (`@tingly/ui/theme/phone`, `usePhoneShellBody`). On the
@@ -486,11 +484,11 @@ kept for reference; re-open an item if it should differ.
 ## 9. Verification of this proposal
 
 - The baseline and options were rendered in headless Chrome against the real
-  frontend (mock mode) and the static prototype; sizes and target counts were
+  frontend (mock mode) and the design canvas; sizes and target counts were
   measured with `getBoundingClientRect()` (the numbers above), light and dark,
   390×844 and 360×800.
-- The prototype scripts pass `node --check` and render with no page errors
-  (checked in Chromium).
+- The canvas `check` reports no problems, and the implementation renders with no
+  page errors (checked in Chromium).
 - The implementation (this PR) passes `tsc --noEmit` in `frontend` and in the
   projects package, `oxlint`, `check-style-literals`, `check-api-arrays`, the
   projects vitest suite (952 tests, including the new ClampedText/phone tests),
@@ -547,7 +545,7 @@ Deliberate deviations from the design text:
    OS keyboard), so it demonstrates the composer/safe-area geometry, not the
    keyboard pixels.
 
-Canvas: `.design/mobile-session/` (8 boards; previews `.design/images/mobile-session/`).
+Canvas: `.design/mobile-session/` (8 boards; previews kept in the project library, not the repo).
 Screenshots: `mobile-impl-*` in `library/outputs/tb-sign/` — 390×844 and
 360×800, light/dark: `pool` (docked approval), `checklist` (folder session),
 `long` (clamped user/assistant), `code` (capped code + right copy),

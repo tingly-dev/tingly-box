@@ -34,14 +34,11 @@ function fit() {
 }
 function render() {
   fit();
-  // Re-rendering the session (a clamp toggle, a copy toast) must not lose the
-  // reading position: keep the transcript's scrollTop across the swap.
-  const prevScroll = S.screen === 'session' ? (document.querySelector('.sess-scroll')?.scrollTop ?? 0) : 0;
   const t = S.tab, sc = S.screen;
   let list, detail;
   if (t === 'work') {
     list = workHome();
-    detail = sc === 'thread' ? threadScreen() : sc === 'session' ? sessionScreen() : sc === 'project' ? projectScreen() : sc === 'folder' ? folderScreen() : '';
+    detail = sc === 'thread' ? threadScreen() : sc === 'project' ? projectScreen() : sc === 'folder' ? folderScreen() : '';
   } else if (t === 'agent') { list = agentList(); detail = sc === 'detail' ? agentDetail() : ''; }
   else { list = me(); detail = sc === 'team' ? teamPage() : sc === 'cred' ? credPage() : sc.startsWith('fb:') ? fallbackPage(sc.slice(3)) : ''; }
   let main;
@@ -49,10 +46,6 @@ function render() {
   else main = `<div class="screen">${detail || list}</div>`;
   const hideNav = !S.wide && (S.kb || (detail && sc !== 'root' && !(S.land && false)));
   $('#phone').innerHTML = `${hideNav ? '' : nav()}${main}<div class="scrim ${S.sheet ? 'on' : ''}" data-act="close"></div><div class="sheet ${S.sheet ? 'on' : ''}"><div class="grab"></div>${S.sheet ? SHEETS[S.sheet]() : ''}</div>${S.toast ? `<div class="toast">${S.toast}</div>` : ''}`;
-  if (S.screen === 'session' && prevScroll) {
-    const el = document.querySelector('.sess-scroll');
-    if (el) el.scrollTop = prevScroll;
-  }
 }
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-tab],[data-ptab],[data-thread],[data-act],[data-sheet],[data-resolve],[data-agent],[data-rule],[data-toast],[data-kb],[data-toggle],[data-page]'); if (!el) return;
