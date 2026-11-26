@@ -31,8 +31,8 @@
 |---|---|---|
 | `stop_thread` | `Strict`；`cite` 必填且经 `quoteUser` 校验必须是用户自己最近的消息（`cite.go:25`）；只对在跑的线程生效，否则 “not running” 不算错 | 唯一一个**代码强制**用户授权的状态工具 |
 | `resolve_thread` | 只有 `thread_id`；**描述里**写“只在用户要求时”，代码不查（`:83`、`:300`）；对 working / waiting 线程同样生效，等于先 Stop 再关 | 授权全凭协调者自觉 |
-| `message_thread` | `cite` 可选（给线程转述用户的批准）；resolved 或 archived 的线程直接报错 | 错误只有一句建议，没有对应工具 |
-| `rename_thread` / `get_thread` / `list_threads` | 无状态影响 / 只读 | `list_threads` 可按 status 过滤，包含已归档 |
+| `message_thread` | `cite` 可选（给线程转述用户的批准）；resolved 或 archived 的线程直接报错（归档的按 §4.5 将不可见） | 错误只有一句建议，没有对应工具 |
+| `rename_thread` / `get_thread` / `list_threads` | 无状态影响 / 只读 | `list_threads` 可按 status 过滤，现包含已归档（§4.5 改为不含） |
 | （无）reopen / archive / restore / delete | — | `thread-lifecycle.md` §6.1 写明“重开只有用户能做”，§11 把 G6 列为暂缓 |
 
 所有协调者工具都是 `CoordinatorOnly`，`findThread` 只找本项目的 worker 线程，不会碰主线程或别的项目（`mcp-tools.md` Step 2）。
@@ -67,14 +67,14 @@
 | B Resolve 了但 PR 还开着，评审意见要改 | **合适**：同一分支、同一 PR（Links）、线程记得评审前的实现 | 要接手别人的分支，易冲突，PR 归属混乱 |
 | C PR 已合并，用户又提跟进（#2774 圆点） | 上下文最好；但 squash 合并后分支已落后 main，要先 merge/rebase main，再走 Merge 对话框的“合并后新提交 → 新 PR”路径（`thread-lifecycle.md` §6.4） | 干净：从 main 新分支，没有历史包袱；代价是丢上下文，协调者得写摘要，线程可用 `get_thread` 读不到别线程的完整转录 |
 | D 合并后发现回归 | 线程最了解实现，适合直接修；同 C 的分支问题 | 修复和原功能解耦，PR 更好审；上下文靠摘要 |
-| E 已归档的线程要继续 | 需要 Restore（重建 worktree，可能失败：分支被删、目录被占）+ Reopen；依赖要重装 | 免去重建，但原分支还要保留给新线程当 base 时才有用 |
+| E 已归档的线程要继续 | 协调者不可见；用户在网页 Restore（重建 worktree，可能失败）+ Reopen；依赖要重装 | 免去重建，但原分支还要保留给新线程当 base 时才有用 |
 | F 无关的新需求 | 不该重开：污染原线程上下文 | 正确 |
 
 ### 3.2 结论
 
 不是二选一。**重开解决“同一件事还没完”（A、B、E，C/D 的上下文优势）；新线程解决“新的一件事”（F，以及 C/D 想要干净 base 的时候）。** 重开该做的是便宜、明确，让协调者在两者之间判断，而不是为协调者省掉判断。分支和 PR 的差异就是判断依据：PR 已 merged 且用户要的是增量功能 → 倾向新线程；PR 还开着或没合并 → 重开。这条判断写进 `reopen_thread` 的描述，不写进代码。
 
-另一个独立缺口：新线程目前没有“承接旧线程上下文”的一等方式（只能协调者手写摘要，`start_thread` 有 `base` / `branch`，没有 `from_thread`）。列为阶段 3 的可选项，不是 reopen 的前提。
+另一个独立缺口：新线程目前没有“承接旧线程上下文”的一等方式（只能协调者手写摘要，`start_thread` 有 `base` / `branch`，没有 `from_thread`）。列为可选项（§7），不是 reopen 的前提。
 
 ## 4 工具设计
 
@@ -86,9 +86,9 @@
 | 维度 | U：`set_thread_status` | S：多个专用工具 |
 |---|---|---|
 | 误用风险 | `to` 是个模式选择器，模型少写一个字段、选错枚举值就换了一种操作；`stop`、`resolve` 的副作用不同（Stop 丢排队消息并让待答的卡过期；Resolve 还回收进程、交还 IM、清 scratch、清授权），被同一个名字掩盖 | 动词即意图，描述里可以写各自的后果和时机，模型调错的代价是“工具不存在”而不是“枚举选错” |
-| 批准（cite） | `cite` 是否必填取决于 `to`；JSON schema 表达不了条件必填，`Strict` 的 schema 只能全部可选，校验推给运行时，错误只有试了才知道 | 每个工具各自的 schema 写明：`stop_thread` 必填、`resolve_thread` 按 §4.3、`reopen_thread` 没有 |
+| 批准（cite） | `cite` 是否必填取决于 `to`；JSON schema 表达不了条件必填，`Strict` 的 schema 只能全部可选，校验推给运行时，错误只有试了才知道 | 每个工具各自的 schema 写明：`stop_thread` 必填、`resolve_thread` 按 §4.3、`reopen_thread` 可选 |
 | 不允许的切换 | `to` 的枚举要么暴露 working / waiting / failed（谁都不该手动设，因为它们是一轮的事实，`thread-lifecycle.md` 原则 1），要么得说明哪些值不可选 | 不存在就不能调；archive / delete 不给协调者是“没有这个工具”，最硬的禁止 |
-| 出错提示 | 一个工具要为每个 (from, to) 组合写提示 | 每个工具只管自己的前置条件，提示固定且短，并能指向下一个工具（“已归档：用 reopen_thread”） |
+| 出错提示 | 一个工具要为每个 (from, to) 组合写提示 | 每个工具只管自己的前置条件，提示固定且短，并能指向下一个工具（“已 resolved：用 reopen_thread”） |
 | 与网页一致 | 网页是 resolve / reopen / archive / restore 各一个路由；U 需要再造一层映射 | 一对一：`resolve_thread` ↔ `POST /resolve`，`reopen_thread` ↔ `POST /reopen`，都落到同一个 `Threads` 方法，沿用 `mcp-tools.md` 的“动作是 Threads 方法，handler 和工具只解析输入”，并已有“同一夹具经服务、HTTP、MCP 状态和事件一致”的对等测试要求 |
 | 工具列表成本 | 少一个工具 | 多一个工具；协调者工具列表有 12000 字节预算（`mcp-tools.md` Step 3，已用约 10.7 KB），`reopen_thread` 约 300 字节，放得下 |
 | 审计 | 事件文本要带 `to` | 事件天然区分：“Stopped / Reopened by the coordinator.” |
@@ -99,7 +99,7 @@
 
 | 做法 | 评价 |
 |---|---|
-| (a) 报错并点名工具：`the thread is resolved; call reopen_thread first`（archived：`…reopen_thread restores it`） | 一步显式、协调者要多一次调用；保留“resolved 是用户的决定”这道闸，也防止协调者把 PR 事件等转述自动推给已完成的线程 |
+| (a) 报错并点名工具：`the thread is resolved; call reopen_thread first` | 一步显式、协调者要多一次调用；保留“resolved 是用户的决定”这道闸，也防止协调者把 PR 事件等转述自动推给已完成的线程 |
 | (b) `message_thread(…, reopen=true)` 一次完成 | **不做**（用户决定，2026-11-26） |
 | (c) 自动重开 | **不做**：resolved 是用户的验收结论（`thread-lifecycle.md` 原则 4），消息不应悄悄推翻它；网页 / IM 对 resolved 线程同样拒绝，三个入口保持一致 |
 
