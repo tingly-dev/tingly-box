@@ -231,6 +231,8 @@ type Usage interface {
 | resources limited | — | `systemd-run --user --scope -p MemoryMax -p MemorySwapMax=0 -p TasksMax`，CPU 为 `-p CPUQuota=<u/10>%` | guest 内 cgroup（`memory.max`、`memory.swap.max=0`、`pids.max`、`cpu.max`），命令经 `CLONE_INTO_CGROUP` 进入；VM 规格只够给出限额：内存 = 限额 + 256 MiB（guest 内核与 init），vCPU = ⌈CPU/1000⌉ |
 | 记账 | — | 有 systemd 用户会话时一律进 scope（`--unit=tb-sandbox-<随机>.scope`，失败的 scope 不回收，读完 `Result` 再 `reset-failed`）；`Usage` 读 scope 的 cgroup | guest 的 `/proc/vmstat` `oom_kill` 计数；`Usage` 未实现 |
 
+**seatbelt（process，macOS）**：`sandbox-exec` 的 SBPL profile（已被 Apple 弃用）：storage confined、network none/allowlist/open、exec confined、无配额；给不了 internet，默认策略下不可用。见 `.design/sandbox-macvm.md` §10。
+
 **macvm（vm，macOS）**：Virtualization.framework 上的 Linux VM，guest init 与 vsock 协议同 microvm；storage 来自镜像的只读根 + 每个挂载一个宿主强制只读/可写的 virtio-fs 共享；internet 由宿主进程内的用户态网络栈（gVisor）按 §2.2 过滤。映射、底座取舍、镜像与签名见 `.design/sandbox-macvm.md`。
 
 **`internet` 的实测（2026-11-25）**：非特权 user namespace 里直接跑 `nft` 被 AppArmor 拒（`kernel.apparmor_restrict_unprivileged_userns=1`）；在 pasta 建的命名空间里可以（pasta 有自己的 AppArmor 配置，只允许执行 `/usr/bin` 下的命令，所以由 `/usr/bin/sh` 装规则再 exec bwrap）。pasta 默认把宿主正在监听的端口（含宿主回环上的）转发进命名空间，等于把宿主回环暴露给沙箱——一致性测试抓到了（`LEAK-host[127.0.0.1]`），必须显式关掉全部转发。变异检查：不装规则时，宿主其它网卡地址（`192.168.122.1`、容器网桥 `10.200.x`）可达。
@@ -247,7 +249,7 @@ microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 �
 | credentials | explicit | 白名单 `sandboxEnv` + 启动自己设的变量 |
 | resources | unlimited（记账开） | 项目设置可选填每线程配额（内存、进程数、CPU 核数），**不预设**；任一项填了则为 `limited` |
 
-- **运行时选择**：项目设置"线程运行环境"列出运行时；某运行时是否可用，按线程策略在本机实际起一次 `true` 判定（`CheckThreadSandbox`，结果缓存一分钟），所以缺 pasta 之类某一级别的工具时，设置里就显示不可用及原因，而不是等线程失败。现为本机 / bwrap / microvm / macvm（microvm 要求运行 Tingly Box 的用户能访问 `/dev/kvm`；macvm 只在 macOS 上可用，其它平台显示为不可用及原因）。
+- **运行时选择**：项目设置"线程运行环境"列出运行时；某运行时是否可用，按线程策略在本机实际起一次 `true` 判定（`CheckThreadSandbox`，结果缓存一分钟），所以缺 pasta 之类某一级别的工具时，设置里就显示不可用及原因，而不是等线程失败。现为本机 / bwrap / microvm / macvm / seatbelt（microvm 要求运行 Tingly Box 的用户能访问 `/dev/kvm`；macvm 只在 macOS 上可用，其它平台显示为不可用及原因）。
 - **配额（决定）**：写在项目上、按线程生效；可另设项目总额（项目一个 systemd slice，线程是其下的 scope；VM 运行时按线程）。界面上留空即不限，填了做下限校验（内存至少 512 MiB，进程数至少 64，CPU 至少 0.1 核；前后端同一套），宿主运行时下禁用。已做：`Project.ThreadMemoryBytes/ThreadTasks/ThreadCPU`、更新接口校验、复制与变更摘要、codegen、设置界面；当前用量显示与项目总额未做。
 - **网络级别**：`internet` 为默认；`allowlist`（附名单编辑）给敏感项目；`open` 不作为普通选项，若保留则明确标为危险（包含宿主回环与内网）。
 - **可见性**：线程因 OOM、配额或沙箱失败结束时，写成线程事件并显示原因与用量。 OOM 已做：沙箱以 `EndOOM` 结束的线程，失败原因写明“沙箱内存不足（限额 …）”。
@@ -264,7 +266,7 @@ microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 �
 | S4 | **Projects 默认切换（已完成）**：线程策略改为 `internet` + 自动 Expose；设置里的可用性按线程策略实测；live 测试：真实 CLI 在 internet 下完成回合，模型经 Expose，公网 200 | S2、S3 |
 | S5 | **配额（已完成）**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
 | S6 | **microvm 进 Projects（已完成）**：microvm 的 `internet`（VMM 进 pasta 命名空间 + tap + `netfilter.Router`）；vCPU 与内存改为宿主规格（代价见 §9）；加入运行时列表；live 测试：真实 CLI 在 microvm 的 internet 下完成回合，公网 200，模型经 Expose | S3、S4 |
-| S8 | **macvm**（进行中）：设计 `.design/sandbox-macvm.md`；guest 共用（`vmguest`）、用户态网络（`usernet`）、运行时与 Projects 接入；镜像的发布与下载、发布流程的签名在后 | S6 |
+| S8 | **macOS 运行时**（已实现，未在真 Mac 上验证）：`.design/sandbox-macvm.md`；guest 共用（`vmguest`）、用户态网络（`usernet`）、`seatbelt`、`macvm` 与 Projects 接入；镜像的发布与下载、发布流程的签名在后 | S6 |
 | S7 | 项目总额（slice）；已知缺口：运行中审批新增的目录挂进沙箱、`library/.cache` 线程间共享、主仓库 git 引用可写 | 按需 |
 
 ## 7 决定记录

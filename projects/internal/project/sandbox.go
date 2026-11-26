@@ -22,7 +22,9 @@ import (
 	"github.com/tingly-dev/tingly-box/sandbox"
 	// The runtimes this build ships: a new one is one more import here.
 	_ "github.com/tingly-dev/tingly-box/sandbox/bwrap"
+	_ "github.com/tingly-dev/tingly-box/sandbox/macvm"
 	_ "github.com/tingly-dev/tingly-box/sandbox/microvm"
+	_ "github.com/tingly-dev/tingly-box/sandbox/seatbelt"
 )
 
 // db.Project.ThreadSandbox names the sandbox runtime a project's threads run
@@ -166,6 +168,10 @@ func threadPolicy(home string, mounts []sandbox.Mount, env []string, expose []sa
 	}
 }
 
+// imagePath is PATH inside a runtime's own system (Info.System): the guest
+// image's standard directories.
+const imagePath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 // sandboxEnv are the host variables a sandboxed thread keeps besides the ones
 // its launch sets itself: what tools need to run, nothing that carries a secret.
 var sandboxEnv = []string{"PATH", "LANG", "LANGUAGE", "LC_*", "TERM", "TZ", "USER", "LOGNAME", "SHELL",
@@ -183,9 +189,13 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 	if !sandboxed(p) {
 		return nil, nil
 	}
-	if _, ok := sandbox.Get(p.ThreadSandbox); !ok {
+	rt, ok := sandbox.Get(p.ThreadSandbox)
+	if !ok {
 		return nil, fmt.Errorf("sandbox %q is not in this build", p.ThreadSandbox)
 	}
+	// A runtime with a system of its own (a Linux guest on a Mac) runs the
+	// tools of its image: the host's executables do not run there.
+	ownSystem := rt.Info().System != ""
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: %w", err)
@@ -244,12 +254,16 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 		ro(gc)
 		opts.Env = setEnv(opts.Env, "GIT_CONFIG_GLOBAL", gc)
 	}
-	for _, dir := range toolchainDirs(home, envValue(opts.Env, "PATH")) {
-		ro(dir)
-	}
-	if cli, err := exec.LookPath("claude"); err == nil {
-		if real, err := filepath.EvalSymlinks(cli); err == nil && strings.HasPrefix(real, home+"/") {
-			ro(filepath.Dir(real))
+	if ownSystem {
+		opts.Env = setEnv(opts.Env, "PATH", imagePath)
+	} else {
+		for _, dir := range toolchainDirs(home, envValue(opts.Env, "PATH")) {
+			ro(dir)
+		}
+		if cli, err := exec.LookPath("claude"); err == nil {
+			if real, err := filepath.EvalSymlinks(cli); err == nil && strings.HasPrefix(real, home+"/") {
+				ro(filepath.Dir(real))
+			}
 		}
 	}
 

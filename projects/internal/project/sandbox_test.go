@@ -149,3 +149,37 @@ func TestHostEndpointsAreThePortsTheLaunchTalksTo(t *testing.T) {
 		"the host's loopback ports in the environment and MCP configuration, nothing else")
 	assert.Equal(t, sandbox.NetworkInternet, threadPolicy("/h", nil, nil, hostEndpoints(opts), sandbox.Resources{Level: sandbox.ResourcesUnlimited}).Network.Level)
 }
+
+// guestSystem is a runtime with a system of its own, like a Linux guest on a Mac.
+type guestSystem struct{}
+
+func (guestSystem) Info() sandbox.Info {
+	return sandbox.Info{Name: "guestsystem", Isolation: sandbox.IsolationVM, System: "linux", Supports: map[sandbox.Axis][]sandbox.Level{}}
+}
+func (guestSystem) Check(context.Context) error { return nil }
+func (guestSystem) Start(context.Context, sandbox.Cmd, sandbox.Policy) (sandbox.Proc, error) {
+	return nil, sandbox.ErrUnavailable
+}
+
+func init() { sandbox.Register(guestSystem{}) }
+
+func TestARuntimeWithItsOwnSystemRunsTheToolsOfItsImage(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", filepath.Join(home, ".local", "bin")+":/usr/bin")
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Fix login", Task: "fix"})
+	require.NoError(t, err)
+	f.report(t)
+
+	f.project.ThreadSandbox = "guestsystem"
+	require.NoError(t, f.store.SaveProject(f.project))
+	_, opts, err := f.threads.turnLaunch(context.Background(), th.ID, th, f.project, false)
+	require.NoError(t, err)
+	require.NotNil(t, opts.Sandbox)
+	assert.Equal(t, imagePath, envValue(opts.Env, "PATH"), "the image's tools, not the host's")
+	_, ok := mountOf(opts.Sandbox, filepath.Join(home, ".local", "bin"))
+	assert.False(t, ok, "the host's executables do not run in the guest")
+	_, ok = mountOf(opts.Sandbox, th.Cwd)
+	assert.True(t, ok, "the thread's work is still its own")
+}

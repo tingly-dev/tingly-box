@@ -575,6 +575,8 @@ export const projectsHandlers = [
             { name: 'host', isolation: 'none', available: true, levels: { storage: 'host', network: 'open', exec: 'host', credentials: 'inherit', resources: 'unlimited' } },
             { name: 'bwrap', isolation: 'process', available: true, levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
             { name: 'microvm', isolation: 'vm', available: false, reason: 'no access to /dev/kvm (permission denied): add the user to the kvm group and log in again', levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'macvm', isolation: 'vm', available: false, reason: 'the macOS VM runtime runs on macOS only (this is linux), where it uses Apple\'s Virtualization.framework; on Linux use microvm', levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'seatbelt', isolation: 'process', available: false, reason: 'Seatbelt runs on macOS only (this is linux)', levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
         ],
     })),
     http.get('/api/v1/projects/:id', ({ params }) => {

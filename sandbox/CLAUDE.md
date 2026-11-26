@@ -18,6 +18,12 @@ this repository, and agentboot, Projects and Tingly Box use it.
 
 - **Runtimes here**: `bwrap` (namespaces) and `microvm` (Cloud Hypervisor +
   virtiofsd; its guest init is this binary).
+- **macOS**: `macvm` (Virtualization.framework through cgo; a Linux guest
+  image, `macvm/image`; its calls are in `vz_darwin.go`, everything else is
+  plain Go tested against a fake hypervisor) and `seatbelt` (sandbox-exec
+  profiles; no internet level, no limits). `usernet` is the filtered
+  user-space network a VM's card is attached to. Neither macOS runtime has
+  been run on a real Mac: see `../.design/sandbox-macvm.md`.
 - **VM guests**: `vmguest` is the host–guest protocol over vsock and the
   guest init every VM runtime shares; `vmguest/cmd/tb-guest` is that init
   built on its own, for a guest image.

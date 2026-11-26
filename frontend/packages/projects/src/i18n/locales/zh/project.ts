@@ -192,7 +192,7 @@ export const project: Dict<typeof projectEn> = {
             hostHelp: '限额需要沙箱：请先在上面选择。留空表示不限。',
             memoryMin: '至少 512 MiB', processesMin: '至少 64', cpuMin: '至少 0.1',
         },
-        sandboxes: { host: '本机（不隔离）', bwrap: '沙箱（bubblewrap）', microvm: '虚拟机（microVM）' },
+        sandboxes: { host: '本机（不隔离）', bwrap: '沙箱（bubblewrap）', microvm: '虚拟机（microVM）', macvm: '虚拟机（macOS）', seatbelt: '沙箱（macOS Seatbelt）' },
         axes: { storage: '文件', network: '网络', exec: '进程', credentials: '凭据', resources: '资源' },
         levels: {
             storage: { host: '你能读的都能读', confined: '只有自己的目录、仓库、资料库和记忆' },

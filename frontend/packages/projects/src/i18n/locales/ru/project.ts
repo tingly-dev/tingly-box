@@ -192,7 +192,7 @@ export const project: PluralDict<typeof en> = {
             hostHelp: 'Лимитам нужна песочница: выберите её выше. Пусто — без ограничений.',
             memoryMin: 'Не меньше 512 МиБ', processesMin: 'Не меньше 64', cpuMin: 'Не меньше 0,1',
         },
-        sandboxes: { host: 'Этот компьютер (без изоляции)', bwrap: 'Песочница (bubblewrap)', microvm: 'Виртуальная машина (microVM)' },
+        sandboxes: { host: 'Этот компьютер (без изоляции)', bwrap: 'Песочница (bubblewrap)', microvm: 'Виртуальная машина (microVM)', macvm: 'Виртуальная машина (macOS)', seatbelt: 'Песочница (macOS Seatbelt)' },
         axes: { storage: 'Файлы', network: 'Сеть', exec: 'Процессы', credentials: 'Секреты', resources: 'Ресурсы' },
         levels: {
             storage: { host: 'всё, что можете читать вы', confined: 'только свой каталог, репозиторий, библиотека и память' },

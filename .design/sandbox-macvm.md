@@ -1,8 +1,8 @@
-# 沙箱：macOS 虚拟机运行时（macvm）
+# 沙箱：macOS 运行时（macvm、seatbelt）
 
-`sandbox/macvm`：让 Mac 上的线程也能隔离运行。模型、原语、一致性标准仍以 `.design/sandbox.md` 为准，本文只写这个运行时选什么底座、五轴怎么映射、guest 镜像怎么来、要什么签名，以及它与模型的出入（会同步进 sandbox.md §4、§9）。
+让 Mac 上的线程也能隔离运行。模型、原语、一致性标准仍以 `.design/sandbox.md` 为准，本文写 macOS 上的两个运行时：`sandbox/macvm`（虚拟机，主）与 `sandbox/seatbelt`（Seatbelt，补充，§10），以及评估后没有采用的 Apple `container`（§11）。各自选什么底座、五轴怎么映射、guest 镜像怎么来、要什么签名，以及与模型的出入。
 
-状态（2026-11-26）：设计 + 首版实现。**没有在真 Mac 上跑过**；本机（Linux）只做了 `GOOS=darwin` 交叉编译与 vet、可抽象部分的单元测试、共用 guest 部分在 microvm 上的一致性测试。标 **待验证** 的要在 Mac 上实测后再定。
+状态（2026-11-26）：设计 + 首版实现，**都没有在真 Mac 上跑过**。本机（Linux）做了：`GOOS=darwin` 的 vet 与编译；macvm 的 vz 调用对 vz 库源码做类型检查；共用的 guest 部分（`vmguest`）在 KVM 虚拟机上真跑；usernet 用两端 socket 对真跑；其余用假的 hypervisor 与纯函数测试。标 **待验证** 的要在 Mac 上实测后再定。
 
 ## 1 为什么是虚拟机
 
@@ -125,10 +125,56 @@ macvm 在所有平台都注册（设置页总能列出它），`Check` 给出原
 - **待验证（要真 Mac）**：vz 调用本身；VZ 的 virtio-fs 对宿主 uid/gid 与权限的呈现；宿主进程退出时 VM 随之结束（VZ 的 VM 在属于本进程的 XPC 服务里）；`unlimited` 按宿主全量内存时的启动开销；镜像内核在 VZ 上启动。
 - **后续**：镜像的 CI 构建与发布、设置页的下载按钮；发布流程的 codesign 步骤；amd64（Intel Mac）镜像；IPv6（usernet 首版只给 IPv4）；ICMP（ping 不通）。
 
-## 9 与模型的出入（并入 sandbox.md §9）
+## 9 macvm 与模型的出入（并入 sandbox.md §9）
 
 - `Sys` 来自镜像（`Info.System = "linux"`）；宿主可执行文件在沙箱里不能运行；`Args[0]` 的绝对宿主路径执行失败时按基名在镜像 `PATH` 中查找。
 - `internet` 的授予与 bwrap、microvm 一样只支持按地址；只有 IPv4；UDP 按流转发、空闲超时后回收；ICMP 不提供。
 - 文件挂载经暂存目录的硬链接（同一 inode），跨卷时只读文件为启动时的快照，可写文件 `Unavailable`。
 - `Fresh` 与根 overlay 在 guest 内存里，计入 guest 内存（不同于 microvm 的宿主侧 tmpfs）。
 - 不实现 `Usage`。
+
+## 10 seatbelt（`sandbox-exec`）
+
+Apple 已弃用 `sandbox-exec`，但它仍随系统提供，是 macOS 上不用虚拟机的唯一隔离，用户要求"即使弃用也支持"。能给什么、不能给什么如下；给不了的级别 `Start` 返回 `Unavailable`，**不降级**（模型不为迁就机制而改）。
+
+| 轴 | seatbelt |
+|---|---|
+| storage confined | `(deny default)` + 系统目录只读 + 每个挂载一条规则；SBPL 是"最后匹配者生效"，规则按路径深度升序写，所以更深的路径压住较浅的（只读文件压在可写目录里：先 `allow`，后 `deny file-write*`）；挂载路径先解析符号链接（内核按真实路径匹配）。`Fresh`：没有独立的挂载视图，HOME、TMPDIR 指向沙箱自己的临时目录，真实 home 不可读 |
+| network | **none**：全部拒绝，只放行 Expose 的 `localhost:端口`（宿主服务本来就在宿主回环上，直接连，不要桥）；**allowlist**：加上宿主回环上的代理端口（`netproxy` 的代理听 `127.0.0.1:0`），环境里 `HTTP(S)_PROXY` 指向它；**open**：`(allow network*)`。**internet 给不了**：SBPL 的 `remote ip` 只能写 `*` 或 `localhost` 加端口，无法表达"公网、不含宿主地址与内网" |
+| exec confined | 只能向自己发信号；`process-info` 默认拒绝（看不到别的进程）；子进程继承 profile |
+| credentials | inherit/explicit |
+| resources | 只有 unlimited；limited 给不了（没有 cgroup） |
+
+与模型的出入：
+- 没有沙箱自己的回环 ⊙：回环是宿主的，沙箱里监听的端口别的进程也能连；Expose 之外的宿主回环端口不可连（profile 只放行点名端口）。
+- `Home`、`/tmp` 不是同路径的空目录：用环境变量指向临时目录，硬编码 `/tmp` 的程序会被拒。
+- `Kill` 只结束命令进程，不保证结束它 `setsid` 出去的后代（无 pid 命名空间）。
+- 没有 OOM 判定、没有 `Usage`（`oom` 表现为 `signaled`）。
+- 挂载点的各级父目录因 `file-read-metadata` 全开而"可见"，包括其它路径的存在性（名字，不含内容）。
+- **默认策略下不可用**：Projects 的线程策略是 `internet`，seatbelt 因此在设置里显示为不可用并说明"cannot give network=internet"；只有 `none`/`allowlist`/`open` 的策略才能用它。是否给项目加"网络级别"设置是后续的产品决定。
+- profile 的基线（mach-lookup 的服务、系统目录列表）按公开的做法写成，**没有在 Mac 上验证**，很可能要调。
+
+## 11 Apple `container`（评估，不采用为默认）
+
+[apple/container](https://github.com/apple/container) 是 Apple 的开源命令行（Swift，基于 Containerization 框架）：每个容器一台轻量 Linux 虚拟机，用 OCI 镜像，Apple 芯片、macOS 26 起（macOS 15 勉强可用，网络功能受限）。
+
+**像 macvm 的地方**：底层同样是 Virtualization.framework，每线程一台 VM；`-v 主机目录:容器目录` 用 virtiofs 挂载；`--cpus`、`--memory` 限额；`--publish-socket` 把容器里的 unix socket 发到宿主；镜像用 OCI，不用自己做 erofs。
+
+**不采用为默认的原因**（按安全模型）：
+1. **internet 级别给不了**。它的网络是 vmnet：容器能连到宿主网关与宿主所有监听在 `0.0.0.0` 的服务和局域网，没有出口过滤（[#1320](https://github.com/apple/container/issues/1320)）；`--internal` 网络按社区反馈也并不拦截出站 TCP（[#2062](https://github.com/apple/container/issues/2062)），自定义网络要 macOS 26。要补就得自己在容器前面放过滤，等于 macvm 里的 usernet，只是换了层壳。
+2. **挂载的只读与文件级挂载**：命令行里的挂载选项（`ro` 等）我没有能验证，CLI 与行为随版本变化快；只读由宿主强制与否取决于其实现，不如直接调框架确定。
+3. **依赖**：要用户另外安装 `container` 并启动它的服务（`container system start`）、macOS 26 + Apple 芯片；我们的程序要通过它的 CLI（`container run -i`）接 stdin/stdout，没有稳定的 API 契约；OOM、结束原因要从退出码推。
+4. **签名的好处没了但换来了依赖**：不需要给我们的二进制签 entitlement 是它的优点，但这一点用一个"装好就能用"的前提换来，对不了解的用户更难解释。
+
+**可以以后加的位置**：作为第三个 VM 运行时（`applecontainer`），只给 `none`/`allowlist`（`--network none` 若可用，加 `--publish-socket` 经 `netproxy` 的 unix socket；我没有验证 `--network none` 是否存在）。它对只做开发机试用、不想签名的用户有价值。当前不做，等有人要。
+
+## 12 推进
+
+| 步 | 内容 |
+|---|---|
+| M1 | 设计（本文） |
+| M2 | `vmguest`：microvm 的 guest init 与协议共用，init 能自建视图（overlay、fresh、virtio-fs 绑定、passwd、resolv.conf、按基名找命令） |
+| M3 | `usernet`：gVisor 用户态网络栈，按 §2.2 过滤 |
+| M4 | `seatbelt` |
+| M5 | `macvm` + Projects 接入（`Info.System`、系统目录来自镜像时不挂宿主工具链、设置页的名字与不可用原因） |
+| 后 | 镜像的 CI 构建与发布、设置页下载按钮、发布流程的 codesign 步骤、amd64 镜像、IPv6/ICMP、项目的网络级别设置、`applecontainer` |
