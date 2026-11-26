@@ -152,17 +152,17 @@ Two layers only:
 
 | Segment (`transcript/model.ts`) | Phone default | Tap | Where the detail lives |
 |---|---|---|---|
-| `user` | bubble, full text; **clamp at ~8 lines**, "展开" | expand | attachments as a row above; author/IM source as a caption |
-| `assistant` (markdown) | full reply, never clamped; code scrolls in its box | — | — |
-| `assistant` with files (`send_file`) | **one row**: up to 4 thumbnails + "N 个文件 · a 图 · b 文档" | file preview | file sheet / Library |
+| `user` | bubble; **clamp at 10 lines** with 展开/收起 (in place) | expand | attachments as a row above; author/IM source as a caption |
+| `assistant` (markdown) | reply; **clamp prose at 12 lines** with 展开/收起 (in place); **code blocks have their own height cap + their own 展开**, horizontal scroll untouched | expand | — |
+| `assistant` with files (`send_file`) | **one row**: up to 4 thumbnails + "N 个文件 · a 图 · b 文档"; a long caption clamps at 3 lines | file preview | file sheet / Library |
 | `activity` · thinking | folded into the run line (or B: one "思考 · Ns" row) | expand | process sheet, full text |
 | `activity` · tool call/result | **A:** one neutral run line "过程 · 3m" (no counts); **B:** one 44 px row per call | row | process sheet: counts, input/output per call, copy |
 | `agent` (subagent) | one card: description + type/status (+ usage in B) | open | subagent sheet: steps + report; the full trace is desktop |
 | `request` pending (approval/ask) | **docked above the composer**, 48 px allow/deny; "本线程都允许…" opens a sheet | — | sheet for extra options; the raw payload is behind "详情" |
 | `request` settled | one quiet line: "允许 Edit · bench/results.md · 已允许" | row | process sheet / message action |
-| `error` | one red line: "Bash 超时 · go test … · 120s" | row | error sheet: exit code, output, retry |
-| `command` (compact/clear) | one line: "会话已压缩 · 98k → 31k · 自动 · 12s" | summary | compaction summary in a sheet |
-| `system` / GitHub events | one quiet centred line / event note | row | host note (already) |
+| `error` | one red line: "Bash 超时 · go test … · 120s"; long text clamps at 10 lines in its sheet | row | error sheet: exit code, output, retry |
+| `command` (compact/clear) | one line: "会话已压缩 · 98k → 31k · 自动 · 12s"; a long summary clamps at 10 lines in its sheet | summary | compaction summary in a sheet |
+| `system` / GitHub events | one quiet centred line / event note; long notes clamp at 6 lines | row | host note (already) |
 | `custom` | host renderer, else one quiet line | — | host |
 | checklist (`todoGroups`) | **one 44 px strip**: "进度 1/3 · 正在验证…" | expand (max 40 vh) | history in a sheet; full list in the progress sheet |
 | working line / background tasks | one line under the last block | — | task panel (sheet) |
@@ -186,6 +186,14 @@ Rules that decide the edge cases:
 - **One level of expansion.** A 44 px row expands inline; its input/output opens
   in a sheet, not another accordion. Subagent steps open as a sheet/page, never
   nested inside the conversation transcript.
+- **Long text is clamped, not destroyed.** Any text surface that can grow (a user
+  brief, an assistant reply, an error, a command summary, a file caption) has a
+  line/height cap — 10 lines for a user message, 12 for a reply, 6–10 for notes
+  and sheets — with a 44 px 展开/收起 row; expanding is **in place**, and the
+  per-message open state survives re-render/streaming. Short text gets no button
+  (measured, not guessed). Copy always writes the original Markdown, never the
+  clamped view. Code blocks are capped by height, not line-clamped, so their
+  horizontal scroll and copy stay intact.
 - **A file sent by the agent is not a message** (its text is a caption): one
   row, captions on the file itself (already the desktop rule).
 
@@ -238,11 +246,37 @@ the keyboard; the focused field scrolls into view. `100dvh` (never `100vh`) and
 `overscroll-behavior: contain` prevent the iOS rubber-band showing the page
 behind the keyboard.
 
-**Long text and code.** User briefs clamp at 8 lines ("展开"); assistant replies
-are never clamped (they are the content) — a "回到底部" pill appears when the
-reader scrolls up. Tool output clamps at 20 lines; subagent reports show 3 lines
-in the card and the full text in its sheet. Code is `white-space: pre` with
-horizontal scroll and a 44 px copy button; it never wraps.
+**Long text and code (a component-level change).** A single reusable
+`ClampedText` wrapper (in `transcript/`) is used by the user bubble, the
+assistant renderer, the error line, command summaries, system notes and file
+captions. It clamps by CSS line box (user 10 lines, assistant 12, notes/sheets
+6–10, a file caption 3) and renders a 44 px `展开全文 / 收起` row **only when the
+content actually overflows** (measured with `scrollHeight > clientHeight` after
+layout/resize, so short messages get no button). The full text stays in the DOM
+and in the entry's `content`; copy (`messageCopyText`) always writes the original
+Markdown, never the clamped view. Expanding is in place: the row sits below the
+clamped content, so it grows downward, the transcript's `scrollTop` is not
+touched, and the stick-to-bottom rule is not triggered. The open state is keyed
+by the block/message id in the transcript (a `Set`/`Map`, not component-local),
+so it survives re-render and streaming deltas; a reply that starts short and
+grows gets its button when it crosses the threshold. The toggle is a native
+button with `aria-expanded`/`aria-controls` (`展开全文` / `收起`), and the clamped
+container keeps the full text for selection and assistive tech.
+
+Code blocks are **height**-capped (≈ 240 px) with their own `展开代码 / 收起`,
+not line-clamped: their `overflow-x: auto` and copy stay intact, and the copy
+button always copies the whole block. Tool output keeps its own 20-line cap in
+the process sheet; a subagent report shows a 3-line preview in the card and the
+full text (clamped at 10 lines with 展开) in its sheet. Assistant prose and a
+code block are clamped independently, so a long reply with code never clips the
+code's horizontal scroll.
+
+Screenshots: `mobile-session-option-a-390x844-{light,dark}-long-user.png`,
+`...-long-assistant.png`, `...-long-code.png` (collapsed) and the matching
+`-expanded.png`; `...-long-assistant-expanded-end.png` shows the 收起 row at the
+end of a long reply. Measured clamp: user 264 px shown of 445, assistant 316 of
+456, code 210 of 491; a programmatic toggle kept `scrollTop` at 944 → 944 (no
+jump).
 
 **Streaming and waiting.** Auto-stick to the bottom only while the reader is at
 the bottom (the existing `stick` ref, `ThreadPanel.tsx:574-580`); the "最新消息"
@@ -311,7 +345,7 @@ keyboard state `...-a-390x844-light-keyboard.png` (dock folded to one line).
 Measured: transcript **480 px = 57 %** at 390×844, **436 = 54 %** at 360×800;
 **676 = 80 %** at 390 once the request is resolved (docked removed); 0 of 18
 visible controls below 44 px. A 4-call run occupies **44 px** (one line), and the
-transcript content is **960 px** tall.
+transcript content is **2104 px** tall (including the long-text fixtures).
 
 ### Option B — 保留结构但折叠 (structure kept, folded)
 
@@ -329,7 +363,7 @@ Screenshots: `mobile-session-option-b-390x844-{light,dark}.png`,
 Measured: transcript **480 px = 57 %** at 390×844, **436 = 54 %** at 360×800
 (same chrome as A); **676 = 80 %** without the dock; 0 of 22 controls below
 44 px. The same 4-call run occupies **272 px** (4 rows + heading), so its
-transcript content is **1224 px** (+264 px over A): fewer messages fit without
+transcript content is **2368 px** (+264 px over A): fewer messages fit without
 scrolling.
 
 ### Comparison
@@ -340,7 +374,7 @@ scrolling.
 | Without a docked request | **80 %** | **80 %** |
 | Rows per 4-call run | 1 | 4 (+1 heading) |
 | A 4-call run occupies | **44 px** | **272 px** |
-| Transcript content height (this conversation) | 960 px | 1224 px |
+| Transcript content height (this conversation) | 2104 px | 2368 px |
 | Process at a glance | a neutral "过程" label (+ duration) | each call's name + target |
 | To see one call's input/output | open the process sheet | tap that row |
 | Info loss in the default view | that a run happened and how long; what it did is one tap away | none (each call is a line) |
@@ -381,7 +415,7 @@ Cost (frontend only; no backend/API change; no new dependency):
 | Per-call rows (B, inside the sheet) | the existing `ToolRow` with 44 px rows + input/output | `Transcript.tsx`, `Disclosure.tsx` | S |
 | Subagent sheet | move `AgentBody` into a sheet; keep `SubagentFocus` for "on its own" | `Transcript.tsx`, `ThreadPanel.tsx` | M |
 | Message meta row | time + 44 px copy `⋯`; reuse `messageCopyText` (sibling branch) | `Transcript.tsx`, `copyText.ts` | S |
-| Long text clamp | user brief / tool output clamp + "展开"; no clamp on replies | `Transcript.tsx`, `conversationStyles.ts` | S |
+| Long text clamp | **new reusable `ClampedText`** (line clamp + measured overflow + 44 px 展开/收起, per-block state, `aria-expanded`); used by user/assistant/error/command/system/caption; code blocks get a height cap + 展开; copy keeps the full original | `transcript/ClampedText.tsx` (new), `Transcript.tsx`, `conversationStyles.ts`, `components/Markdown.tsx` | S–M |
 | Touch targets | coarse-pointer `minHeight: 44` on disclosure rows, pickers, code copy | `Disclosure.tsx`, `Markdown.tsx` | S |
 | Performance | memoize message/Markdown; `content-visibility` per block; phone page size | `Transcript.tsx`, `transcript/Markdown.tsx`, `useTranscript.ts` | S–M |
 | Tests | vitest with `matchMedia` (as `Composer.test.tsx`), plus the existing viewport script over 320–430 × short/regular | `frontend` tests | M |
