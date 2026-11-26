@@ -417,7 +417,7 @@ export const firstNewBlock = (blocks: TranscriptBlock[], seenAt?: string): numbe
 };
 
 // WorkingVerb is what the live turn is doing, for the line under it.
-export type WorkingVerb = 'thinking' | 'running' | 'reading' | 'editing' | 'searching' | 'delegating' | 'working';
+export type WorkingVerb = 'thinking' | 'running' | 'reading' | 'editing' | 'searching' | 'delegating' | 'working' | 'waiting' | 'background';
 
 const VERB_BY_TOOL: Record<string, WorkingVerb> = {
     Bash: 'running', BashOutput: 'running',

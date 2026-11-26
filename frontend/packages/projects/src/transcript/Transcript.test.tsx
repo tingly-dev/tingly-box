@@ -278,6 +278,17 @@ describe('working line', () => {
         expect(line).toHaveTextContent('1m 5s');
     });
 
+    it('keeps a line in concise mode for a live turn, a waiting request and background tasks', () => {
+        renderEntries([msg({role: 'user', content: 'go', timestamp: '2026-10-04T00:00:00Z'})], {working: true, detail: 'concise'});
+        expect(document.querySelector('[data-working]')).not.toBeNull();
+        cleanup();
+        renderEntries([msg({kind: 'approval_request', content: 'Bash', request_id: 'r1', payload: {command: 'ls'}})], {pending: 'r1', working: true, detail: 'concise'});
+        expect(screen.getByRole('status')).toHaveTextContent('Waiting for your reply');
+        cleanup();
+        render(<Transcript blocks={buildTranscript([msg({role: 'assistant', content: 'done'})])} working={false} backgroundTasks={2} detail="concise" onRespond={respondNever} drafts={drafts}/>);
+        expect(screen.getByRole('status')).toHaveTextContent('2 background tasks running');
+    });
+
     it('gives way to the card a request waits on', () => {
         renderEntries([msg({kind: 'approval_request', content: 'Bash', request_id: 'r1', payload: {command: 'ls'}})], {pending: 'r1', working: true});
         expect(document.querySelector('[data-working]')).toBeNull();

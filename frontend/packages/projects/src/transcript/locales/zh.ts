@@ -102,6 +102,8 @@ export default {
       "verb_searching": "正在搜索网页",
       "verb_thinking": "正在思考",
       "verb_working": "正在工作",
+      "verb_waiting": "等待你的回复",
+      "verb_background": "{{count}} 个后台任务运行中",
       "viewTrajectory": "轨迹",
       "working": "处理中…"
     }

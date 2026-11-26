@@ -102,6 +102,8 @@ export default {
       "verb_searching": "Searching the web",
       "verb_thinking": "Thinking",
       "verb_working": "Working",
+      "verb_waiting": "Waiting for your reply",
+      "verb_background": "{{count}} background tasks running",
       "viewTrajectory": "Trajectory",
       "working": "Working…"
     }

@@ -26,6 +26,8 @@ import {exactLabel, fullLabel, markLabel, nextMidnight, timeMarks, type TimeMark
 export type Respond = (requestId: string, approved: boolean, answer: string, remember?: boolean, answers?: Record<string, string>) => Promise<boolean>;
 
 interface TranscriptProps {
+    // Background tasks the host knows are alive; they keep the live line up after the turn ends.
+    backgroundTasks?: number;
     // Presentation only; requests remain actionable in either level.
     detail?: MessageDetail;
     blocks: TranscriptBlock[];
@@ -936,9 +938,11 @@ const useSubagentSteps = (call: string, open: boolean) => {
 
 // WorkingLine says the live turn is still going: what it is doing and for
 // how long, so a stuck turn is told apart from a slow one.
-const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
+const WorkingLine = ({blocks, state, count}: {blocks: TranscriptBlock[]; state?: 'waiting' | 'background'; count?: number}) => {
     const {t} = useTranslation();
-    const {verb, since} = workingState(blocks);
+    const live = workingState(blocks);
+    const verb = state ?? live.verb;
+    const since = state ? undefined : live.since;
     const [now, setNow] = useState(() => serverNow());
     useEffect(() => {
         const timer = setInterval(() => setNow(serverNow()), 1000);
@@ -949,7 +953,7 @@ const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
     return (
         <Stack role="status" data-working direction="row" spacing={1} sx={{alignItems: 'center', color: 'text.secondary'}}>
             <CircularProgress size={12}/>
-            <Typography variant="body2" sx={{color: 'inherit'}}>{t(`projects.transcript.verb_${verb}`, {defaultValue: VERB_DEFAULTS[verb]})}</Typography>
+            <Typography variant="body2" sx={{color: 'inherit'}}>{t(`projects.transcript.verb_${verb}`, {defaultValue: VERB_DEFAULTS[verb], count})}</Typography>
             {elapsed && <Typography variant="body2" sx={{color: 'text.disabled', fontVariantNumeric: 'tabular-nums'}}>{elapsed}</Typography>}
         </Stack>
     );
@@ -1020,6 +1024,7 @@ export const ChecklistCard = ({todos, working, history = []}: {todos: Todo[]; wo
 const VERB_DEFAULTS: Record<WorkingVerb, string> = {
     thinking: 'Thinking', running: 'Running a command', reading: 'Reading', editing: 'Editing',
     searching: 'Searching the web', delegating: 'Waiting on a subagent', working: 'Working',
+    waiting: 'Waiting for your reply', background: '{{count}} background tasks running',
 };
 
 // SubagentFocus is one subagent opened on its own: the same body its card
@@ -1063,10 +1068,23 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, newSince, hideChecklist = false, messageSource, renderCustom}: TranscriptProps) => {
+// backgroundCount is the background subagents still running (as the
+// transcript shows them), or the host's own count when it is larger.
+const backgroundCount = (blocks: TranscriptBlock[], turnLive: boolean, hostCount: number): number => {
+    const own = blocks.filter((b) => b.type === 'agent' && b.task?.background && agentStatus(b, turnLive) === 'running').length;
+    return Math.max(own, hostCount);
+};
+
+const Transcript = ({blocks, pendingRequestId, working, backgroundTasks = 0, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, newSince, hideChecklist = false, messageSource, renderCustom}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
-    // gets a line saying what it does and for how long.
+    // gets a line saying what it does and for how long. Background work
+    // outlives the turn: with the turn over, a line still says it runs. The
+    // concise view hides calls and results, so while a request waits it also
+    // keeps a line naming the wait.
     const showWorking = working && !pendingRequestId;
+    const running = backgroundCount(blocks, working, backgroundTasks);
+    const showBackground = !working && running > 0;
+    const showWaiting = detail === 'concise' && working && !!pendingRequestId;
     const groups = useMemo(() => todoGroups(blocks), [blocks]);
     const currentGroup = groups.at(-1);
 
@@ -1076,6 +1094,8 @@ const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', exp
                 {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
                 <BlockList anchored timeMarked blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
                 {showWorking && <WorkingLine blocks={blocks}/>}
+                {showWaiting && <WorkingLine blocks={blocks} state="waiting"/>}
+                {showBackground && <WorkingLine blocks={blocks} state="background" count={running}/>}
             </Stack>
         </TranscriptHostProvider>
     );
