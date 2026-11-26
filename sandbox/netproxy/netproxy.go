@@ -97,22 +97,33 @@ func ListenDir(n sandbox.Network) (*Host, error) {
 
 // Listen serves n's endpoints on the unix socket path(name) of each.
 func Listen(n sandbox.Network, path func(name string) string) (*Host, error) {
+	return ListenOn(n, func(name string) (net.Listener, error) { return net.Listen("unix", path(name)) })
+}
+
+// ListenOn serves n's endpoints on the listener listen(name) makes for each
+// (a microVM's vsock port, say).
+func ListenOn(n sandbox.Network, listen func(name string) (net.Listener, error)) (*Host, error) {
 	h := &Host{}
 	pl := PlanFor(n)
 	if pl.Proxy {
-		p, err := listenProxy(n.Allow, path(ProxyName))
+		ln, err := listen(ProxyName)
 		if err != nil {
+			return nil, fmt.Errorf("proxy socket: %w", err)
+		}
+		p, err := serveProxy(n.Allow, ln)
+		if err != nil {
+			_ = ln.Close()
 			return nil, err
 		}
 		h.closers = append(h.closers, p)
 	}
 	for _, port := range pl.Expose {
-		f, err := listenForward(path(ExposeName(port)), port)
+		ln, err := listen(ExposeName(port))
 		if err != nil {
 			_ = h.Close()
-			return nil, err
+			return nil, fmt.Errorf("expose %d: %w", port, err)
 		}
-		h.closers = append(h.closers, f)
+		h.closers = append(h.closers, serveForward(ln, port))
 	}
 	return h, nil
 }
@@ -162,13 +173,9 @@ var dialer = &net.Dialer{Timeout: 30 * time.Second}
 // tests.
 var dialOut = dialer.DialContext
 
-// listenForward forwards every connection on the socket at path to the
-// host's loopback on port.
-func listenForward(path string, port int) (io.Closer, error) {
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		return nil, fmt.Errorf("expose %d: %w", port, err)
-	}
+// serveForward forwards every connection on ln to the host's loopback on
+// port.
+func serveForward(ln net.Listener, port int) io.Closer {
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -188,7 +195,7 @@ func listenForward(path string, port int) (io.Closer, error) {
 			}()
 		}
 	}()
-	return ln, nil
+	return ln
 }
 
 // lookup resolves a name when a request is made; a variable for tests.
@@ -206,7 +213,7 @@ type proxy struct {
 
 type dialTo struct{}
 
-func listenProxy(allow []string, path string) (*proxy, error) {
+func serveProxy(allow []string, ln net.Listener) (*proxy, error) {
 	p := &proxy{}
 	for _, a := range allow {
 		g, err := sandbox.ParseGrant(a)
@@ -214,10 +221,6 @@ func listenProxy(allow []string, path string) (*proxy, error) {
 			return nil, err
 		}
 		p.grants = append(p.grants, g)
-	}
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		return nil, fmt.Errorf("proxy socket: %w", err)
 	}
 	// A plain request connects to the address the grant was checked on,
 	// never to a second resolution of the name.
