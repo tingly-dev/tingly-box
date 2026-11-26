@@ -93,7 +93,7 @@ func toolNames(tools []*mcp.Tool) []string {
 func TestToolsOfEachScope(t *testing.T) {
 	f := newToolsFixture(t)
 	coordinator := []string{"forget", "get_thread", "list_shared_files", "list_threads", "message_thread", "no_update", "propose_threads",
-		"read_conversation", "read_shared_file", "remember", "rename_thread", "request_decision", "resolve_thread", "send_file",
+		"read_conversation", "read_shared_file", "remember", "rename_thread", "reopen_thread", "request_decision", "resolve_thread", "send_file",
 		"start_thread", "stop_thread", "update_instructions"}
 	// The GitHub tools are the thread's own: they act on its checkout, which the
 	// coordinator does not have.
@@ -136,5 +136,5 @@ func TestCoordinatorToolListStaysSmall(t *testing.T) {
 	b, err := json.Marshal(listTools(t, cs))
 	require.NoError(t, err)
 	t.Logf("coordinator tool list: %d bytes", len(b))
-	assert.Less(t, len(b), 12000)
+	assert.Less(t, len(b), 13000) // 12000 before reopen_thread and resolve_thread's cite (~0.8 KB)
 }

@@ -229,9 +229,17 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 	call("rename_thread", map[string]any{"thread_id": second[:8], "title": "   "})
 	call("rename_thread", map[string]any{"thread_id": "zzzz", "title": "x"})
 	call("resolve_thread", map[string]any{"thread_id": second[:8]})
+	call("resolve_thread", map[string]any{"thread_id": second[:8], "cite": []string{"nope"}})
+	call("resolve_thread", map[string]any{"thread_id": second[:8], "cite": []string{user.ID[:8]}})
+	call("resolve_thread", map[string]any{"thread_id": second[:8], "cite": []string{user.ID[:8]}})
 	call("resolve_thread", map[string]any{"thread_id": "zzzz"})
 	call("message_thread", map[string]any{"thread_id": second[:8], "message": "one more thing"})
 	call("get_thread", map[string]any{"thread_id": second[:8]})
+	call("reopen_thread", map[string]any{"thread_id": second[:8], "cite": []string{"nope"}})
+	call("reopen_thread", map[string]any{"thread_id": "zzzz"})
+	call("reopen_thread", map[string]any{"thread_id": second[:8]})
+	call("reopen_thread", map[string]any{"thread_id": second[:8]})
+	call("resolve_thread", map[string]any{"thread_id": second[:8], "cite": []string{user.ID[:8]}})
 	call("list_threads", map[string]any{"status": "resolved"})
 
 	// Conversation history and shared files.

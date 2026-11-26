@@ -237,5 +237,5 @@ func TestThePromptLetsTheCoordinatorAskForAFollowUp(t *testing.T) {
 	p := coordinatorSystemPrompt(Layout{Root: t.TempDir()}, &db.Project{ID: "p1", Name: "Demo"}, nil, time.Now())
 	assert.Contains(t, p, `source="github"`)
 	assert.Contains(t, p, "you may message_thread to ask the thread to check what remains")
-	assert.Contains(t, p, "Never resolve or close the thread yourself")
+	assert.Contains(t, p, "Do not close the thread on your own judgement")
 }

@@ -89,7 +89,7 @@ One table replaces three separate registrations (the coordinator's list, the two
 - **One gate** (`coordinatorToolTurn.run`): active turn, not ended with `no_update`, project not paused or archived, settings unchanged, `no_update` refused on a user turn. Every tool on the coordinator's server passes it, `send_file` included.
 - **All tools are in the table.** The 13 coordinator tools used to run in one `switch` (`Coordinator.runTool`); each is now a method with a typed input struct (`coordinator_tools.go`: `startThread`, `messageThread`, ...) bound to its definition with `textTool`, which decodes the input, calls the method and turns an error into a failed result. `runTool` is gone. A new tool is one definition and one method.
 - **Migration was checked, not trusted.** Before moving anything, two golden files pinned the current behaviour (`testdata/tool_list.golden`: every tool's name, description and schema in each scope; `testdata/tool_calls.golden`: the exact answer of all 16 tools on a fixed script of about 60 calls, with ids, paths and times normalised). They are byte-identical after the move. Mutation check: changing one answer or one description fails the matching golden test. Regenerate on purpose with `UPDATE_GOLDEN=1` and read the diff.
-- **Tests** (`tools_test.go`): the exact tool list of each kind of session (a tool added to the coordinator's server has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 12000 bytes (10.7 KB now, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn).
+- **Tests** (`tools_test.go`): the exact tool list of each kind of session (a tool added to the coordinator's server has to be added to the test, so it cannot reach a worker by accident); no tool takes `project_id`, and no worker tool takes `thread_id`; the coordinator's tool list stays under 13000 bytes (12.8 KB now after `reopen_thread`; 12000 and 10.7 KB before, 8.2 KB for the 13 business tools before `base`/`branch` and the shared tools; each tool costs tokens on every turn).
 - **`send_file` keeps its old contract**: a strict input schema (`additionalProperties: false`), an output schema (`message_id`) and a structured result next to the text. These were checked against the pre-table implementation, not assumed (`Strict` and `Output` on `Tool`).
 
 Cut after a code review, because nothing used them yet and unused machinery rots: a risk class on every tool, the `approved_by` approval gate for irreversible tools, and a three-way scope (coordinator / worker / folder session; the last two were never different). The approval rule is designed when the first irreversible tool exists (see Later). Also from the review: a stop-and-send keeps its plain "Stopped." note, `Reopen` re-checks the status under the row lock, and a suggestion card keeps the threads it started when a later one fails to start.
@@ -104,7 +104,7 @@ Tests: `tools_fixes_test.go` (each fix has a direct test; reversing the sort, ma
 
 Not changed: the tools' names, schemas (apart from `base` / `branch`) and behaviour; the real-CLI probe is not rerun.
 
-## Step 4: stop + reopen tools (`stop_thread` built, `reopen_thread` next)
+## Step 4: stop + reopen tools (both built)
 
 The service side is Step 2, the table is Step 3. Each tool is one entry in `coordinatorTools()` and one method.
 
@@ -115,7 +115,7 @@ The service side is Step 2, the table is Step 3. Each tool is one entry in `coor
 | `stop_thread` (built) | `thread_id`, `cite` (required, at least one) | interrupt the thread's running turn, drop its queued messages | one line: "stopped; the thread is now <status>", or "not running; nothing to stop" (not an error) |
 | `reopen_thread` | `thread_id` | undo `resolve_thread`: the thread accepts messages again | one line: status now, or "already open" (not an error) |
 
-Both are `CoordinatorOnly`, reversible and recorded in the thread, so they need no approval step. `message_thread` to a resolved thread keeps returning `ErrResolved`, and its text now names `reopen_thread`.
+Both are `CoordinatorOnly`, reversible and recorded in the thread. `reopen_thread` takes an optional `cite`. `message_thread` to a resolved thread keeps refusing, and its text now names `reopen_thread`. Archived threads are invisible to every coordinator tool. `resolve_thread` now checks its authorization (`cite`, or a finished handoff). The design and the decisions are in [thread-lifecycle-tools.md](thread-lifecycle-tools.md).
 
 `stop_thread` takes `cite` like `message_thread` and checks it the same way (`quoteUser`): the coordinator may stop a thread only because the user asked, so a call with no citation, or one that is not the user's own message, is refused and stops nothing. The thread's note reads "Stopped by the coordinator." The main thread and other projects' threads are not found (`findThread`). The tool waits for the stopped turn to settle before it reads the status, so the answer is the new status (idle, or ready when the branch has commits).
 

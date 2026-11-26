@@ -76,12 +76,18 @@ func (c *Coordinator) coordinatorTools() []Tool {
 				"id":       strProp("Optional. Read this one message whole instead (use the id of a cut-short entry)."),
 				"limit":    map[string]any{"type": "integer", "description": "How many messages, up to 40. Default 20."},
 				"full":     map[string]any{"type": "boolean", "description": "Show each message up to 4000 characters instead of 600 (fewer fit in one result)."}}, Handle: textTool(c.readConversationTool)},
-		{Name: "list_threads", CoordinatorOnly: true, Description: "List the project's threads, including old and archived ones the thread table in your prompt leaves out. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.",
+		{Name: "list_threads", CoordinatorOnly: true, Description: "List the project's threads, including the old ones the thread table in your prompt leaves out. Archived threads are not listed. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.",
 			Properties: map[string]any{"status": strProp("Optional. Only threads with this status, e.g. working, waiting, ready, resolved."),
 				"contains": strProp("Optional. Only threads whose title, task or last report contains this text."),
 				"limit":    map[string]any{"type": "integer", "description": "How many threads, up to 40. Default 20."}}, Handle: textTool(c.listThreadsTool)},
-		{Name: "resolve_thread", CoordinatorOnly: true, Description: "Mark a thread resolved (done). Only when the user asks for it: a merged PR alone does not mean the thread is done.",
-			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or prefix.")}, Required: []string{"thread_id"}, Handle: textTool(c.resolveThread)},
+		{Name: "resolve_thread", CoordinatorOnly: true, Strict: true, Description: "Mark a thread resolved (done), only when the user asks: pass their message id in cite. Without cite, only a resting thread whose PR is merged with nothing left is resolved; the error says what is missing.",
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or prefix."),
+				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (msg attribute) of the user's messages that ask for it."}},
+			Required: []string{"thread_id"}, Handle: textTool(c.resolveThread)},
+		{Name: "reopen_thread", CoordinatorOnly: true, Strict: true, Description: "Reopen a resolved thread so it takes messages again; its branch, PR and history are as they were. An open thread is left as it is.",
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or prefix."),
+				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional. Ids (msg attribute) of the user's messages that ask for it."}},
+			Required: []string{"thread_id"}, Handle: textTool(c.reopenThread)},
 		{Name: "rename_thread", CoordinatorOnly: true, Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
 			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or 8-character prefix."), "title": strProp("New title: starts with a verb that names the goal, three to six words, no ids or paths.")}, Required: []string{"thread_id", "title"}, Handle: textTool(c.renameThread)},
 		{Name: "no_update", CoordinatorOnly: true, Description: "End this turn without posting anything to the user. Use it when a thread update or settings change needs no message. Call it instead of replying with text.",
@@ -171,6 +177,9 @@ func (c *Coordinator) messageThread(ctx context.Context, p *db.Project, in struc
 		msg += quote
 	}
 	_, joined, err := c.threads.sendWith(ctx, t.ID, msg, nil, fromThread(p.MainThreadID), SendInsert)
+	if errors.Is(err, ErrResolved) {
+		return "", errors.New("the thread is resolved; call reopen_thread first if the same work continues, or start a new thread for new work")
+	}
 	if err != nil {
 		return "", err
 	}
@@ -301,15 +310,95 @@ func (c *Coordinator) renameThread(_ context.Context, p *db.Project, in struct {
 
 func (c *Coordinator) resolveThread(_ context.Context, p *db.Project, in struct {
 	ThreadID string `json:"thread_id"`
+	Cite     []string
 }) (string, error) {
 	t, err := c.findThread(p.ID, in.ThreadID)
 	if err != nil {
 		return "", err
 	}
+	if t.Status == db.ThreadResolved {
+		return "already resolved", nil
+	}
+	if len(in.Cite) > 0 {
+		if _, err := c.quoteUser(p, in.Cite); err != nil {
+			return "", err
+		}
+	} else if gaps := c.handoffGaps(t); len(gaps) > 0 {
+		return "", fmt.Errorf("not resolved: %s. Pass the id of the user's message that asks to resolve it in cite, or ask the user", strings.Join(gaps, "; "))
+	}
+	running := c.threads.Running(t.ID)
 	if _, err := c.threads.Resolve(t.ID); err != nil {
 		return "", err
 	}
+	if running {
+		return "resolved; its running turn was stopped", nil
+	}
 	return "resolved", nil
+}
+
+// handoffGaps lists what keeps a thread from being resolved without the user's
+// word: the work is merged and nothing is left in the thread. Empty means the
+// handoff is done. It checks what the system knows (the thread's status, its
+// recorded PRs, the commits behind the merge); it cannot know that the user
+// has no follow-up, which is why the user's own words in cite are the other way.
+func (c *Coordinator) handoffGaps(t *db.Thread) []string {
+	c.threads.AnnotateOne(t)
+	running := c.threads.Running(t.ID)
+	var gaps []string
+	switch {
+	case running || t.RunningTasks > 0:
+		gaps = append(gaps, "a turn or a background task is running")
+	case t.Status != db.ThreadReady && t.Status != db.ThreadIdle:
+		gaps = append(gaps, "the thread is "+t.Status+", not resting")
+	}
+	var merged *db.ThreadLink
+	for i, k := range t.Links {
+		switch {
+		case k.Kind != db.LinkPR:
+		case k.State == db.LinkStateOpen:
+			gaps = append(gaps, fmt.Sprintf("PR #%d is still open", k.Number))
+		case k.State == db.LinkStateMerged && (t.Branch == "" || k.Head == t.Branch):
+			merged = &t.Links[i]
+		}
+	}
+	if merged == nil {
+		gaps = append(gaps, "no merged PR of this thread's branch is recorded")
+	} else if f := factsOf(t, *merged, running); !f.CommitsKnown {
+		gaps = append(gaps, "the commits after the merge cannot be read")
+	} else if f.Commits > 0 {
+		gaps = append(gaps, fmt.Sprintf("%d %s after the merge", f.Commits, plural(f.Commits, "commit")))
+	}
+	if t.Uncommitted {
+		gaps = append(gaps, "uncommitted changes")
+	}
+	return gaps
+}
+
+func (c *Coordinator) reopenThread(_ context.Context, p *db.Project, in struct {
+	ThreadID string `json:"thread_id"`
+	Cite     []string
+}) (string, error) {
+	t, err := c.findThread(p.ID, in.ThreadID)
+	if err != nil {
+		return "", err
+	}
+	quote := ""
+	if len(in.Cite) > 0 {
+		if quote, err = c.quoteUser(p, in.Cite); err != nil {
+			return "", err
+		}
+	}
+	if t.Status != db.ThreadResolved {
+		return "already open; the thread is " + t.Status, nil
+	}
+	now, err := c.threads.Reopen(t.ID, fromThread(p.MainThreadID))
+	if err != nil {
+		return "", err
+	}
+	if quote != "" && now.Status != db.ThreadResolved {
+		c.threads.addEvent(now, &db.ThreadEvent{Kind: db.EvSystem, Content: strings.TrimSpace(quote)})
+	}
+	return "reopened; the thread is now " + now.Status, nil
 }
 
 // noUpdate ends the turn; the gate (coordinatorToolTurn.run) does the rest.

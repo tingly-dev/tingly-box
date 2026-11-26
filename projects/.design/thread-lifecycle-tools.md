@@ -1,6 +1,6 @@
 # 协调者的线程状态工具与 reopen（讨论稿）
 
-> 状态：**方案已定，未实施**（2026-11-26）。本稿只提方案，不改代码；用户的决定见 §8。
+> 状态：**阶段 1 与 2 已实施**（2026-11-26，同一个 PR）；可选项未做。用户的决定见 §8。
 > 落地前先按本稿结论改 [thread-lifecycle.md](thread-lifecycle.md)（原则 4、§6.1、§11 的“暂缓”），再改代码。
 >
 > 相关：[thread-lifecycle.md](thread-lifecycle.md)（状态机现行设计）、[mcp-tools.md](mcp-tools.md)（Step 4 早已提出 `reopen_thread`，并否决了 `set_thread_state`）、[`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)（Archive / Restore / Delete）、`cite.go`（`quoteUser`）。
@@ -90,7 +90,7 @@
 | 不允许的切换 | `to` 的枚举要么暴露 working / waiting / failed（谁都不该手动设，因为它们是一轮的事实，`thread-lifecycle.md` 原则 1），要么得说明哪些值不可选 | 不存在就不能调；archive / delete 不给协调者是“没有这个工具”，最硬的禁止 |
 | 出错提示 | 一个工具要为每个 (from, to) 组合写提示 | 每个工具只管自己的前置条件，提示固定且短，并能指向下一个工具（“已 resolved：用 reopen_thread”） |
 | 与网页一致 | 网页是 resolve / reopen / archive / restore 各一个路由；U 需要再造一层映射 | 一对一：`resolve_thread` ↔ `POST /resolve`，`reopen_thread` ↔ `POST /reopen`，都落到同一个 `Threads` 方法，沿用 `mcp-tools.md` 的“动作是 Threads 方法，handler 和工具只解析输入”，并已有“同一夹具经服务、HTTP、MCP 状态和事件一致”的对等测试要求 |
-| 工具列表成本 | 少一个工具 | 多一个工具；协调者工具列表有 12000 字节预算（`mcp-tools.md` Step 3，已用约 10.7 KB），`reopen_thread` 约 300 字节，放得下 |
+| 工具列表成本 | 少一个工具 | 多一个工具；协调者工具列表的字节预算（`TestCoordinatorToolListStaysSmall`）原为 12000；`reopen_thread` 加 `resolve_thread` 的 `cite` 实际用了约 0.8 KB，上限有意调到 13000（现 12.8 KB） |
 | 审计 | 事件文本要带 `to` | 事件天然区分：“Stopped / Reopened by the coordinator.” |
 
 `mcp-tools.md` 在 Step 1 已经比较过 `set_thread_state` 并否决，这次多出来的理由是上表“条件必填 + 枚举暴露自动状态”两条。**推荐 S。** U 的唯一优势是少一个工具，但状态只有 resolved⇄open 一对可以由协调者切换，不值得为一对开关造枚举。
@@ -113,7 +113,7 @@
 |---|---|---|
 | `stop_thread` | 用户明说 | 不变：`cite` 必填 |
 | `resolve_thread` | 用户明说，**或**系统验证“已交接完成” | 见下 |
-| `reopen_thread` | 不需要；`cite` **可选**（用户决定） | 可撤销、不丢东西、线程里留痕。给了 `cite` 就经 `quoteUser` 校验并和 `message_thread` 一样引用给线程；不给不影响。描述里写判断依据（§3.2） |
+| `reopen_thread` | 不需要；`cite` **可选**（用户决定） | 可撤销、不丢东西、线程里留痕。给了 `cite` 就经 `quoteUser` 校验，并把用户的原话记成线程里的一条系统事件；不给不影响。描述里写判断依据（§3.2） |
 | archive / restore / delete | 协调者**没有这些工具，也看不到已归档的线程**（§4.5） | archive 会删用户磁盘上的 worktree，delete 不可撤销，是用户管理磁盘的事 |
 
 **`resolve_thread` 的授权落到代码。** 现在的规则只在描述里，而用户已经给过一个窄授权（已合并、没有剩余工作 → 交接后可直接 resolve），应让工具检查事实，而不是靠协调者自觉：

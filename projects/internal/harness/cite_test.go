@@ -123,3 +123,44 @@ func TestForgedQuoteHeadingIsRefused(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Len(t, w.Prompts(), 1, "the thread heard nothing")
 }
+
+// C4: a resolved thread takes no message until the coordinator reopens it;
+// the refusal says so, and the thread then works on the follow-up.
+func TestCoordinatorReopensAResolvedThreadForAFollowUp(t *testing.T) {
+	var refusal, reopened string
+	w := New(t, Options{
+		Files: projectsRepo,
+		Actor: Diligent("done"),
+		Brain: func(c *coordtest.Turn) error {
+			switch {
+			case c.CheckIn():
+				c.Call("no_update", map[string]string{})
+			case strings.Contains(c.Input(), "one more thing"):
+				id := eventID.FindStringSubmatch(c.InputEnvelope())
+				require.NotNil(t, id)
+				ref := c.ThreadRef(endTool)
+				refusal, _ = c.Call("message_thread", map[string]any{"thread_id": ref, "message": "One more thing."})
+				reopened, _ = c.Call("reopen_thread", map[string]any{"thread_id": ref, "cite": []string{id[1]}})
+				c.Call("message_thread", map[string]any{"thread_id": ref, "message": "One more thing.", "cite": []string{id[1]}})
+				c.Reply("Reopened it and passed it on.")
+			default:
+				startThread(c, endTool, "Add the no_update tool.")
+				c.Reply("Started.")
+			}
+			return nil
+		},
+	})
+
+	w.Say("Add an end-of-turn tool.")
+	th := w.ThreadIs(endTool, db.ThreadReady)
+	w.Quiet()
+	_, err := w.Threads.Resolve(th.ID)
+	require.NoError(t, err)
+	w.Say("one more thing")
+	w.Eventually("thread got the follow-up", func() bool { return len(w.Prompts()) == 2 })
+	w.Quiet()
+
+	assert.Contains(t, refusal, "call reopen_thread first")
+	assert.Contains(t, reopened, "reopened; the thread is now")
+	assert.Contains(t, w.Prompts()[1], "One more thing.")
+}

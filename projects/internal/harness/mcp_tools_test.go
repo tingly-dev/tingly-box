@@ -206,9 +206,9 @@ func TestCoordinatorSessionIsOfferedTheWholeToolTable(t *testing.T) {
 	w.Say("hello")
 	w.Quiet()
 	for _, name := range []string{"start_thread", "propose_threads", "message_thread", "stop_thread", "get_thread", "list_threads",
-		"resolve_thread", "rename_thread", "request_decision", "no_update", "remember", "forget", "update_instructions",
+		"resolve_thread", "reopen_thread", "rename_thread", "request_decision", "no_update", "remember", "forget", "update_instructions",
 		"read_conversation", "read_shared_file", "list_shared_files", "send_file"} {
 		assert.Contains(t, tools, name)
 	}
-	assert.Len(t, tools, 17, "a new tool is added here on purpose")
+	assert.Len(t, tools, 18, "a new tool is added here on purpose")
 }
