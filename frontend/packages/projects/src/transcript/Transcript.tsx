@@ -1,6 +1,7 @@
-import {Block, Build, Cancel, Check, CheckCircle, Close, ErrorOutline, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
+import {Block, Build, Cancel, Check, CheckCircle, Close, ContentCopy, ErrorOutline, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
 import {Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material';
 import type {Theme} from '@mui/material/styles';
+import {useCopyFeedback} from '@tingly/ui';
 import {getReadableAccent} from '@tingly/ui/theme/status';
 import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
 import type {TFunction} from 'i18next';
@@ -18,6 +19,7 @@ import {DisclosureChevron, DisclosureRow} from '../components/common/Disclosure'
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 import {conciseBlock, type MessageDetail} from './messageDetail';
+import {messageCopyText} from './copyText';
 import {exactLabel, fullLabel, markLabel, nextMidnight, timeMarks, type TimeMark} from './timeMarks';
 
 // Respond answers a request. remember asks to allow the tool from now on
@@ -599,10 +601,10 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
-                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><UserBubble message={b.message}/></Box>;
+                    return <Box key={i} {...anchor} sx={stampHost}><MessageActions at={b.message.timestamp} text={messageCopyText(b)}/><UserBubble message={b.message}/></Box>;
                 case 'assistant':
-                    if (files) return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><FilesGroup messages={files}/></Box>;
-                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><AssistantText message={b.message}/></Box>;
+                    if (files) return <Box key={i} {...anchor} sx={stampHost}><MessageActions at={b.message.timestamp}/><FilesGroup messages={files}/></Box>;
+                    return <Box key={i} {...anchor} sx={stampHost}><MessageActions at={b.message.timestamp} text={messageCopyText(b)}/><AssistantText message={b.message}/></Box>;
                 case 'activity':
                     return <ActivityRun key={i} steps={b.steps} live={working && last} hold={holdsPending(items[at + 1]?.block, pendingRequestId)} expandAll={expandAll} pendingRequestId={pendingRequestId}/>;
                 case 'agent':
@@ -693,12 +695,16 @@ const TimeDivider = ({mark}: {mark: TimeMark}) => {
     );
 };
 
-// stampHost / MessageStamp: the exact time of one message, shown above its
-// corner while the pointer is on it. It sits in the gap between messages, so
-// it never moves anything; touch screens (no hover) rely on the dividers.
+// stampHost / MessageActions: a message's quiet action row, in the gap above
+// its corner: its exact time and its copy button. Pointer devices reveal it
+// while the pointer is on the message, or when its copy button has focus (so
+// the keyboard can reach it); a touch screen has no hover, so the copy button
+// stays visible there while the time remains a pointer-only affordance.
 const stampHost = {
     position: 'relative',
-    '@media (hover: hover)': {'&:hover > .message-stamp': {opacity: 1}},
+    '& > .message-actions': {opacity: 0, pointerEvents: 'none', transition: 'opacity 120ms'},
+    '@media (hover: hover)': {'&:hover > .message-actions, &:focus-within > .message-actions': {opacity: 1, pointerEvents: 'auto'}},
+    '@media (hover: none)': {'& > .message-actions': {opacity: 1, pointerEvents: 'auto'}},
 } as const;
 
 const MessageStamp = ({at}: {at?: string}) => {
@@ -708,11 +714,45 @@ const MessageStamp = ({at}: {at?: string}) => {
     if (!exact) return null;
     return (
         <Typography className="message-stamp" component="time" dateTime={at} aria-hidden variant="caption"
-            sx={{position: 'absolute', right: 0, bottom: '100%', mb: 0.25, pointerEvents: 'none', color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap', opacity: 0, display: 'none', '@media (hover: hover)': {display: 'block'}, transition: 'opacity 120ms'}}>
+            sx={{color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap', display: 'none', '@media (hover: hover)': {display: 'block'}}}>
             {exact}
         </Typography>
     );
 };
+
+// MessageCopyButton copies one message's own text (its raw Markdown, not the
+// rendered output), and says so in place: a check while it held, an error
+// outline when the clipboard refused, with the tooltip naming each state.
+const MessageCopyButton = ({text}: {text: string}) => {
+    const {t} = useTranslation();
+    const {copied, failed, copy} = useCopyFeedback();
+    const label = t('projects.transcript.copyMessage', {defaultValue: 'Copy message'});
+    const done = t('projects.transcript.copyMessageDone', {defaultValue: 'Copied'});
+    const error = t('projects.transcript.copyMessageFailed', {defaultValue: 'Could not copy'});
+    return (
+        <Tooltip title={copied ? done : failed ? error : label}>
+            <IconButton
+                size="small"
+                aria-label={copied ? done : failed ? error : label}
+                data-copy-state={copied ? 'copied' : failed ? 'failed' : 'idle'}
+                onClick={() => copy(text)}
+                sx={{p: 0.625, color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary'}}
+            >
+                {copied ? <Check sx={{fontSize: 14}}/> : failed ? <ErrorOutline sx={{fontSize: 14}}/> : <ContentCopy sx={{fontSize: 14}}/>}
+            </IconButton>
+        </Tooltip>
+    );
+};
+
+const MessageActions = ({at, text}: {at?: string; text?: string}) => (
+    // Flush with the message's top edge: a gap here would drop the parent's
+    // :hover while the pointer crosses from the text to the button, hiding
+    // the row before it can be clicked.
+    <Box className="message-actions" sx={{position: 'absolute', right: 0, bottom: '100%', display: 'flex', alignItems: 'center', gap: 0.5}}>
+        <MessageStamp at={at}/>
+        {text !== undefined && <MessageCopyButton text={text}/>}
+    </Box>
+);
 
 // CommandCard is a slash command's outcome as one line that settles in
 // place: working, done with the figures the agent reported, or why it could not.
