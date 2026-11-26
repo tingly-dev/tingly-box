@@ -22,7 +22,6 @@ type RemarkPlugin = NonNullable<Options['remarkPlugins']>[number];
 export function CodeBlock({ code, language }: { code: string; language: string }) {
     const theme = useTheme();
     const { t } = useTranslation('projects');
-    const { t: tt } = useTranslation();
     const phone = usePhoneShell();
     const { copied, failed, copy } = useCopyFeedback();
     const pre = useRef<HTMLDivElement>(null);
@@ -45,7 +44,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     const capping = phone && !open;
     const footer = phone && (overflows || open);
     const copyButton = (
-        <Tooltip title={copied ? t('common.copied') : failed ? tt('projects.transcript.copyMessageFailed', { defaultValue: 'Could not copy' }) : t('common.copy')}>
+        <Tooltip title={copied ? t('common.copied') : failed ? t('phone.copyFailed', { defaultValue: 'Could not copy' }) : t('common.copy')}>
             <IconButton size="small" onClick={() => copy(code)} aria-label={t('common.copy')} sx={{ color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary' }}>
                 {copied ? <Check fontSize="inherit" color="success" /> : <ContentCopy fontSize="inherit" />}
             </IconButton>
@@ -80,8 +79,8 @@ export function CodeBlock({ code, language }: { code: string; language: string }
                 <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 44, px: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                     <ButtonBase onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls={bodyId} sx={{ minHeight: 44, gap: 0.75, color: 'primary.main', fontSize: fontSizes.sm, fontWeight: 600 }}>
                         {open
-                            ? tt('projects.transcript.collapseCode', { defaultValue: 'Collapse code' })
-                            : tt('projects.transcript.expandCode', { defaultValue: 'Show full code' })}
+                            ? t('phone.collapseCode', { defaultValue: 'Collapse code' })
+                            : t('phone.expandCode', { defaultValue: 'Show full code' })}
                         <ExpandMore sx={{ fontSize: 16, transform: open ? 'rotate(180deg)' : 'none' }} />
                     </ButtonBase>
                     <Box sx={{ flex: 1 }} />

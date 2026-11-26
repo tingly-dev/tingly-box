@@ -20,8 +20,6 @@ export default {
       "processDetails": "This run",
       "expandText": "Show full text",
       "collapseText": "Show less",
-      "expandCode": "Show full code",
-      "collapseCode": "Collapse code",
       "errorDetails": "Error details",
       "checklistEmpty": "No current tasks",
       "checklistHistory": "Previous task groups ({{count}})",

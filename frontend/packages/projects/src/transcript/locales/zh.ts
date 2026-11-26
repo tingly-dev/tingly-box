@@ -20,8 +20,6 @@ export default {
       "processDetails": "这一轮的过程",
       "expandText": "展开全文",
       "collapseText": "收起",
-      "expandCode": "展开代码",
-      "collapseCode": "收起代码",
       "errorDetails": "错误详情",
       "checklistEmpty": "当前没有任务",
       "checklistHistory": "之前的任务（{{count}} 组）",

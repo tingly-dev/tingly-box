@@ -20,8 +20,6 @@ export default {
       "processDetails": "Этот запуск",
       "expandText": "Показать полностью",
       "collapseText": "Свернуть",
-      "expandCode": "Показать код",
-      "collapseCode": "Свернуть код",
       "errorDetails": "Подробности ошибки",
       "checklistEmpty": "Нет текущих задач",
       "checklistHistory": "Предыдущие группы задач ({{count}})",
