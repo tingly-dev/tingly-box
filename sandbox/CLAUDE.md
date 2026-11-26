@@ -24,4 +24,6 @@ use `ExecCommand`), registers itself, and has
 it to `.github/workflows/daily.yml`'s `test-sandbox` setup if it needs a tool
 installed. Nothing outside this module changes but the one import.
 
-Design: `../projects/.design/thread-runtime.md` §11.
+Design (authoritative: security model, axes and levels, primitives, runtime
+mapping, steps): `../.design/sandbox.md`. History and measurements:
+`../projects/.design/thread-runtime.md`.
