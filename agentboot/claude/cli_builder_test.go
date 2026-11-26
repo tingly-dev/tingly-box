@@ -272,3 +272,36 @@ func TestBuildCommonArgsEffort(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildCommonArgsChatProfile(t *testing.T) {
+	args := BuildCommonArgs(Config{}, CommonOptions{
+		Tools:           []string{"Read", "Glob", "Grep"},
+		AllowedTools:    []string{"Read", "Glob", "Grep"},
+		Restricted:      true,
+		SafeMode:        true,
+		StrictMcpConfig: true,
+	})
+	assert.Equal(t, "Read,Glob,Grep", argAfter(args, "--tools"))
+	assert.Equal(t, "Read,Glob,Grep", argAfter(args, "--allowedTools"))
+	assert.Contains(t, args, "--restricted")
+	assert.Contains(t, args, "--safe-mode")
+	assert.Contains(t, args, "--strict-mcp-config")
+	assert.NotContains(t, args, "--mcp-config")
+}
+
+func TestBuildCommonArgsEmptyTools(t *testing.T) {
+	args := BuildCommonArgs(Config{}, CommonOptions{Tools: []string{}})
+	// A non-nil empty allowlist means "no built-in tools": --tools "".
+	i := slices.Index(args, "--tools")
+	require.NotEqual(t, -1, i)
+	require.Less(t, i+1, len(args))
+	assert.Equal(t, "", args[i+1])
+}
+
+func argAfter(args []string, flag string) string {
+	i := slices.Index(args, flag)
+	if i < 0 || i+1 >= len(args) {
+		return ""
+	}
+	return args[i+1]
+}

@@ -112,6 +112,19 @@ func (t *Transport) EncodeUserMessage(prompt string) any {
 	}
 }
 
+// EncodeUserContent converts a user turn carrying content blocks (text and
+// images) into the wire payload Claude expects on stdin. Implements
+// [agentboot.ContentEncoder].
+func (t *Transport) EncodeUserContent(prompt string, content []agentboot.ContentBlock) any {
+	return map[string]any{
+		"type": SDKUserMessage,
+		"message": map[string]any{
+			"role":    "user",
+			"content": agentboot.WireContent(prompt, content),
+		},
+	}
+}
+
 // EncodeMidTurnMessage is the same user message as a turn's own: Claude Code
 // reads stdin during a turn and adds what it finds to its next model request
 // (observed, agentboot/claude/ref/live-control.md). Implements

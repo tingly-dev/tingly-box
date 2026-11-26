@@ -144,7 +144,7 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 	var initialInput <-chan any
 	if format == agentboot.OutputFormatStreamJSON {
 		builder := NewStreamPromptBuilder()
-		if prompt == "" {
+		if prompt == "" && len(opts.Content) == 0 {
 			// Recovery launch (ResumeInterruptedTurn): we inject no message
 			// of our own — the CLI replays the interrupted turn from its
 			// transcript. Stdin must stay open: an immediate EOF would end
@@ -153,7 +153,11 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 			// (or the session) ends.
 			initialInput = make(chan any)
 		} else {
-			builder.AddUserMessage(prompt)
+			if len(opts.Content) > 0 {
+				builder.AddUserContent(prompt, opts.Content)
+			} else {
+				builder.AddUserMessage(prompt)
+			}
 			ch := builder.Close()
 			// Convert chan map[string]any to chan any
 			anyC := make(chan any, 100)
@@ -234,6 +238,9 @@ func (d *Driver) buildArgs(
 		AppendSystemPrompt:   opts.AppendSystemPrompt,
 		AllowedTools:         opts.AllowedTools,
 		DisallowedTools:      opts.DisallowedTools,
+		Tools:                opts.Tools,
+		Restricted:           opts.Restricted,
+		SafeMode:             opts.SafeMode,
 		MCPServers:           opts.MCPServers,
 		MCPConfigPath:        opts.MCPConfigPath,
 		StrictMcpConfig:      opts.StrictMcpConfig,

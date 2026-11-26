@@ -20,6 +20,11 @@ type CommonOptions struct {
 	Resume               string
 	AllowedTools         []string
 	DisallowedTools      []string
+	// Tools is the built-in allowlist (--tools). A non-nil empty slice means
+	// "no built-in tools".
+	Tools      []string
+	Restricted bool
+	SafeMode   bool
 	MCPServers           map[string]interface{}
 	MCPConfigPath        string
 	StrictMcpConfig      bool
@@ -103,6 +108,11 @@ func BuildCommonArgs(config Config, opts CommonOptions) []string {
 		args = append(args, "--resume", opts.Resume)
 	}
 
+	// Built-in tool allowlist. Non-nil (including empty) emits --tools.
+	if opts.Tools != nil {
+		args = append(args, "--tools", strings.Join(opts.Tools, ","))
+	}
+
 	// Tool filtering - both config and opts can contribute
 	if len(config.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(config.AllowedTools, ","))
@@ -115,6 +125,14 @@ func BuildCommonArgs(config Config, opts CommonOptions) []string {
 	}
 	if len(opts.DisallowedTools) > 0 {
 		args = append(args, "--disallowedTools", strings.Join(opts.DisallowedTools, ","))
+	}
+
+	// Restricted mode and safe mode: launch-time only.
+	if opts.Restricted {
+		args = append(args, "--restricted")
+	}
+	if opts.SafeMode {
+		args = append(args, "--safe-mode")
 	}
 
 	// MCP servers - merge from config and opts
