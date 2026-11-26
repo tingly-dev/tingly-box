@@ -125,6 +125,21 @@ func TestSetModeLive_RefusalIsNotRemembered(t *testing.T) {
 		t.Fatalf("a refused mode was remembered as %q", got)
 	}
 
+	// The next turn's applyLive tries again, because nothing was remembered.
+	retry := &fakeLive{}
+	e.mu.Lock()
+	have := e.launch["id"]
+	e.mu.Unlock()
+	if !e.applyLive("id", retry, have, launchState{model: "m", mode: "plan"}) {
+		t.Fatal("applyLive failed")
+	}
+	if len(retry.modes) != 1 || retry.modes[0] != "plan" {
+		t.Fatalf("the next turn sent %v, want the refused mode again", retry.modes)
+	}
+	e.mu.Lock()
+	e.launch["id"] = launchState{model: "m", mode: "default"}
+	e.mu.Unlock()
+
 	f = &fakeLive{}
 	if applied, err := e.setModeLive("id", f, "plan"); !applied || err != nil {
 		t.Fatalf("setModeLive = %v, %v", applied, err)
