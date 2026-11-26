@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,7 +50,7 @@ func ThreadPolicyLevels(runtime string) map[sandbox.Axis]sandbox.Level {
 			Resources: sandbox.Resources{Level: sandbox.ResourcesUnlimited},
 		}.Levels()
 	}
-	return threadPolicy("", nil, nil, nil).Levels()
+	return threadPolicy("", nil, nil, nil, sandbox.Resources{Level: sandbox.ResourcesUnlimited}).Levels()
 }
 
 // CheckThreadSandbox reports whether a project's threads can run in runtime
@@ -94,7 +95,7 @@ func probeThreadSandbox(ctx context.Context, runtime string) error {
 		return err
 	}
 	defer os.RemoveAll(home)
-	proc, err := sandbox.Start(ctx, runtime, sandbox.Cmd{Args: []string{"true"}, Env: []string{"PATH=/usr/bin:/bin"}}, threadPolicy(home, nil, []string{"PATH"}, nil))
+	proc, err := sandbox.Start(ctx, runtime, sandbox.Cmd{Args: []string{"true"}, Env: []string{"PATH=/usr/bin:/bin"}}, threadPolicy(home, nil, []string{"PATH"}, nil, sandbox.Resources{Level: sandbox.ResourcesUnlimited}))
 	if err != nil {
 		return err
 	}
@@ -103,18 +104,64 @@ func probeThreadSandbox(ctx context.Context, runtime string) error {
 	return proc.Wait()
 }
 
+// failureText is why a turn's error ended the thread, in words: a sandbox
+// that killed the process for running out of memory says so, with the limit.
+func (m *Threads) failureText(t *db.Thread, err error) string {
+	var exit *sandbox.ExitError
+	if !errors.As(err, &exit) || exit.Reason != sandbox.EndOOM {
+		return err.Error()
+	}
+	msg := "the sandbox ran out of memory"
+	if p, perr := m.store.GetProject(t.ProjectID); perr == nil && p.ThreadMemoryBytes > 0 {
+		msg += " (limit " + FormatBytes(p.ThreadMemoryBytes) + " per thread)"
+	}
+	return msg + "; raise the project's memory limit or unset it in the project settings"
+}
+
+// FormatBytes writes a byte count in the largest binary unit that keeps it whole.
+func FormatBytes(n int64) string {
+	for _, u := range []struct {
+		size int64
+		name string
+	}{{1 << 30, "GiB"}, {1 << 20, "MiB"}} {
+		if n >= u.size && n%u.size == 0 {
+			return strconv.FormatInt(n/u.size, 10) + " " + u.name
+		}
+	}
+	return strconv.FormatInt(n, 10) + " bytes"
+}
+
+// Quota minimums: Claude Code does not start in less memory than this.
+const (
+	MinThreadMemoryBytes int64 = 512 << 20
+	MinThreadTasks             = 64
+	MinThreadCPU               = 100
+)
+
+// threadResources are a project's per-thread limits: limited when any is set,
+// else unlimited.
+func threadResources(p *db.Project) sandbox.Resources {
+	r := sandbox.Resources{MemoryBytes: p.ThreadMemoryBytes, Tasks: p.ThreadTasks, CPU: p.ThreadCPU}
+	if r.MemoryBytes > 0 || r.Tasks > 0 || r.CPU > 0 {
+		r.Level = sandbox.ResourcesLimited
+	} else {
+		r.Level = sandbox.ResourcesUnlimited
+	}
+	return r
+}
+
 // threadPolicy is what a sandboxed thread runs under (.design/sandbox.md §5).
 // Storage: only the mounts (home is empty). Network: the public internet,
 // and of the host only the ports its launch talks to (the model gateway,
 // MCP servers). Exec: confined. Credentials: only the variables named.
-// Resources: no limits yet.
-func threadPolicy(home string, mounts []sandbox.Mount, env []string, expose []sandbox.Endpoint) sandbox.Policy {
+// Resources: the project's limits, none by default.
+func threadPolicy(home string, mounts []sandbox.Mount, env []string, expose []sandbox.Endpoint, res sandbox.Resources) sandbox.Policy {
 	return sandbox.Policy{
 		Storage:     sandbox.Storage{Level: sandbox.StorageConfined, Home: home, Mounts: mounts},
 		Network:     sandbox.Network{Level: sandbox.NetworkInternet, Expose: expose},
 		Exec:        sandbox.Exec{Level: sandbox.ExecConfined},
 		Credentials: sandbox.Credentials{Level: sandbox.CredentialsExplicit, Env: env},
-		Resources:   sandbox.Resources{Level: sandbox.ResourcesUnlimited},
+		Resources:   res,
 	}
 }
 
@@ -211,7 +258,7 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 			keep = append(keep, name)
 		}
 	}
-	return &process.Sandbox{Runtime: p.ThreadSandbox, Policy: threadPolicy(home, ms, keep, hostEndpoints(opts))}, nil
+	return &process.Sandbox{Runtime: p.ThreadSandbox, Policy: threadPolicy(home, ms, keep, hostEndpoints(opts), threadResources(p))}, nil
 }
 
 // loopbackURL finds a URL on the host's loopback.

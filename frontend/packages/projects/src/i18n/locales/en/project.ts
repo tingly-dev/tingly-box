@@ -183,6 +183,12 @@ export const project = {
         permissionMode: 'Thread permissions',
         sandbox: 'Where threads run',
         sandboxUnavailable: 'Not available on this machine',
+        quota: {
+            memory: 'Memory', processes: 'Processes', cpu: 'CPU cores',
+            help: 'Limits for each thread. Empty means no limit.',
+            hostHelp: 'Limits need a sandbox: pick one above. Empty means no limit.',
+            memoryMin: 'At least 512 MiB', processesMin: 'At least 64', cpuMin: 'At least 0.1',
+        },
         sandboxes: { host: 'This machine (no isolation)', bwrap: 'Sandbox (bubblewrap)' },
         axes: { storage: 'Files', network: 'Network', exec: 'Processes', credentials: 'Secrets', resources: 'Resources' },
         levels: {

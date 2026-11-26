@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -160,6 +161,9 @@ func configurationChanges(a, b *db.Project) []string {
 		{"thread effort", a.ThreadEffort, b.ThreadEffort},
 		{"thread permission mode", a.ThreadPermissionMode, b.ThreadPermissionMode},
 		{"thread sandbox", a.ThreadSandbox, b.ThreadSandbox},
+		{"thread memory limit", strconv.FormatInt(a.ThreadMemoryBytes, 10), strconv.FormatInt(b.ThreadMemoryBytes, 10)},
+		{"thread process limit", strconv.Itoa(a.ThreadTasks), strconv.Itoa(b.ThreadTasks)},
+		{"thread CPU limit", strconv.Itoa(a.ThreadCPU), strconv.Itoa(b.ThreadCPU)},
 		{"thread GitHub access", a.ThreadGitHubAccess, b.ThreadGitHubAccess},
 		{"GitHub auto-approval", strings.Join(a.GitHubAuto, ","), strings.Join(b.GitHubAuto, ",")},
 	} {

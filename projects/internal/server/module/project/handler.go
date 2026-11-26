@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -99,6 +100,12 @@ type UpdateProjectRequest struct {
 	// ThreadSandbox is the runtime threads run in: empty on the host, or a name
 	// from /projects/runtime's sandboxes.
 	ThreadSandbox *string `json:"thread_sandbox,omitempty"`
+	// ThreadMemoryBytes, ThreadTasks and ThreadCPU (thousandths of a core) limit
+	// what one thread may use in a sandbox; zero removes that limit. When set:
+	// memory at least 512 MiB, tasks at least 64, CPU at least 100.
+	ThreadMemoryBytes *int64 `json:"thread_memory_bytes,omitempty"`
+	ThreadTasks       *int   `json:"thread_tasks,omitempty"`
+	ThreadCPU         *int   `json:"thread_cpu,omitempty"`
 	// GitHubAuto are the groups of GitHub actions threads' tools may do
 	// without a card (publish, rewrite, others, close, merge); any other call
 	// asks. The whole list is replaced. Only the owner sets it, here.
@@ -762,6 +769,19 @@ func (h *Handler) update(c *gin.Context) {
 			p.ThreadSandbox = "" // one way to say "on the host"
 		}
 	}
+	if msg := validQuotas(req); msg != "" {
+		apierr.BadRequest(c, msg)
+		return
+	}
+	if req.ThreadMemoryBytes != nil {
+		p.ThreadMemoryBytes = *req.ThreadMemoryBytes
+	}
+	if req.ThreadTasks != nil {
+		p.ThreadTasks = *req.ThreadTasks
+	}
+	if req.ThreadCPU != nil {
+		p.ThreadCPU = *req.ThreadCPU
+	}
 	if req.ThreadGitHubAccess != nil {
 		switch *req.ThreadGitHubAccess {
 		case rt.GitHubAsk:
@@ -1150,4 +1170,27 @@ func (h *Handler) usage(c *gin.Context) {
 		resp.ByThread = append(resp.ByThread, ThreadUsage{ThreadID: t.ID, Title: t.Title, Model: t.Model, Turns: t.Turns, InputTokens: t.InputTokens, OutputTokens: t.OutputTokens})
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// validQuotas is why the per-thread limits in req are not acceptable, or "".
+func validQuotas(req UpdateProjectRequest) string {
+	if v := req.ThreadMemoryBytes; v != nil && *v != 0 && *v < rt.MinThreadMemoryBytes {
+		if *v < 0 {
+			return "thread memory limit cannot be negative"
+		}
+		return "thread memory limit must be at least " + rt.FormatBytes(rt.MinThreadMemoryBytes) + ": Claude Code does not start in less"
+	}
+	if v := req.ThreadTasks; v != nil && *v != 0 && *v < rt.MinThreadTasks {
+		if *v < 0 {
+			return "thread process limit cannot be negative"
+		}
+		return "thread process limit must be at least " + strconv.Itoa(rt.MinThreadTasks)
+	}
+	if v := req.ThreadCPU; v != nil && *v != 0 && *v < rt.MinThreadCPU {
+		if *v < 0 {
+			return "thread CPU limit cannot be negative"
+		}
+		return "thread CPU limit must be at least " + strconv.Itoa(rt.MinThreadCPU) + " (a tenth of a core)"
+	}
+	return ""
 }

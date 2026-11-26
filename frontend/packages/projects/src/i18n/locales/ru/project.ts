@@ -186,6 +186,12 @@ export const project: PluralDict<typeof en> = {
         permissionMode: 'Разрешения потоков',
         sandbox: 'Где работают потоки',
         sandboxUnavailable: 'Недоступно на этом компьютере',
+        quota: {
+            memory: 'Память', processes: 'Процессы', cpu: 'Ядра CPU',
+            help: 'Лимиты на каждый поток. Пусто — без ограничений.',
+            hostHelp: 'Лимитам нужна песочница: выберите её выше. Пусто — без ограничений.',
+            memoryMin: 'Не меньше 512 МиБ', processesMin: 'Не меньше 64', cpuMin: 'Не меньше 0,1',
+        },
         sandboxes: { host: 'Этот компьютер (без изоляции)', bwrap: 'Песочница (bubblewrap)' },
         axes: { storage: 'Файлы', network: 'Сеть', exec: 'Процессы', credentials: 'Секреты', resources: 'Ресурсы' },
         levels: {

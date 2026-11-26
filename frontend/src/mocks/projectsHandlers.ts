@@ -17,7 +17,7 @@ type Proj = {
     name: string; goal: string; instructions: string; paused: boolean; starred: boolean
     repos: { path: string; base_branch: string }[]; coordinator_model: string; thread_model: string
     coordinator_effort: string; thread_effort: string
-    thread_permission_mode: string; thread_sandbox?: string; github_auto: string[]; max_running_threads: number; created_at: string; updated_at: string; archived_at?: string
+    thread_permission_mode: string; thread_sandbox?: string; thread_memory_bytes?: number; thread_tasks?: number; thread_cpu?: number; github_auto: string[]; max_running_threads: number; created_at: string; updated_at: string; archived_at?: string
 }
 
 const projects: Proj[] = [
@@ -25,7 +25,7 @@ const projects: Proj[] = [
         id: 'p-latency', type: 'project', main_thread_id: 'main-p-latency', name: 'Payments API latency', goal: 'Get p99 of /charge under 300 ms without dropping retries.',
         instructions: 'Keep changes behind the existing feature flags.', paused: false, starred: true,
         repos: [repo('/Users/me/code/payments-api'), repo('/Users/me/code/payments-sdk')],
-        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits', thread_sandbox: 'bwrap', github_auto: ['publish'], max_running_threads: 4,
+        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits', thread_sandbox: 'bwrap', thread_memory_bytes: 4 * 1024 ** 3, thread_tasks: 512, thread_cpu: 2000, github_auto: ['publish'], max_running_threads: 4,
         created_at: ago(60 * 26), updated_at: ago(4),
     },
     {

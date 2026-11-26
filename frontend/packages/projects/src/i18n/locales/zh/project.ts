@@ -186,6 +186,12 @@ export const project: Dict<typeof projectEn> = {
         permissionMode: '线程权限',
         sandbox: '线程运行环境',
         sandboxUnavailable: '本机不可用',
+        quota: {
+            memory: '内存', processes: '进程数', cpu: 'CPU 核数',
+            help: '每个线程的上限；留空表示不限。',
+            hostHelp: '限额需要沙箱：请先在上面选择。留空表示不限。',
+            memoryMin: '至少 512 MiB', processesMin: '至少 64', cpuMin: '至少 0.1',
+        },
         sandboxes: { host: '本机（不隔离）', bwrap: '沙箱（bubblewrap）' },
         axes: { storage: '文件', network: '网络', exec: '进程', credentials: '凭据', resources: '资源' },
         levels: {

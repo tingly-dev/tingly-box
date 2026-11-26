@@ -4547,6 +4547,11 @@
             "type": "boolean",
             "description": "Field starred"
           },
+          "thread_cpu": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_cpu"
+          },
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
@@ -4554,6 +4559,11 @@
           "thread_github_access": {
             "type": "string",
             "description": "Field thread_github_access"
+          },
+          "thread_memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_memory_bytes"
           },
           "thread_model": {
             "type": "string",
@@ -4570,6 +4580,11 @@
           "thread_sandbox": {
             "type": "string",
             "description": "Field thread_sandbox"
+          },
+          "thread_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_tasks"
           },
           "type": {
             "type": "string",
@@ -4596,6 +4611,9 @@
           "thread_effort",
           "thread_permission_mode",
           "thread_sandbox",
+          "thread_memory_bytes",
+          "thread_tasks",
+          "thread_cpu",
           "github_auto",
           "max_running_threads",
           "paused",
@@ -4799,6 +4817,11 @@
             "type": "boolean",
             "description": "Field starred"
           },
+          "thread_cpu": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_cpu"
+          },
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
@@ -4806,6 +4829,11 @@
           "thread_github_access": {
             "type": "string",
             "description": "Field thread_github_access"
+          },
+          "thread_memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_memory_bytes"
           },
           "thread_model": {
             "type": "string",
@@ -4822,6 +4850,11 @@
           "thread_sandbox": {
             "type": "string",
             "description": "Field thread_sandbox"
+          },
+          "thread_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_tasks"
           },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
@@ -4851,6 +4884,9 @@
           "thread_effort",
           "thread_permission_mode",
           "thread_sandbox",
+          "thread_memory_bytes",
+          "thread_tasks",
+          "thread_cpu",
           "github_auto",
           "max_running_threads",
           "paused",
@@ -6078,6 +6114,11 @@
             "type": "boolean",
             "description": "Field starred"
           },
+          "thread_cpu": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_cpu"
+          },
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort",
@@ -6096,6 +6137,11 @@
               "ask",
               "allow"
             ]
+          },
+          "thread_memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_memory_bytes"
           },
           "thread_model": {
             "type": "string",
@@ -6118,6 +6164,11 @@
           "thread_sandbox": {
             "type": "string",
             "description": "Field thread_sandbox"
+          },
+          "thread_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_tasks"
           }
         }
       },
