@@ -2,11 +2,14 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -46,7 +49,7 @@ func ExecCommand(ctx context.Context, cmd Cmd) (Proc, error) {
 	}
 	p := &execProc{cmd: c, stdin: stdin, stdout: stdout, done: make(chan struct{})}
 	go func() {
-		p.waitErr = c.Wait()
+		p.waitErr = p.end(c.Wait())
 		close(p.done)
 		// A grandchild holding stdout may keep EOF from coming: let the
 		// consumer drain, then close so it cannot block forever.
@@ -70,6 +73,26 @@ type execProc struct {
 	waitErr error
 
 	killOnce, stdoutOnce sync.Once
+	killed               atomic.Bool
+}
+
+// end is how the process ended, as an *ExitError (nil for a zero exit).
+func (p *execProc) end(err error) error {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		if err != nil {
+			return &ExitError{Code: -1, Reason: EndFailed, Detail: err.Error()}
+		}
+		return nil
+	}
+	e := &ExitError{Code: exit.ExitCode(), Reason: EndExited}
+	if ws, ok := exit.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		e.Code, e.Reason = 128+int(ws.Signal()), EndSignaled
+	}
+	if p.killed.Load() {
+		e.Reason = EndKilled
+	}
+	return e
 }
 
 func (p *execProc) closeStdout()          { p.stdoutOnce.Do(func() { _ = p.stdout.Close() }) }
@@ -91,6 +114,7 @@ func (p *execProc) Kill() error {
 			return
 		default:
 		}
+		p.killed.Store(true)
 		err = p.cmd.Process.Kill()
 	})
 	return err

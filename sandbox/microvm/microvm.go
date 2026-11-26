@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/sandbox"
@@ -49,6 +51,8 @@ const (
 	portStdout
 	portStderr
 	portProxy
+	// portExpose + i carries Network.Expose[i].
+	portExpose = 1100
 )
 
 // guestEnv, on the kernel command line, tells this binary it is a guest's
@@ -57,19 +61,21 @@ const guestEnv = "TB_SANDBOX_GUEST"
 
 // spec is what the host sends the guest on the control connection.
 type spec struct {
-	Args  []string `json:"args"`
-	Env   []string `json:"env"`
-	Dir   string   `json:"dir"`
-	UID   int      `json:"uid"`
-	GID   int      `json:"gid"`
-	Proxy bool     `json:"proxy,omitempty"`
+	Args   []string `json:"args"`
+	Env    []string `json:"env"`
+	Dir    string   `json:"dir"`
+	UID    int      `json:"uid"`
+	GID    int      `json:"gid"`
+	Proxy  bool     `json:"proxy,omitempty"`
+	Expose []int    `json:"expose,omitempty"`
 }
 
 // result is what the guest sends back when the command has ended, or could
 // not start.
 type result struct {
-	Exit  int    `json:"exit"`
-	Error string `json:"error,omitempty"`
+	Exit   int    `json:"exit"`
+	Signal int    `json:"signal,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 // Guest size. The memory is the guest's RAM, allocated as it is touched.
@@ -153,12 +159,13 @@ type machine struct {
 
 	fs, vmm   *exec.Cmd
 	listeners []net.Listener
-	proxy     *netproxy.Proxy
+	net       *netproxy.Host
 	stdin     net.Conn
 	stdout    net.Conn
 
 	done     chan struct{}
 	waitErr  error
+	killed   atomic.Bool
 	stopOnce sync.Once
 }
 
@@ -214,8 +221,10 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 			_ = ln.Close()
 		}()
 	}
-	if p.Network.Level == sandbox.NetworkAllowlist {
-		if m.proxy, err = netproxy.ListenAt(p.Network.Allow, vsock+"_"+strconv.Itoa(portProxy)); err != nil {
+	pl := netproxy.PlanFor(p.Network)
+	if !pl.Empty() {
+		ports := vsockPorts(pl)
+		if m.net, err = netproxy.Listen(p.Network, func(name string) string { return vsock + "_" + strconv.Itoa(ports[name]) }); err != nil {
 			return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 		}
 	}
@@ -252,7 +261,7 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 	if err != nil {
 		return err
 	}
-	s := spec{Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir, UID: os.Getuid(), GID: os.Getgid(), Proxy: m.proxy != nil}
+	s := spec{Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir, UID: os.Getuid(), GID: os.Getgid(), Proxy: pl.Proxy, Expose: pl.Expose}
 	if err := json.NewEncoder(ctl).Encode(s); err != nil {
 		return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 	}
@@ -278,15 +287,22 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 func (m *machine) watch(ctl net.Conn, vmmExited <-chan struct{}) {
 	var r result
 	line, err := bufio.NewReader(ctl).ReadBytes('\n')
+	failed := func(detail string) error {
+		return &sandbox.ExitError{Code: -1, Reason: sandbox.EndFailed, Detail: detail}
+	}
 	switch {
+	case m.killed.Load():
+		m.waitErr = &sandbox.ExitError{Code: 128 + int(syscall.SIGKILL), Reason: sandbox.EndKilled}
 	case err != nil:
-		m.waitErr = fmt.Errorf("microvm: the guest ended without a result%s", m.tail("console.log"))
+		m.waitErr = failed("the guest ended without a result" + m.tail("console.log"))
 	case json.Unmarshal(line, &r) != nil:
-		m.waitErr = fmt.Errorf("microvm: bad result from the guest: %q", line)
+		m.waitErr = failed(fmt.Sprintf("bad result from the guest: %q", line))
 	case r.Error != "":
-		m.waitErr = fmt.Errorf("microvm: %s", r.Error)
+		m.waitErr = failed(r.Error)
+	case r.Signal != 0:
+		m.waitErr = &sandbox.ExitError{Code: 128 + r.Signal, Reason: sandbox.EndSignaled}
 	case r.Exit != 0:
-		m.waitErr = &ExitError{Code: r.Exit}
+		m.waitErr = &sandbox.ExitError{Code: r.Exit, Reason: sandbox.EndExited}
 	}
 	// The guest powers off after it reports; give it a moment, then stop it.
 	select {
@@ -297,12 +313,14 @@ func (m *machine) watch(ctl net.Conn, vmmExited <-chan struct{}) {
 	close(m.done)
 }
 
-// ExitError is a command that ran in the guest and exited non-zero (128 plus
-// the signal when a signal ended it).
-type ExitError struct{ Code int }
-
-func (e *ExitError) Error() string { return "exit status " + strconv.Itoa(e.Code) }
-func (e *ExitError) ExitCode() int { return e.Code }
+// vsockPorts are the vsock ports of a plan's endpoints, by name.
+func vsockPorts(pl netproxy.Plan) map[string]int {
+	ports := map[string]int{netproxy.ProxyName: portProxy}
+	for i, p := range pl.Expose {
+		ports[netproxy.ExposeName(p)] = portExpose + i
+	}
+	return ports
+}
 
 // stop kills the VM and virtiofsd and removes the sockets; it is idempotent.
 func (m *machine) stop() {
@@ -318,8 +336,8 @@ func (m *machine) stop() {
 		for _, ln := range m.listeners {
 			_ = ln.Close()
 		}
-		if m.proxy != nil {
-			_ = m.proxy.Close()
+		if m.net != nil {
+			_ = m.net.Close()
 		}
 		_ = os.RemoveAll(m.dir)
 	})
@@ -342,6 +360,7 @@ func (m *machine) Kill() error {
 	default:
 	}
 	if m.vmm != nil && m.vmm.Process != nil {
+		m.killed.Store(true)
 		return m.vmm.Process.Kill()
 	}
 	return nil

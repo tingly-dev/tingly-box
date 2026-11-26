@@ -56,9 +56,15 @@ func Run(t *testing.T, rt sandbox.Runtime) {
 	if c.supports(sandbox.AxisResources, sandbox.ResourcesLimited) {
 		t.Run("resources/limited memory", c.memoryLimited)
 		t.Run("resources/limited tasks", c.tasksLimited)
+		t.Run("resources/limited cpu", c.cpuLimited)
 	}
 	if c.supports(sandbox.AxisNetwork, sandbox.NetworkAllowlist) {
 		t.Run("network/allowlist", c.networkAllowlist)
+	}
+	for _, l := range []sandbox.Level{sandbox.NetworkNone, sandbox.NetworkAllowlist, sandbox.NetworkInternet} {
+		if c.supports(sandbox.AxisNetwork, l) {
+			t.Run("network/"+string(l)+" expose", func(t *testing.T) { c.networkExpose(t, l) })
+		}
 	}
 }
 
@@ -111,7 +117,7 @@ func (c *suite) refuses(t *testing.T) {
 	p := c.policy(t)
 	asks := map[sandbox.Axis]sandbox.Level{}
 	for _, a := range sandbox.Axes {
-		for _, l := range allLevels[a] {
+		for _, l := range sandbox.AxisLevels[a] {
 			if !c.supports(a, l) {
 				asks[a] = l
 			}
@@ -139,14 +145,6 @@ func (c *suite) refuses(t *testing.T) {
 			t.Errorf("%s=%s is not given, and start must refuse; got %v", a, l, err)
 		}
 	}
-}
-
-var allLevels = map[sandbox.Axis][]sandbox.Level{
-	sandbox.AxisStorage:     {sandbox.StorageHost, sandbox.StorageConfined},
-	sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone, sandbox.NetworkAllowlist},
-	sandbox.AxisExec:        {sandbox.ExecHost, sandbox.ExecConfined},
-	sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
-	sandbox.AxisResources:   {sandbox.ResourcesUnlimited, sandbox.ResourcesLimited},
 }
 
 func (c *suite) storageConfined(t *testing.T) {
@@ -313,57 +311,130 @@ func (c *suite) tasksLimited(t *testing.T) {
 // networkAllowlist allows one of two listeners on the host's loopback: the
 // proxy named by HTTPS_PROXY must tunnel to it and refuse the other, and
 // neither may be reached directly.
-func (c *suite) networkAllowlist(t *testing.T) {
+// cpuLimited spins for two seconds under a tenth of a core: the CPU time it
+// gets must be well under the wall time.
+func (c *suite) cpuLimited(t *testing.T) {
+	p := c.limited(t, sandbox.Resources{CPU: 100})
+	m, run := probe(t, `while [ $SECONDS -lt 2 ]; do :; done
+read -r -a f < /proc/$$/stat; echo "TICKS=$(( f[13] + f[14] )) HZ=$(getconf CLK_TCK)"`)
+	p.Storage.Mounts = append(p.Storage.Mounts, m)
+	out := c.run(t, p, run)
+	var ticks, hz int
+	if i := strings.Index(out, "TICKS="); i < 0 {
+		t.Fatalf("no count in:\n%s", out)
+	} else {
+		_, _ = fmt.Sscanf(out[i:], "TICKS=%d HZ=%d", &ticks, &hz)
+	}
+	if hz == 0 || float64(ticks)/float64(hz) > 0.6 {
+		t.Errorf("cpu=100 (a tenth of a core) spun %d ticks at %d Hz in 2s", ticks, hz)
+	}
+}
+
+// hostListener serves HELLO on the host's loopback; it returns the port.
+func hostListener(t *testing.T) int {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	must(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = conn.Write([]byte("HELLO\n"))
+			_ = conn.Close()
+		}
+	}()
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+// probe writes a bash script where the sandbox can read it, and returns the
+// mount and the command that runs it.
+func probe(t *testing.T, script string) (sandbox.Mount, string) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("the probe needs bash (/dev/tcp)")
 	}
-	listen := func() int {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		must(t, err)
-		t.Cleanup(func() { _ = ln.Close() })
-		go func() {
-			for {
-				conn, err := ln.Accept()
-				if err != nil {
-					return
-				}
-				_, _ = conn.Write([]byte("HELLO\n"))
-				_ = conn.Close()
-			}
-		}()
-		return ln.Addr().(*net.TCPAddr).Port
-	}
-	allowed, denied := listen(), listen()
 	dir := t.TempDir()
-	probe := filepath.Join(dir, "probe.sh")
-	must(t, os.WriteFile(probe, []byte(fmt.Sprintf(`
+	path := filepath.Join(dir, "probe.sh")
+	must(t, os.WriteFile(path, []byte(script), 0o644))
+	return sandbox.Mount{Path: dir}, bash + " " + path
+}
+
+// networkAllowlist: the proxy named by HTTPS_PROXY refuses the host, even
+// when the allowlist names it (by a name that resolves to it), and refuses
+// what the list does not name; nothing is reached directly. Naming the host
+// literally is not a policy at all. With a network, a listed public host is
+// reached (the lower bound).
+func (c *suite) networkAllowlist(t *testing.T) {
+	port := hostListener(t)
+	p := c.policy(t)
+	p.Network = sandbox.Network{Level: sandbox.NetworkAllowlist, Allow: []string{fmt.Sprintf("127.0.0.1:%d", port)}}
+	if _, err := sandbox.Start(context.Background(), c.info.Name, sandbox.Cmd{Args: []string{"true"}}, p); !errors.Is(err, sandbox.ErrUnavailable) {
+		t.Errorf("an allowlist naming the host's loopback must not start; got %v", err)
+	}
+
+	// The host's own name resolves to the host (nss-myhostname and the like).
+	self, _ := os.Hostname()
+	if addrs, err := net.DefaultResolver.LookupNetIP(context.Background(), "ip", self); err != nil || len(addrs) == 0 || sandbox.Classify(addrs[0]) != sandbox.SurfaceHost {
+		self = ""
+	}
+	online := false
+	if conn, err := net.DialTimeout("tcp", "example.com:443", 3*time.Second); err == nil {
+		online = true
+		_ = conn.Close()
+	}
+	allow := []string{"example.com"}
+	if self != "" {
+		allow = append(allow, fmt.Sprintf("%s:%d", self, port))
+	}
+	m, run := probe(t, fmt.Sprintf(`
 [ -n "$HTTPS_PROXY" ] || echo NO-PROXY
-hp=${HTTPS_PROXY#http://}; hp=${hp%%/}
+hp=${HTTPS_PROXY#http://}; hp=${hp%%%%/}
 via() {
-	exec 3<>/dev/tcp/${hp%%:*}/${hp##*:} || return
-	printf 'CONNECT 127.0.0.1:%%s HTTP/1.1\r\nHost: 127.0.0.1:%%s\r\n\r\n' $1 $1 >&3
-	head -c 200 <&3 | tr '\r\n' '  '
+	exec 3<>/dev/tcp/${hp%%%%:*}/${hp##*:} || return
+	printf 'CONNECT %%s HTTP/1.1\r\nHost: %%s\r\n\r\n' $1 $1 >&3
+	head -c 12 <&3
 	exec 3<&-
 }
-echo "ALLOWED[$(via %d)]"
-echo "DENIED[$(via %d)]"
-(echo > /dev/tcp/127.0.0.1/%d) 2>/dev/null && echo LEAK-direct
+echo "LOOPBACK[$(via 127.0.0.1:%[1]d)]"
+[ -n %[2]q ] && echo "SELF[$(via %[2]s:%[1]d)]"
+[ %[3]t = true ] && echo "PUBLIC[$(via example.com:443)]"
+(echo > /dev/tcp/127.0.0.1/%[1]d) 2>/dev/null && echo LEAK-direct
 echo END
-`, allowed, denied, allowed)), 0o644))
-	p := c.policy(t, sandbox.Mount{Path: dir})
-	p.Network = sandbox.Network{Level: sandbox.NetworkAllowlist, Allow: []string{fmt.Sprintf("127.0.0.1:%d", allowed)}}
-	out := c.run(t, p, bash+" "+probe)
-	expect(t, out, "END")
+`, port, self, online))
+	p = c.policy(t, m)
+	p.Network = sandbox.Network{Level: sandbox.NetworkAllowlist, Allow: allow}
+	out := c.run(t, p, run)
+	expect(t, out, "END", "LOOPBACK[HTTP/1.1 403")
 	if strings.Contains(out, "NO-PROXY") {
 		t.Fatalf("network=allowlist set no HTTPS_PROXY:\n%s", out)
 	}
-	if !strings.Contains(out, "ALLOWED[HTTP/1.1 200") || !strings.Contains(out, "HELLO") {
-		t.Errorf("the proxy did not tunnel to an allowed host:\n%s", out)
+	if self != "" && !strings.Contains(out, "SELF[HTTP/1.1 403") {
+		t.Errorf("a listed name that resolves to the host was not refused:\n%s", out)
 	}
-	if !strings.Contains(out, "DENIED[HTTP/1.1 403") {
-		t.Errorf("the proxy did not refuse a host off the list:\n%s", out)
+	if online && !strings.Contains(out, "PUBLIC[HTTP/1.1 200") {
+		t.Errorf("a listed public host was not reached:\n%s", out)
 	}
+	if !online {
+		t.Log("offline: the lower bound (a listed public host is reached) is not checked")
+	}
+}
+
+// networkExpose: below open, an exposed port of the host's loopback is at
+// localhost in the sandbox, by address and by name; another port is not.
+func (c *suite) networkExpose(t *testing.T, level sandbox.Level) {
+	exposed, other := hostListener(t), hostListener(t)
+	m, run := probe(t, fmt.Sprintf(`
+read -r a < /dev/tcp/127.0.0.1/%[1]d && echo "ADDR[$a]"
+read -r b < /dev/tcp/localhost/%[1]d && echo "NAME[$b]"
+(read -r c < /dev/tcp/127.0.0.1/%[2]d && echo "LEAK-other[$c]") 2>/dev/null
+echo END
+`, exposed, other))
+	p := c.policy(t, m)
+	p.Network = sandbox.Network{Level: level, Expose: []sandbox.Endpoint{{Port: exposed}}}
+	out := c.run(t, p, run)
+	expect(t, out, "ADDR[HELLO]", "NAME[HELLO]", "END")
 }
 
 func expect(t *testing.T, out string, want ...string) {
