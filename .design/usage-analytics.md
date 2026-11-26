@@ -51,12 +51,28 @@ an upstream account allowance or balance changed — and therefore does not shar
 the request-oriented Model and Identity filters. The page provides its own
 Provider filter, rolling `5h | 1d | 7d | 30d` range selector, and refresh action,
 then groups stored samples by provider and quota window. Each window has
-its own sampled time series, so unrelated providers, units, and quota windows
-are never stacked into one trend. The time axis uses the selected rolling
-quota-scale range, even when only part of that range has samples. Hovering a point shows its exact sample time
-and quota values. The 5H and 1D views show detailed samples; the 7D and 30D
-views show each provider window's daily low and high, including today. Completed
-local days retain the original snapshots containing those extrema. History older
+its own sampled series, so unrelated providers, units, and quota windows
+are never stacked into one trend.
+
+A compact **Quota watch** summary heads the page: one row per provider×window,
+sorted by urgency (lowest remaining first), each with a status chip (from the
+fixed status tones), the current value, the change over the range, and a
+sparkline. The provider detail sections are likewise ordered most-urgent-first,
+but the windows inside a provider keep the stable semantic order
+(`compareQuotaWindows`) so rows do not jump around as values change.
+
+Marks are coloured by severity — `quotaTone`: ≤20% remaining is critical, ≤50%
+low, otherwise healthy — and a danger band shades the bottom 20%. The 5H and 1D
+views draw a line over the data's own time span (not padded out to the whole
+selected range), broken at coverage gaps and marked "no data", with no
+per-sample dots. Because the 7D and 30D reads return *the snapshots that held
+each day's low and high*, those views render each day as a floating min–max band
+with a thin "day's latest" line rather than connecting the extrema as a
+polyline; days with no sample are marked. Percent axes are fixed 0–100%, balance
+axes are zero-based, and each card shows a reset countdown from `resets_at`
+(with a reset marker when it falls in view). Hovering a point or band shows its
+exact sample time and quota values. Completed local days retain the original
+snapshots containing those extrema. History older
 than 30 days is removed. Each response is limited to 1,000 points; in the 7D
 and 30D views, the limit applies after daily selection. The UI offers provider
 or range filtering when that limit is reached.
