@@ -6,12 +6,13 @@ import { CoachMark, PageHeader, Surface, useDocumentTitle } from '@tingly/ui';
 import { IM_SIDEBAR_ANCHOR_ID } from '../components/ProjectsSidebar';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
-import type { ProjectSummary } from '../client';
+import type { ProjectSummary, Thread } from '../client';
 import type { ChannelBinding } from '../client/channelBindings';
 import { Add, ArrowForward, ChatBubble, FolderOpen, Stack } from '../components/icons';
 import { useChannelBindings, useProjectDirectory } from '../components/im/useImBindings';
 import { ProjectCard } from '../components/project/ProjectCard';
 import { WorkdirCard } from '../components/workdir/WorkdirCard';
+import { useChatList } from '../hooks/useChatList';
 import { useProjectList } from '../hooks/useProjectList';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { NotificationControl } from '../notifications/NotificationControl';
@@ -27,6 +28,29 @@ export const RECENT = 3;
 const IM_HINT_THIS_VISIT = 'workspace.imHint.seen';
 
 const recent = (list: ProjectSummary[]) => [...list].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);
+
+/** One recent read-only chat, as a card in the Chats section. */
+function ChatCard({ chat, onOpen }: { chat: Thread; onOpen: () => void }) {
+    const { t } = useTranslation('projects');
+    return (
+        <Box
+            component="a"
+            href="#"
+            onClick={(e) => { e.preventDefault(); onOpen(); }}
+            sx={{ display: 'block', textDecoration: 'none', color: 'inherit', border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper', p: 2, '&:hover': { bgcolor: 'action.hover' } }}
+        >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                <ChatBubble sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
+                <Typography noWrap sx={{ fontWeight: 500, fontSize: fontSizes.base, minWidth: 0 }}>
+                    {chat.title || t('readonlyChats.untitled')}
+                </Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                {chat.status === 'working' ? t('readonlyChats.working') : chat.status === 'failed' ? t('readonlyChats.failed') : t('readonlyChats.readOnly')}
+            </Typography>
+        </Box>
+    );
+}
 
 function Section({ icon, title, body, action, onAction, viewAll, onViewAll, headerRef, steps, loading, children }: {
     icon: ReactNode;
@@ -127,9 +151,10 @@ export default function WorkspaceHomePage() {
     const { paths: routes, embedded, im } = useProjectsHost();
     const hasIm = !!(im && routes.im);
     const { projects, folders } = useProjectList();
+    const { list: chatList } = useChatList(!!routes.chats);
     const { bindings } = useChannelBindings(hasIm);
     const directory = useProjectDirectory(hasIm);
-    const steps = (prefix: 'projects' | 'workdir' | 'im') => [1, 2, 3].map((n) => t(`workspace.${prefix}Step${n}`));
+    const steps = (prefix: 'projects' | 'workdir' | 'im' | 'chats') => [1, 2, 3].map((n) => t(`workspace.${prefix}Step${n}`));
 
     // The IM entry sits at the sidebar's bottom; when the Workspace power-up
     // is turned on, the first render of this page points a coach mark at that
@@ -211,6 +236,24 @@ export default function WorkspaceHomePage() {
                 >
                     {recent(folders ?? []).map((f) => <WorkdirCard key={f.id} f={f} />)}
                 </Section>
+
+                {routes.chats && (
+                    <Section
+                        icon={<ChatBubble sx={{ fontSize: 22 }} />}
+                        title={t('readonlyChats.title')}
+                        body={t('readonlyChats.homeBody')}
+                        action={t('nav.newChat')}
+                        onAction={() => navigate(routes.chats!)}
+                        viewAll={t('readonlyChats.viewAll')}
+                        onViewAll={() => navigate(routes.chats!)}
+                        steps={chatList && chatList.chats.length === 0 ? steps('chats') : null}
+                        loading={chatList === null}
+                    >
+                        {[...(chatList?.chats ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT).map((c) => (
+                            <ChatCard key={c.id} chat={c} onOpen={() => routes.chat && navigate(routes.chat(c.id))} />
+                        ))}
+                    </Section>
+                )}
 
                 {hasIm && (bindings !== null && bindings.length === 0 ? (
                     <Section

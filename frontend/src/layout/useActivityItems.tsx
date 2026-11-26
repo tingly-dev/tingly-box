@@ -336,7 +336,7 @@ export function useActivityItems(): ActivityItem[] {
                     </Suspense>
                 ) : undefined,
                 children: [
-                    { path: '/workspace', label: t('layout.projects'), match: (p: string) => p === '/workspace' || p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
+                    { path: '/workspace', label: t('layout.projects'), match: (p: string) => p === '/workspace' || p.startsWith('/workspace/') || p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
                 ],
             }] as ActivityItem[]),
             // ── Power-ups: what extends an agent beyond plain model routing ──

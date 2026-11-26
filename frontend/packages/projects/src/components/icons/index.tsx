@@ -48,6 +48,8 @@ import {
     IconPictureInPictureOn,
     IconRefresh,
     IconPlayerStopFilled,
+    IconShieldCheck,
+    IconShieldOff,
     IconStack2,
     IconStarFilled,
     IconTextPlus,
@@ -60,6 +62,8 @@ export * from '@tingly/ui/icons';
 export const Star = tablerMuiFilled(IconStarFilled);
 
 export const Stack = tablerMui(IconStack2);
+export const ShieldCheck = tablerMui(IconShieldCheck);
+export const ShieldOff = tablerMui(IconShieldOff);
 export const ExpandAll = tablerMui(IconChevronsDown);
 export const CollapseAll = tablerMui(IconChevronsUp);
 export const BellOff = tablerMui(IconBellOff);

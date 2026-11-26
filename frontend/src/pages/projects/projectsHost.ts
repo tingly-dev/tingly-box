@@ -30,6 +30,8 @@ export const projectsHost: ProjectsHost = {
         list: '/projects',
         project: (id) => `/projects/${id}`,
         folder: (path) => (path ? `/projects/folder?path=${encodeURIComponent(path)}` : '/projects/folder'),
+        chats: '/workspace/chats',
+        chat: (id) => `/workspace/chats/${id}`,
         im: '/projects/im',
     },
     // The rail's waiting dot is the nav that reflects projects.

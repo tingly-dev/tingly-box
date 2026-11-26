@@ -20,7 +20,7 @@ const ProjectsNav = ({ onNavigate }: ProjectsNavProps) => {
     return (
     <ProjectsHostProvider host={projectsHost}>
         <NotificationsBridge />
-        <ProjectsSidebar showProjects showWorkdirs imRows={imRows} onNavigate={onNavigate} />
+        <ProjectsSidebar showProjects showWorkdirs showChats imRows={imRows} onNavigate={onNavigate} />
     </ProjectsHostProvider>
 );
 };
