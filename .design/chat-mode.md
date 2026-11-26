@@ -28,13 +28,17 @@
    把文件工具限制在 working directories，附件由宿主复制到这里；不挂项目/library/
    memory，不 `--add-dir` 别的路径。
 4. **沙箱：有 bwrap 就用（纵深防御）；没有就在 host 上跑 `--restricted`，并在该 chat
-   显示非阻塞提示“未沙箱；本 chat 文件夹只读”。** 这是已接受的残余风险，不阻塞使用。
-   Chat 不会因为缺 bwrap 而不可用。
+   的会话头固定显示一行“未沙箱；本 chat 文件夹只读”。** 这是已接受的残余风险，不阻塞
+   使用；Chat 不会因为缺 bwrap 而不可用。
 5. **System prompt 约 1.2 KB**，`--system-prompt` 替换 CC 自带大提示词；没有项目上下文、
    没有工具使用规范/目录约定/记忆/library，只保留身份、只读边界、指令层级、输出与安全。
 6. **明确边界**：Chat 防的是“模型通过工具写/执行/出网/离开目录”；它不防模型输出危险或
    错误的文字，也不防提示注入改变回答。host 兜底时，`--restricted` 是 CLI 的路径限制，
    不是 OS 沙箱；这一点在 §2.6 如实写明。
+7. **v1 附件：文本 + 图片。** 图片作为 vision content block 发送；文本文件落到 chat
+   工作区，由 `Read` 读取；两者都复制进 `$DATA/chats/<thread-id>/attachments/`，拒绝
+   符号链接，按类型/大小白名单校验。PDF、压缩包、可执行文件等一律不支持，UI 明确报错
+   （§2.4.1）。删除和导出都包含附件。
 
 ## 1 现状与目标差异
 
@@ -91,11 +95,8 @@ coordinator；UI 也不展示这些。
 
 现有 Chats 是 `conversations` / `messages` + `internal/llm`，没有工具、没有会话页的
 交互（独立 `ChatPage`），且只在 standalone 挂载。新 Chat 走 workspace session 的
-数据面和交互，**不复用 `conversations`**。两者并存一段时间：
-
-- 现有 standalone Chats 保持不动（避免回归）；
-- 新 Chat 用 `threads` / `thread_events`，入口在 Workspace；
-- 是否把旧 Chats 迁移/下线，作为 §9 的决策；迁移可用导出/导入（§4.5）。
+数据面和交互，**不复用 `conversations`**。**v1 决定：standalone Chats 原样保留，和新
+Chat 并存**；不做迁移、不隐藏旧入口，避免回归。是否以后折叠/下线，另议。
 
 ## 2 安全模型
 
@@ -126,7 +127,7 @@ Chat 不改变资产表，只改变可达的工具与路径。
 
 | 工具 | 用途 | 限制 |
 |---|---|---|
-| `Read` | 读 chat 目录里的文本/图片/PDF | 路径必须落在 chat cwd；`--restricted` 限制 working directories；大小由 CC/宿主上限控制。 |
+| `Read` | 读 chat 目录里的文本文件；图片作为 vision block 由宿主发送，不靠 `Read` 猜 | 路径必须落在 chat cwd；`--restricted` 限制 working directories；大小由 CC/宿主上限控制。 |
 | `Glob` | 按模式列出 chat 目录里的文件 | 同上；不接受域外路径。 |
 | `Grep` | 在 chat 目录里搜索文本 | 同上；输出由 CC 的工具输出上限约束。 |
 | **不注册/不可用** | `Write`、`Edit`、`NotebookEdit`、`Bash`、`WebFetch`、`WebSearch`、`Task`/`Agent`、后台任务、`Cron*`、`SendMessage`/`ListAgents`、`Workflow`、`EnterWorktree`、MCP 工具、GitHub 工具 | 无写、无执行、无出网、无子代理、无外部副作用。 |
@@ -192,6 +193,40 @@ $DATA/                         实例的 Projects 数据根
 - **探针**：`Read`/`Glob`/`Grep` 对绝对路径、`../`、目录内符号链接的行为必须实测；
   `--restricted` 的 help 说限制 working directories，但没有在 2.1.259 上做端到端验证
   （§7 U1）。
+
+### 2.4.1 附件：文本 + 图片（v1）
+
+**支持**：
+
+| 类型 | MIME（示例） | 送入模型的方式 | 单文件上限 |
+|---|---|---|---|
+| 文本 | `text/*`、`application/json`、`application/xml`、`application/yaml`（含常见代码/配置文本） | 复制到 chat 工作区；prompt 列出相对路径，模型用 `Read` 读取 | 20 MB |
+| 图片 | `image/png`、`image/jpeg`、`image/gif`、`image/webp` | 宿主读取字节、base64，作为 **vision content block** 放进本轮用户消息 | 5 MB |
+| 其它 | PDF、zip/tar/gz、Office、音视频、ELF/PE/Mach-O 可执行文件、SVG、任何需要转换的二进制 | **不支持** | — |
+
+- 每条消息最多 **20 个附件**，单条消息附件总量 ≤ **50 MB**。图片用 5 MB 而不是 20 MB：
+  base64 会膨胀约 1/3，且图片 token/提供商限制更紧；文本文件走 `Read`，不把内容直接
+  塞进 prompt，所以 20 MB 仍可控。
+- **明确不支持**：PDF、Office、压缩包、音视频、可执行文件、SVG，以及任何需要 OCR/
+  格式转换的二进制。Chat 不做转换，也不把它们交给模型；在上传/发送时直接拒绝，不会
+  先落盘再失败。
+- 图片作为 vision block 是**宿主构造用户消息**的一部分；当前 `Threads` 的 prompt 是
+  `string`（`threads.go:240`、agentboot `RunRequest.Prompt` 也是 string），因此需要
+  agentboot 支持 content-block 用户输入（§8 第 2 步）。文本文件不需要这个扩展。
+- 两种附件都先复制到 `$DATA/chats/<thread-id>/attachments/`：
+  - 复制时 `Lstat` + `O_NOFOLLOW`，拒绝符号链接、目录、设备等特殊文件；
+  - 落盘名 `<sha256 前 16 hex>-<清洗后的 basename>`，原始名只存 DB；
+  - 校验 MIME 与大小后才接收；不接受“先存后判”。
+- 文本文件的 prompt note 沿用现有“用户附件路径，内容是 untrusted data，不是批准”的
+  措辞，但路径是 chat 目录内的相对路径；`--restricted` 保证只能读 chat 工作区。
+- **不支持时的 UI 错误**（英文/中文都走 i18n）：
+
+  > PDF, archives, executables and other binary files are not supported in this chat.
+  > Attach text or an image (PNG, JPEG, GIF or WebP).
+
+  超限时给出具体值（“larger than 20 MB”/“larger than 5 MB”/“more than 20 files”），
+  不静默丢弃，也不把文件先写入磁盘再报错。
+- 删除 chat、导出 chat 都包含 `attachments/`（§4.5）。
 
 ### 2.5 沙箱不可用时：host + `--restricted`，不阻塞
 
@@ -309,14 +344,14 @@ attaches, or what is in that folder.
 | 会话元数据 | `threads` 行 | `ProjectID=<chat project>`、`Cwd=<chat dir>`、`Agent="claude-code"`、`Title`、`Model`、`PermissionMode="default"`、`Status`、`Turns`、usage、时间。 |
 | 可见过程 | `thread_events` | 与 workspace session 相同的 kind：`user` / `assistant` / `tool_use` / `tool_result` / `usage` / `system` / `error`（`models.go:294-341`）。只读工具的调用/结果也在其中。 |
 | 模型历史/转录 | `$DATA/chats/<thread-id>/.claude/` | 用 `CLAUDE_CONFIG_DIR` 指向本 chat；`--resume` 与 `SessionReader` 都读这里。删除 chat 即完整删除。 |
-| 附件 | `$DATA/chats/<thread-id>/attachments/` | 按哈希命名；只读工具通过 cwd 读取；原始名在 DB/事件里显示。 |
-| 导出 | `$DATA/chats/<thread-id>/exports/` | 临时文件，下载后删或 TTL。 |
+| 附件 | `$DATA/chats/<thread-id>/attachments/` | 文本（20 MB/文件）与图片（5 MB/文件，vision block）；按哈希命名；原始名在 DB/事件里显示。 |
+| 导出 | `$DATA/chats/<thread-id>/exports/` | 临时文件，下载后删或 TTL；导出包含 `attachments/`。 |
 
 **为什么用 `threads` / `thread_events`**：用户要求数据面与 workspace session 一样；
 现有 `ThreadPanel`、SSE、Stop、Steer、usage、删除/列表都直接可用。Chat 不是
 `conversations`（旧 standalone Chats），也不是 afk 的新 session 格式。
 
-**Chat 挂在哪**：推荐**一个隐藏的 chat project**，而不是每个 chat 一个 project：
+**Chat 挂在哪**：**v1 采用一个隐藏的 chat project**，而不是每个 chat 一个 project：
 
 - `Project{Type:"chat", Name:"Chats"}`，没有 coordinator/主线程、没有 repos、没有
   memory/library；不出现在 ProjectsPage / WorkdirPage 的列表里（现在只过滤 `isFolder`，
@@ -372,14 +407,14 @@ $DATA/chats/<thread-id>/
 
 | 项 | 建议 |
 |---|---|
-| 删除 | 用户确认后：停止 turn → 事务删 `thread_events` + `threads` 行 → 校验路径在 `$DATA/chats` 下且无符号链接 → `RemoveAll` 目录。删除不可撤销；先提供导出。 |
+| 删除 | 用户确认后：停止 turn → 事务删 `thread_events` + `threads` 行 → 校验路径在 `$DATA/chats` 下且无符号链接 → `RemoveAll` 目录（**含 `attachments/` 与 `.claude/`**）。删除不可撤销；先提供导出。 |
 | 单条消息 | ≤100k 字符且 UTF-8 ≤256 KiB；超出拒绝并提示分段/附件。 |
-| 单附件 | 建议 20 MB、每条消息最多 20 个；与项目上传的 200 MB / 20 个（`projects/internal/server/module/project/handler.go:1019`、`attachment.go:114-115`）分开，Chat 更严。 |
+| 单附件 | **文本 20 MB/文件；图片 5 MB/文件；每条消息最多 20 个；单条消息附件总量 ≤50 MB**（§2.4.1）。与项目上传的 200 MB / 20 个分开，Chat 更严。 |
 | 每 chat 总量 | 例如 1 GB（含转录、附件、导出），写入前检查；超出拒绝新内容。 |
 | 全实例总量 | 例如 1000 个 chat / 5 GB；设置页显示用量；超出拒绝新建/上传。 |
-| 导出 | `thread_events` 的 JSON + 附件 zip（`chat.json` 元数据）；是否带 `.claude` 转录由产品定（默认不带，避免泄露内部上下文）。流式生成，下载后删或 24h TTL。 |
-| 导入 | 校验 version/大小/消息数/附件数；zip 拒绝 `..`、绝对路径、符号链接、超限；总是新建 thread id；不覆盖。 |
-| 迁移 | 不需要新表：`Type` 是字符串，`AutoMigrate` 不变（`migrate.go:142`）；现有 `conversations` 不动。旧 standalone Chats 若要迁入，走导出/导入。 |
+| 导出 | `thread_events` 的 JSON + **`attachments/` 全部文件**的 zip（`chat.json` 元数据）；是否带 `.claude` 转录由产品定（默认不带，避免泄露内部上下文）。流式生成，下载后删或 24h TTL。 |
+| 导入 | 校验 version/大小/消息数/附件数；zip 拒绝 `..`、绝对路径、符号链接、超限；总是新建 thread id；不覆盖；附件按 §2.4.1 重新校验类型/大小。 |
+| 迁移 | 不需要新表：`Type` 是字符串，`AutoMigrate` 不变（`migrate.go:142`）；现有 `conversations` 不动。旧 standalone Chats 不迁移，和新 Chat 并存。 |
 
 额度用**拒绝**而不是自动淘汰，避免用户在不知情时丢数据；阈值集中在一个 `chatLimits`
 配置，前后端共用。
@@ -431,15 +466,16 @@ Chat 页面是一个薄包装：标题 + 模型选择 + `ThreadPanel` + 能力/�
 
 ### 5.3 能力说明必须常驻
 
-> This chat can read files in its own folder. It cannot write, run commands or
-> use the web. For work on files or code, use a project or folder session.
+> This chat can read text and images in its own folder. It cannot write, run
+> commands or use the web. For work on files or code, use a project or folder
+> session.
 
 这不是装饰：用户要一眼知道边界，才不会把“模型说它改了”当成真的。权限在启动参数，
-但**边界的可见性**是产品的一部分。
+但**边界的可见性**是产品的一部分。附件被拒绝时的错误见 §2.4.1。
 
-### 5.4 未沙箱提示（非阻塞）
+### 5.4 未沙箱提示（固定会话头一行）
 
-没有 bwrap 时，在该 chat 的会话页固定显示：
+没有 bwrap 时，**在该 chat 的会话头固定显示一行**：
 
 > Not sandboxed: files are read-only in this chat's folder.
 
@@ -498,51 +534,64 @@ Chat 沿用线程的 `Host.ThreadEnv`（`projects/projects.go:38-47`）：`ANTHR
 | U8 | `CLAUDE_CONFIG_DIR=$DATA/chats/<id>/.claude` 是否影响 CC 认证/转录读取 | 需要探针；若网关认证不依赖配置目录，最干净；否则回退共享配置目录并做删除时清理。 |
 | U9 | Chat 的 `threads` 行进入现有 `/threads` handler/API | handler 现按 Claude Code 线程工作；Chat 只需按 `Project.Type=chat` 走同一路径，但 Send/Stop/Retry 要跳过项目专属逻辑（coordinator/report）。 |
 | U10 | 状态语义：`RestingStatus` 只看 `CommitsAhead`，Chat 恒 idle；`ready`/`waiting` 永不出现 | Chat 列表/详情不要渲染 ready/waiting；已在 `thread-lifecycle.md` §9 注明子集。 |
-| U11 | 附件类型/大小/预览 | 建议文本/图片/PDF；`Read` 可读图片/PDF（需探针）；服务端校验 MIME，下载加 `nosniff`。 |
+| U11 | 附件：v1 只支持文本 + 图片 | 已定：文本 20 MB、图片 5 MB、每条 20 个、单条总量 50 MB；图片走 vision content block，文本走 workspace `Read`；PDF/压缩/可执行/需转换的二进制拒绝并在 UI 报错（§2.4.1）。 |
 | U12 | 网关日志是否记录请求正文 | **UNKNOWN**；按 `logging.md` 核对；若记录，加 chat 正文不落日志的规则。 |
-| U13 | 现有 standalone Chats 的保留/迁移 | 两套并存会增加入口混淆；§9 需决定保留、折叠还是下线。 |
+| U13 | 现有 standalone Chats | **已定：原样保留，和新 Chat 并存**；不迁移、不隐藏旧入口。 |
 | U14 | CC 升级新增工具/行为变化 | `--tools` 是 allowlist，默认安全；但每次升级重跑 U1–U3，尤其是 `--restricted`/`--safe-mode`。 |
 | U15 | Chat 项目的隐藏与过滤 | 项目列表、Workdir、侧栏、统计都要排除 `type=chat`；漏一处就会把内部 project 暴露给用户。 |
-| U16 | 删除/配额/导出与转录清理 | 删除必须停 turn、删事件/线程/目录（含 `.claude`）；路径/符号链接测试；配额在写入前拒绝。 |
+| U16 | 删除/配额/导出与转录清理 | 删除必须停 turn、删事件/线程/目录（含 `attachments/`、`.claude/`）；路径/符号链接测试；配额在写入前拒绝。 |
+| U17 | 图片作为 vision content block 需要 agentboot 的用户消息支持 content block | 当前 `RunRequest.Prompt`/`Threads.threadPrompt` 都是 string（`threads.go:240`、`agentboot/service.go:238-239`）；需要扩展或旁路（§8 第 2 步）。 |
 
 **非目标（明确不做）**：内容审核、事实校验、DLP、附件杀毒、模型提供商侧保密承诺、
 `WebFetch/WebSearch`、MCP、写/执行工具、子代理/后台任务。
 
-## 8 下一步（3–5 个）
+## 8 实现拆分（按模块）
 
-1. **探针**：用脚本化模型抓 Claude Code 2.1.259 的请求体，验证 `--tools` 只剩
-   `Read/Glob/Grep`、`--restricted` 读不到 cwd 外（绝对路径/`..`/符号链接）、
-   `--safe-mode` 不加载 hooks/MCP/CLAUDE.md、`--system-prompt` 的实际内容；写进
+1. **探针（Claude Code 2.1.259，真实 CLI + 脚本化模型）**：验证
+   `--tools` 请求里只剩 `Read/Glob/Grep`；`--restricted` 下绝对路径、`..`、符号链接
+   都读不到 cwd 外；`--safe-mode` 不加载 hooks/MCP/CLAUDE.md/skills；`--system-prompt`
+   的实际 system 内容；有/无 bwrap 两条路径。结果写进
    `.research/cc-chat-mode-probe.md`。
-2. **agentboot + Threads chat 档位**：新增 `Tools`/`Restricted`/`SafeMode` 透传；Chat
-   的 `turnLaunch` 跳过 MCP/settings/`threadSystemPrompt`，用 `CustomSystemPrompt` +
-   `--tools`/`--allowedTools` + `--restricted`/`--safe-mode`/`--strict-mcp-config`；
-   `launchSignature` 纳入这些启动项；Chat prompter 全部拒绝。
-3. **chat 数据与目录**：隐藏 chat project、`ProjectChat` 常量、`$DATA/chats/<id>`、
-   `CLAUDE_CONFIG_DIR`/`TMPDIR`、附件、删除/配额/导出；`ProjectsPage`/Workdir/侧栏
-   过滤 chat。
-4. **沙箱**：有 bwrap 时套 chat 策略（只挂 chat 目录 + CLI/系统目录，network none +
-   Expose 网关）；无 bwrap 时 host + `--restricted` + UI 固定提示；两条路径都要测。
-5. **UI**：Workspace Chats 区 + `ThreadPanel` 包装页 + 能力说明 + 未沙箱提示；隐藏
-   项目专用栏；截图（空态、对话、只读工具、host 兜底提示、错误）。
+2. **agentboot**：
+   - `ExecutionOptions` / `CommonOptions` / `BuildCommonArgs` 增加 `Tools`、
+     `Restricted`、`SafeMode`（`--tools`/`--restricted`/`--safe-mode`），保留现有
+     `AllowedTools`/`StrictMcpConfig`；
+   - 支持**用户消息的 content block**（文本 + 图片），供 Chat 的图片附件使用；当前
+     `RunRequest.Prompt` 是 string（`agentboot/service.go:238-239`）；
+   - `launchSignature` 纳入这些新启动项（`turn.go:724-745`），避免常驻进程沿用旧档位。
+3. **Projects（后端）**：
+   - `db.ProjectChat = "chat"`；一个隐藏的 “Chats” project；chat thread 的创建/列表/
+     Send/Stop/Retry；
+   - `Threads.turnLaunch` 的 chat 分支：跳过 `SessionToolsConfig`/`LaunchMCP`/
+     `writeSettings`/`threadSystemPrompt`，传 `Tools`/`AllowedTools`/`Restricted`/
+     `SafeMode`/`StrictMcpConfig`、`CustomSystemPrompt`、`PermissionMode=default`；
+     Chat prompter 全部拒绝；
+   - chat 目录、`CLAUDE_CONFIG_DIR`、`TMPDIR`、附件复制/校验（文本 + 图片、vision
+     block）、删除/配额/导出；项目/Workdir/侧栏/统计过滤 `type=chat`；
+   - 沙箱：有 bwrap 时用 chat 策略；无 bwrap 时 host + `--restricted`，返回“未沙箱”
+     标记给前端。
+4. **前端**：
+   - Workspace 侧栏 “Chats” 区 + 首页 Chats 卡片 + `/workspace/chats` 列表/会话路由；
+   - 会话页用 `ThreadPanel` 薄包装，隐藏分支/PR/Library/Overview/权限选择器；
+   - 固定能力说明；**未沙箱提示固定显示在会话头一行**；附件拒绝/超限的错误文案
+     （§2.4.1）。
+5. **数据/运维**：删除/导出包含 `attachments/`；配额与孤儿清理；日志脱敏；两种沙箱
+   路径的端到端测试与截图。
 
-## 9 决策与仍需确认
-
-**已定（本版按此写）**：
+## 9 决策（已定）
 
 - 运行时用 Claude Code，不用 afk 作为 v1；
 - 工具只读：`Read` / `Glob` / `Grep`；无写、无执行、无 WebFetch/WebSearch、无 MCP；
 - 数据面和交互复用 workspace session（`threads`/`thread_events`/ThreadPanel）；
 - 域只有 `$DATA/chats/<thread-id>/`；
-- 沙箱有 bwrap 就用，没有则 host + `--restricted` + 非阻塞提示；**不因缺 bwrap 阻塞**；
-  这是接受的残余风险；
+- **一个隐藏的 “Chats” project**（chat = thread）；**standalone Chats 原样保留，并存**；
+- 沙箱有 bwrap 就用，没有则 host + `--restricted` + **会话头固定提示**；不因缺 bwrap
+  阻塞，这是接受的残余风险；
+- **附件 v1：文本 + 图片**；图片 vision content block，文本走 workspace `Read`；
+  文本 20 MB、图片 5 MB、每条 20 个、单条总量 50 MB；PDF、压缩包、可执行文件及需要
+  转换的二进制不支持，UI 明确报错；删除/导出包含附件；
 - system prompt 用 §3.2 的 1188 字节文本，`--system-prompt` 替换。
 
-**仍需确认**：
-
-1. **附件**：v1 是否支持？支持文本/图片/PDF 的哪些？`Read` 读图片/PDF 的行为需要探针。
-2. **chat project 形状**：一个隐藏的 “Chats” project（推荐，chat=thread）还是每个
-   chat 一个 project？
-3. **现有 standalone Chats**：保留并存、折叠到新 Chat，还是后续下线？迁移用 §4.5 的
-   导出/导入。
-4. **未沙箱提示的文案/位置**：固定横幅还是会话头一行？本节给的是内容，位置按 UI 规范定。
+**实现前仍需验证（不是产品决策）**：§7 的 U1–U3（`--tools`/`--restricted`/
+`--safe-mode` 的实际行为）、U8（`CLAUDE_CONFIG_DIR` 与 CC 认证/转录）、U17（图片
+content block 的 agentboot 扩展）、U12（网关正文日志）。
