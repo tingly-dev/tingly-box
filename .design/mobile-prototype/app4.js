@@ -38,9 +38,9 @@ function sessChecklist() {
 }
 
 const meTurn = (text, at) =>
-  `<div class="turn me"><div class="msg me">${text}</div><div class="meta">${at}<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div></div>`;
+  `<div class="turn me"><div class="msg me">${text}</div><div class="meta"><span class="mtime">${at}</span><button class="metacopy" data-toast="已复制消息" aria-label="复制消息">${I('copy', 's')}</button></div></div>`;
 const themTurn = (html, at) =>
-  `<div class="turn"><div class="msg them">${html}</div><div class="meta">${at}<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div></div>`;
+  `<div class="turn"><div class="msg them">${html}</div><div class="meta"><span class="mtime">${at}</span><button class="metacopy" data-toast="已复制消息" aria-label="复制消息">${I('copy', 's')}</button></div></div>`;
 
 function runA() {
   // One neutral line: what layer it is and how long it took. No per-tool
@@ -80,7 +80,7 @@ function filesRow() {
 }
 
 function settled() {
-  return `<button class="settled" data-sheet="smsg">${I('check', 's')}<b style="color:var(--text)">允许 Edit</b><span class="mono">bench/results.md</span><span class="ok">已允许</span></button>`;
+  return `<div class="settled">${I('check', 's')}<b style="color:var(--text)">允许 Edit</b><span class="mono">bench/results.md</span><span class="ok">已允许</span></div>`;
 }
 function compacted() {
   return `<div class="cmdline">${I('check', 's')}<b style="color:var(--text);font-weight:600">会话已压缩</b><span class="mono">98k → 31k tokens</span><span class="cap">自动 · 12s</span></div>`;
@@ -146,7 +146,7 @@ const longUserTurn = () => {
       <div class="clamp-body ${open ? 'open' : ''}" id="clamp-u" style="--lines:10">${LONG_USER}</div>
       <button class="clamp-foot" data-clamp-id="u-long-end" data-toggle="clamp-u" aria-expanded="${open ? 'true' : 'false'}" aria-controls="clamp-u">${open ? '收起' : '展开全文'}${I(open ? 'up' : 'down', 's')}</button>
     </div>
-    <div class="meta">10:19<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div>
+    <div class="meta"><span class="mtime">10:19</span><button class="metacopy" data-toast="已复制消息" aria-label="复制消息">${I('copy', 's')}</button></div>
   </div>`;
 };
 const longAssistantTurn = () => {
@@ -156,7 +156,7 @@ const longAssistantTurn = () => {
       <div class="clamp-body ${open ? 'open' : ''}" id="clamp-a" style="--lines:12">${LONG_ASSISTANT}</div>
       <button class="clamp-foot" data-clamp-id="a-long-end" data-toggle="clamp-a" aria-expanded="${open ? 'true' : 'false'}" aria-controls="clamp-a">${open ? '收起' : '展开全文'}${I(open ? 'up' : 'down', 's')}</button>
     </div>
-    <div class="meta">10:20<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div>
+    <div class="meta"><span class="mtime">10:20</span><button class="metacopy" data-toast="已复制消息" aria-label="复制消息">${I('copy', 's')}</button></div>
   </div>`;
 };
 const longCodeTurn = () => {
@@ -166,12 +166,12 @@ const longCodeTurn = () => {
       <div class="codebox ${open ? 'open' : ''}" id="code-long">
         <pre class="code">${LONG_CODE}</pre>
         <div class="codefoot">
-          <button class="mini" data-toast="已复制完整代码">复制完整代码</button>
           <button class="clamp-foot" data-clamp-id="code-long-end" data-toggle="code-long" aria-expanded="${open ? 'true' : 'false'}" aria-controls="code-long">${open ? '收起代码' : '展开代码'}${I(open ? 'up' : 'down', 's')}</button>
+          <button class="codecopy" data-toast="已复制完整代码" aria-label="复制完整代码">${I('copy', 's')}</button>
         </div>
       </div>
     </div>
-    <div class="meta">10:21<button class="morebtn" data-sheet="smsg" aria-label="消息操作">${I('dots')}</button></div>
+    <div class="meta"><span class="mtime">10:21</span><button class="metacopy" data-toast="已复制消息" aria-label="复制消息">${I('copy', 's')}</button></div>
   </div>`;
 };
 
@@ -267,7 +267,6 @@ Object.assign(SHEETS, {
     <div class="note">完整轨迹、并行子代理对比请在电脑上查看。</div>
   </div>`,
   sfiles: () => `<h3>发来的文件 · 3</h3><div class="body">${[['p99.png', '54 KB · 图'], ['throughput.png', '62 KB · 图'], ['report.md', '4.8 KB · 文档']].map(([n, m]) => `<button class="row">${thumb(n.endsWith('.png') ? 'image' : 'file')}<span class="main"><span class="t">${n}</span><span class="d">${m}</span></span>${sessChev}</button>`).join('')}<div class="note">点按预览；完整图片库在电脑上。</div></div>`,
-  smsg: () => `<h3>消息</h3><div class="body msgacts"><button class="row" data-toast="已复制">${I('copy', 's')}<span class="t main">复制文本</span></button><button class="row" data-toast="已复制">${I('info', 's')}<span class="main"><span class="t">复制时间</span><span class="d">今天 10:18</span></span></button><div class="note">长按消息可选择任意文本。</div></div>`,
   ssettings: () => `<h3>会话设置</h3><div class="body"><div class="kv"><span>模型</span><span>claude-haiku-4-5 · 高</span></div><div class="kv"><span>权限</span><span>自动接受编辑</span></div><div class="kv"><span>自动回答</span><span>5 分钟后用推荐答案</span></div><div class="kv"><span>分支</span><span>${SESSION.branch}</span></div><div class="kv"><span>上下文</span><span>123k / 200k</span></div><div class="note">这些设置只在手机版里改；默认值是项目给的。</div></div>`,
   serror: () => `<h3>Bash 超时</h3><div class="body"><div class="kv"><span>命令</span><span style="font-family:ui-monospace,Menlo,monospace">go test ./store/...</span></div><div class="kv"><span>退出码</span><span style="color:var(--err)">124</span></div><div class="kv"><span>耗时</span><span>120s</span></div><pre class="code" style="margin-top:12px">panic: test timed out after 2m0s\n\trunning tests:\n\t\tTestIdempotencyStore (2m0s)</pre><button class="btn p" style="width:100%;margin-top:8px">重试这一步</button></div>`,
 });

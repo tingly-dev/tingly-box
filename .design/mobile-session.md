@@ -166,8 +166,8 @@ Two layers only:
 | `custom` | host renderer, else one quiet line | — | host |
 | checklist (`todoGroups`) | **one 44 px strip**: "进度 1/3 · 正在验证…" | expand (max 40 vh) | history in a sheet; full list in the progress sheet |
 | working line / background tasks | one line under the last block | — | task panel (sheet) |
-| time | time dividers (already) + exact time in the message meta | — | message action |
-| copy | per-message meta action (44 px) + code-block copy | — | — |
+| time | time dividers (already) + exact time in the message meta | — | — |
+| copy | per-message **right-aligned copy icon** (44 px) + code-block copy icon on the **right** of its footer/header | — | — |
 | thread meta (branch, model, tokens, context) | **not on the page** | — | info sheet (the existing info rail content) |
 | files/links/PRs of the thread | not on the page | — | files in the ⋯ sheet; PRs/branch in the info sheet |
 
@@ -224,12 +224,18 @@ capped (20 lines) with "在面板打开"; the checklist expands within the page 
 40 vh) and pushes the transcript rather than scrolling inside itself.
 
 **Time and copy.** Group time dividers stay (day/hour). Each message group has a
-quiet meta row with its exact time and one `⋯` (44 px):
-`复制文本 · 复制时间`. The copy writes the entry's raw Markdown
-via the sibling branch's `messageCopyText()` (`.design/transcript-message-copy.md`),
-never the DOM; code blocks keep their own copy button. Long-press still selects
-and copies arbitrary text; a "locate in trajectory" action is desktop-only. On touch the meta row is **visible** (the time is not
-hover-only), because a phone has no divider for every message.
+quiet meta row: the exact time on the left (user messages: on the right) and a
+**right-aligned 44 px copy icon** — an icon, not a text button and not a `⋯`
+menu. The copy writes the entry's raw Markdown via the sibling branch's
+`messageCopyText()` (`.design/transcript-message-copy.md`), never the DOM. Code
+blocks put the copy icon on the **right** of their footer (the expand/collapse
+label is on the left); the desktop `CodeBlock` already puts the language left and
+the copy icon right in its header (`components/Markdown.tsx`), so both surfaces
+use the same icon and `useCopyFeedback` — the mobile change mirrors the desktop
+rather than inventing a different control. Long-press still selects and copies
+arbitrary text; a "locate in trajectory" action is desktop-only. On touch the
+meta row is **visible** (the time is not hover-only), because a phone has no
+divider for every message.
 
 **Bottom safe area.** `viewport-fit=cover`; the composer's bottom padding is
 `max(12px, env(safe-area-inset-bottom))`; the dock sits above the composer, and
@@ -274,11 +280,16 @@ the clamped container keeps the full text for selection and assistive tech.
 
 Code blocks are **height**-capped (≈ 210–240 px) with their own `展开代码 / 收起`
 row inside the code box, not line-clamped: their `overflow-x: auto` and full-code
-copy stay intact. Tool output keeps its own 20-line cap in the process sheet; a
-subagent report shows a 3-line preview in the card and the full text (clamped at
-10 lines with 展开) in its sheet. Assistant prose and a code block are clamped
-independently, so a long reply with code never clips the code's horizontal
-scroll.
+copy stay intact. The copy is an **icon on the right** of that row (the
+expand/collapse label is on the left); desktop's `CodeBlock` already puts the
+language left and the copy icon right in its header (`components/Markdown.tsx`),
+so there is no desktop text button to change — and the mobile shell's phone
+theme raises that same icon to 44 px (`@tingly/ui/theme/phone`), while the
+desktop keeps its normal size. Tool output keeps its own 20-line cap in the
+process sheet; a subagent report shows a 3-line preview in the card and the
+full text (clamped at 10 lines with 展开) in its sheet. Assistant prose and a
+code block are clamped independently, so a long reply with code never clips the
+code's horizontal scroll.
 
 Screenshots: `mobile-session-option-a-390x844-{light,dark}-long-user.png`,
 `...-long-assistant.png`, `...-long-code.png` (collapsed, the row inside the
@@ -355,7 +366,7 @@ keyboard state `...-a-390x844-light-keyboard.png` (dock folded to one line).
 Measured: transcript **480 px = 57 %** at 390×844, **436 = 54 %** at 360×800;
 **676 = 80 %** at 390 once the request is resolved (docked removed); 0 of 18
 visible controls below 44 px. A 4-call run occupies **44 px** (one line), and the
-transcript content is **2104 px** tall (including the long-text fixtures).
+transcript content is **2247 px** tall (including the long-text fixtures).
 
 ### Option B — 保留结构但折叠 (structure kept, folded)
 
@@ -373,7 +384,7 @@ Screenshots: `mobile-session-option-b-390x844-{light,dark}.png`,
 Measured: transcript **480 px = 57 %** at 390×844, **436 = 54 %** at 360×800
 (same chrome as A); **676 = 80 %** without the dock; 0 of 22 controls below
 44 px. The same 4-call run occupies **272 px** (4 rows + heading), so its
-transcript content is **2368 px** (+264 px over A): fewer messages fit without
+transcript content is **2511 px** (+264 px over A): fewer messages fit without
 scrolling.
 
 ### Comparison
@@ -384,7 +395,7 @@ scrolling.
 | Without a docked request | **80 %** | **80 %** |
 | Rows per 4-call run | 1 | 4 (+1 heading) |
 | A 4-call run occupies | **44 px** | **272 px** |
-| Transcript content height (this conversation) | 2104 px | 2368 px |
+| Transcript content height (this conversation) | 2247 px | 2511 px |
 | Process at a glance | a neutral "过程" label (+ duration) | each call's name + target |
 | To see one call's input/output | open the process sheet | tap that row |
 | Info loss in the default view | that a run happened and how long; what it did is one tap away | none (each call is a line) |
@@ -424,8 +435,8 @@ Cost (frontend only; no backend/API change; no new dependency):
 | Process folding (A) | one run line; `ActivityRun` concise; process sheet reusing `BottomSheet`/`GroupedList` | `Transcript.tsx`, new `ActivitySheet` | M |
 | Per-call rows (B, inside the sheet) | the existing `ToolRow` with 44 px rows + input/output | `Transcript.tsx`, `Disclosure.tsx` | S |
 | Subagent sheet | move `AgentBody` into a sheet; keep `SubagentFocus` for "on its own" | `Transcript.tsx`, `ThreadPanel.tsx` | M |
-| Message meta row | time + 44 px copy `⋯`; reuse `messageCopyText` (sibling branch) | `Transcript.tsx`, `copyText.ts` | S |
-| Long text clamp | **new reusable `ClampedText`** (line clamp + measured overflow + 44 px 展开/收起, per-block state, `aria-expanded`); used by user/assistant/error/command/system/caption; code blocks get a height cap + 展开; copy keeps the full original | `transcript/ClampedText.tsx` (new), `Transcript.tsx`, `conversationStyles.ts`, `components/Markdown.tsx` | S–M |
+| Message meta row | time + a **right-aligned 44 px copy icon**; reuse `messageCopyText` (sibling branch); the desktop copy is the same right-corner icon | `Transcript.tsx`, `copyText.ts` | S |
+| Long text clamp | **new reusable `ClampedText`** (line clamp + measured overflow + 44 px 展开/收起 inside the block, per-block state, `aria-expanded`); used by user/assistant/error/command/system/caption; code blocks get a height cap + 展开; **copy is a right-aligned icon in the footer (the desktop header already uses one)** and keeps the full original | `transcript/ClampedText.tsx` (new), `Transcript.tsx`, `conversationStyles.ts`, `components/Markdown.tsx` | S–M |
 | Touch targets | coarse-pointer `minHeight: 44` on disclosure rows, pickers, code copy | `Disclosure.tsx`, `Markdown.tsx` | S |
 | Performance | memoize message/Markdown; `content-visibility` per block; phone page size | `Transcript.tsx`, `transcript/Markdown.tsx`, `useTranscript.ts` | S–M |
 | Tests | vitest with `matchMedia` (as `Composer.test.tsx`), plus the existing viewport script over 320–430 × short/regular | `frontend` tests | M |
@@ -451,8 +462,9 @@ row and the memoization.
    its history move to a sheet? (Recommend strip + sheet.)
 6. **Subagent:** a sheet (keeps the conversation) or a full page (today's
    `SubagentFocus`)? (Recommend sheet, with "open on its own" for the full page.)
-7. **Per-message actions:** a visible 44 px `⋯` on every message group, or
-   long-press selection + copy only? (Recommend the `⋯`; long-press still selects.)
+7. **Per-message copy:** a visible right-aligned 44 px icon on every message
+   group (recommended), or long-press selection only? (The icon is an icon, not
+   a text button; long-press still selects.)
 8. **Copy dependency:** build on the sibling `tp/add-copy-button-to-session-messa-*`
    branch (`messageCopyText`), or reimplement? (Recommend build on it; merge it
    first, then this layout.)

@@ -17,10 +17,11 @@
 
 /* one message and its quiet action line */
 .turn { margin: 0 0 14px; }
-.turn .meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--text3); font-size: 12px; min-height: 24px; }
+.turn .meta { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 2px; color: var(--text3); font-size: 12px; min-height: 44px; }
 .turn.me .meta { justify-content: flex-end; }
-.morebtn { min-width: 44px; min-height: 44px; margin: -10px 0 -10px 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--text3); }
-.morebtn .i { width: 16px; height: 16px; }
+.mtime { color: var(--text3); font-size: 12px; }
+.metacopy { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--text3); }
+.metacopy .i { width: 16px; height: 16px; }
 
 /* assistant prose */
 .them p { margin: 0 0 10px; }
@@ -134,9 +135,10 @@
 .codebox .code { border-radius: 0; margin: 0; background: transparent; max-height: 210px; overflow: auto; }
 .codebox:not(.open) .code { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
 .codebox.open .code { max-height: none; }
-.codefoot { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-top: 1px solid var(--divider); background: var(--paper); }
-.codefoot .mini { min-height: 44px; padding: 0 6px; color: var(--text2); font-size: 13px; }
-.codefoot .clamp-foot { width: auto; padding: 0; border: 0; margin: 0; }
+.codefoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 10px; border-top: 1px solid var(--divider); background: var(--paper); }
+.codefoot .clamp-foot { flex: 1; width: auto; padding: 0; border: 0; margin: 0; }
+.codecopy { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--text2); }
+.codecopy .i { width: 16px; height: 16px; }
 
 /* safe-area aware bottom */
 .sess-comp { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
@@ -146,4 +148,3 @@
 .sheet .kv.mono span { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
 .sheet .actgrid { display: flex; gap: 8px; margin: 12px 0; }
 .sheet .actgrid .btn { flex: 1; min-height: 48px; }
-.msgacts .row { min-height: 52px; }
