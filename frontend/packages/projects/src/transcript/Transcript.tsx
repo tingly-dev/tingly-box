@@ -736,7 +736,7 @@ const MessageCopyButton = ({text}: {text: string}) => {
                 aria-label={copied ? done : failed ? error : label}
                 data-copy-state={copied ? 'copied' : failed ? 'failed' : 'idle'}
                 onClick={() => copy(text)}
-                sx={{p: 0.25, color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary'}}
+                sx={{p: 0.625, color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary'}}
             >
                 {copied ? <Check sx={{fontSize: 14}}/> : failed ? <ErrorOutline sx={{fontSize: 14}}/> : <ContentCopy sx={{fontSize: 14}}/>}
             </IconButton>
@@ -745,7 +745,10 @@ const MessageCopyButton = ({text}: {text: string}) => {
 };
 
 const MessageActions = ({at, text}: {at?: string; text?: string}) => (
-    <Box className="message-actions" sx={{position: 'absolute', right: 0, bottom: '100%', mb: 0.25, display: 'flex', alignItems: 'center', gap: 0.5}}>
+    // Flush with the message's top edge: a gap here would drop the parent's
+    // :hover while the pointer crosses from the text to the button, hiding
+    // the row before it can be clicked.
+    <Box className="message-actions" sx={{position: 'absolute', right: 0, bottom: '100%', display: 'flex', alignItems: 'center', gap: 0.5}}>
         <MessageStamp at={at}/>
         {text !== undefined && <MessageCopyButton text={text}/>}
     </Box>

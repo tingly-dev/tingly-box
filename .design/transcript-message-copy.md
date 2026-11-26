@@ -40,13 +40,18 @@ or a file sent without a caption, yields `undefined` and gets no button.
 
 The hover stamp and the copy button share one action row in the gap above the
 message's corner (`MessageActions` in `transcript/Transcript.tsx`). It is
-absolute-positioned, so it never moves the reading surface. On pointer devices
-it is quiet until the pointer is on the message **or the copy button has
-focus** (`:focus-within`), which is what makes it reachable by Tab. Touch
-screens have no hover, so there the copy button stays visible while the exact
-time remains pointer-only (as before). The row uses the theme's tokens and the
-same `IconButton`/`Tooltip` chrome as other icon actions; there are no literal
-colours or sizes outside `fontSizes`.
+absolute-positioned, so it never moves the reading surface, and its bottom edge
+is **flush** with the message's top edge: a margin there drops the parent's
+`:hover` while the pointer travels from the text to the button, hiding the row
+before it can be clicked (measured with a browser probe: the 2px gap gave
+`opacity: 0; pointer-events: none` mid-travel and the click did nothing). On
+pointer devices the row is quiet until the pointer is on the message **or the
+copy button has focus** (`:focus-within`), which is what makes it reachable by
+Tab. Touch screens have no hover, so there the copy button stays visible while
+the exact time remains pointer-only (as before). The button keeps a 24px hit
+area. The row uses the theme's tokens and the same `IconButton`/`Tooltip`
+chrome as other icon actions; there are no literal colours or sizes outside
+`fontSizes`.
 
 ## Feedback and i18n
 
