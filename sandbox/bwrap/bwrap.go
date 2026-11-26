@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -46,7 +47,13 @@ func (Runtime) Info() sandbox.Info {
 }
 
 // Check runs bubblewrap once with the namespaces Start uses.
+// goos is the system this runs on; a variable for tests.
+var goos = runtime.GOOS
+
 func (Runtime) Check(ctx context.Context) error {
+	if goos != "linux" {
+		return fmt.Errorf("bubblewrap runs on Linux only (this is %s): it is made of Linux namespaces", goos)
+	}
 	bin, err := lookPath()
 	if err != nil {
 		return fmt.Errorf("bubblewrap (bwrap) is not installed: install the bubblewrap package")
@@ -59,6 +66,9 @@ func (Runtime) Check(ctx context.Context) error {
 }
 
 func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sandbox.Proc, error) {
+	if goos != "linux" {
+		return nil, fmt.Errorf("%w: bubblewrap runs on Linux only (this is %s)", sandbox.ErrUnavailable, goos)
+	}
 	bin, err := lookPath()
 	if err != nil {
 		return nil, fmt.Errorf("%w: bubblewrap (bwrap) is not installed", sandbox.ErrUnavailable)

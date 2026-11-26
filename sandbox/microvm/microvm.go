@@ -128,6 +128,15 @@ func guestSize(r sandbox.Resources) (cpus, memoryMB int) {
 	return cpus, memoryMB
 }
 
+// goos is the system this runs on; a variable for tests.
+var goos = runtime.GOOS
+
+// linuxOnly is why the runtime is unavailable elsewhere: it needs KVM, and
+// its guest init is Linux.
+func linuxOnly() error {
+	return fmt.Errorf("the microVM runtime runs on Linux only (this is %s): it needs KVM", goos)
+}
+
 // What the runtime needs, found by an environment variable, on PATH, or
 // where Kata Containers installs it. Variables for tests.
 var (
@@ -156,6 +165,9 @@ func (Runtime) Info() sandbox.Info {
 // Check looks for KVM, Cloud Hypervisor, virtiofsd, a guest kernel and
 // bubblewrap.
 func (Runtime) Check(ctx context.Context) error {
+	if goos != "linux" {
+		return linuxOnly()
+	}
 	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("no access to /dev/kvm (%v): add the user to the kvm group and log in again", err)
@@ -176,6 +188,9 @@ func (Runtime) Check(ctx context.Context) error {
 }
 
 func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sandbox.Proc, error) {
+	if goos != "linux" {
+		return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, linuxOnly())
+	}
 	vmm, err1 := findVMM()
 	fsd, err2 := findVirtiofsd()
 	kernel, err3 := findKernel()
