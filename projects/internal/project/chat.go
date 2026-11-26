@@ -136,9 +136,6 @@ type ChatThreadSpec struct {
 	Attachments []ChatUpload
 }
 
-// ChatAttachment is one attachment as the API returns it.
-type ChatAttachment = Attachment
-
 // StartChat creates a chat thread under the hidden chat project, stores its
 // attachments and runs its first turn.
 func (m *Threads) StartChat(ctx context.Context, spec ChatThreadSpec) (*db.Thread, error) {
@@ -206,45 +203,6 @@ func (m *Threads) SaveChatAttachments(threadID string, uploads []ChatUpload) ([]
 		return nil, err
 	}
 	return m.saveChatUploads(threadID, uploads)
-}
-
-// SendChat stores new attachments and sends a message to a chat.
-func (m *Threads) SendChat(ctx context.Context, threadID, text string, uploads []ChatUpload) (*db.Thread, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.requireChat(t); err != nil {
-		return nil, err
-	}
-	stored, err := m.saveChatUploads(threadID, uploads)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.enqueueChat(threadID, strings.TrimSpace(text), stored); err != nil {
-		return nil, err
-	}
-	return m.store.GetThread(threadID)
-}
-
-// SendChatPaths sends a message to a chat naming attachments already uploaded
-// to it (relative paths under attachments/).
-func (m *Threads) SendChatPaths(ctx context.Context, threadID, text string, paths []string) (*db.Thread, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.requireChat(t); err != nil {
-		return nil, err
-	}
-	atts, err := m.layout.ResolveChatAttachments(threadID, paths)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.enqueueChat(threadID, strings.TrimSpace(text), atts); err != nil {
-		return nil, err
-	}
-	return m.store.GetThread(threadID)
 }
 
 func (m *Threads) enqueueChat(threadID, text string, atts []Attachment) error {
@@ -506,11 +464,6 @@ func (m *Threads) DeleteChat(threadID string) error {
 	}
 	makeWritable(dir)
 	return os.RemoveAll(dir)
-}
-
-// ChatSummary is one chat in a list.
-type ChatSummary struct {
-	Thread db.Thread `json:"thread"`
 }
 
 // ListChats returns the chats, newest first.
