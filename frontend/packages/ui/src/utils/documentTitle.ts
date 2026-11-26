@@ -14,10 +14,8 @@ interface Entry {
 }
 
 const MAX_PART = 40;
-const ATTENTION_MARK = '● ';
 const entries = new Map<string, Entry>();
 let order = 0;
-let attention = false;
 let product: string | undefined;
 
 const isDesktopOrigin = () => window.location.protocol === 'wails:' || window.location.hostname === 'wails.localhost';
@@ -27,9 +25,9 @@ export function truncatePart(part: string, max = MAX_PART): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : chars.join('');
 }
 
-export function composeTitle(parts: string[], opts: { product: string; site?: string; attention?: boolean }): string {
+export function composeTitle(parts: string[], opts: { product: string; site?: string }): string {
   const tail = [opts.product, opts.site].filter(Boolean) as string[];
-  return `${opts.attention ? ATTENTION_MARK : ''}${[...parts, ...tail].join(' · ')}`;
+  return [...parts, ...tail].join(' · ');
 }
 
 function apply() {
@@ -39,15 +37,7 @@ function apply() {
   document.title = composeTitle(top?.parts ?? [], {
     product,
     site: isDesktopOrigin() ? undefined : window.location.host,
-    attention,
   });
-}
-
-/** A dot before the title while something waits on the user; a boolean, so the tab never flickers with counts. */
-export function setTitleAttention(on: boolean) {
-  if (attention === on) return;
-  attention = on;
-  apply();
 }
 
 /**
