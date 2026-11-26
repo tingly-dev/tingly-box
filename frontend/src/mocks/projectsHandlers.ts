@@ -573,8 +573,8 @@ export const projectsHandlers = [
         cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100,
         sandboxes: [
             { name: 'host', isolation: 'none', available: true, levels: { storage: 'host', network: 'open', exec: 'host', credentials: 'inherit', resources: 'unlimited' } },
-            { name: 'bwrap', isolation: 'process', available: true, levels: { storage: 'confined', network: 'open', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
-            { name: 'libkrun', isolation: 'vm', available: false, reason: '/dev/kvm is not accessible: add your user to the kvm group', levels: { storage: 'confined', network: 'open', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'bwrap', isolation: 'process', available: true, levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'libkrun', isolation: 'vm', available: false, reason: '/dev/kvm is not accessible: add your user to the kvm group', levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
         ],
     })),
     http.get('/api/v1/projects/:id', ({ params }) => {

@@ -92,9 +92,9 @@ func (s *scriptedAnthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // what its Bash tool can and cannot reach. Opt in with TB_SANDBOX_LIVE=1; it
 // needs claude and bwrap, and HOME must be the user's (toolchains live there).
 // TB_SANDBOX_LIVE_RUNTIME names another runtime (microvm needs
-// a network other than open). TB_SANDBOX_LIVE_NETWORK names the network level
-// (allowlist, internet; TB_SANDBOX_LIVE_ALLOWLIST=1 is allowlist), with the
-// model exposed.
+// a network other than open). Threads run with the internet level, the
+// model exposed; TB_SANDBOX_LIVE_NETWORK names another level (allowlist;
+// TB_SANDBOX_LIVE_ALLOWLIST=1 is allowlist).
 func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	if os.Getenv("TB_SANDBOX_LIVE") != "1" {
 		t.Skip("set TB_SANDBOX_LIVE=1 to run the real CLI in bwrap")
@@ -151,19 +151,25 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	opts.ProjectPath = th.Cwd
 	opts.OutputFormat = agentboot.OutputFormatStreamJSON
 	opts.Timeout = 2 * time.Minute
+	// Projects finds the gateway in the launch's environment; this one is
+	// set after the launch was built, so expose it as Projects would.
+	port, _ := strconv.Atoi(srv.URL[strings.LastIndex(srv.URL, ":")+1:])
+	require.Equal(t, sandbox.NetworkInternet, opts.Sandbox.Policy.Network.Level, "threads run with the internet level")
+	opts.Sandbox.Policy.Network.Expose = append(opts.Sandbox.Policy.Network.Expose, sandbox.Endpoint{Port: port})
+	mock.command += "; curl -sS -m 5 -o /dev/null -w 'PUBLIC=%{http_code}\\n' https://example.com 2>&1 | tail -1; curl -sS -m 5 " + srv.URL + "/v1/models >/dev/null && echo VIA-EXPOSE"
 	network := sandbox.Level(os.Getenv("TB_SANDBOX_LIVE_NETWORK"))
 	if os.Getenv("TB_SANDBOX_LIVE_ALLOWLIST") == "1" {
 		network = sandbox.NetworkAllowlist
 	}
 	if network != "" {
-		// The model is on the host's loopback, reached only as an exposed
-		// port; allowlist grants nothing else, internet the public internet.
-		port, _ := strconv.Atoi(srv.URL[strings.LastIndex(srv.URL, ":")+1:])
-		opts.Sandbox.Policy.Network = sandbox.Network{Level: network, Expose: []sandbox.Endpoint{{Port: port}}}
+		// Another level, with the model still exposed; allowlist grants
+		// nothing else.
+		opts.Sandbox.Policy.Network.Level = network
 		if network == sandbox.NetworkAllowlist {
 			opts.Sandbox.Policy.Network.Allow = []string{"example.org"}
 		}
-		mock.command += "; curl -sS -m 5 -o /dev/null -w 'PUBLIC=%{http_code}\\n' https://example.com 2>&1 | tail -1; curl -sS -m 5 " + srv.URL + "/v1/models >/dev/null && echo VIA-EXPOSE"
+	} else {
+		network = sandbox.NetworkInternet
 	}
 	if os.Getenv("TB_SANDBOX_LIVE_HOST") == "1" {
 		opts.Sandbox = nil // the same launch on the host, to compare
@@ -192,7 +198,7 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	case sandbox.NetworkInternet:
 		assert.Contains(t, out, "PUBLIC=200", "the public internet is reached")
 	}
-	if network != "" {
+	if os.Getenv("TB_SANDBOX_LIVE_HOST") != "1" {
 		assert.Contains(t, out, "VIA-EXPOSE", "the model on the host is reached as an exposed port")
 	}
 	assert.Contains(t, out, "WROTE")

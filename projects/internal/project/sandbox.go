@@ -3,11 +3,16 @@ package project
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
@@ -44,16 +49,69 @@ func ThreadPolicyLevels(runtime string) map[sandbox.Axis]sandbox.Level {
 			Resources: sandbox.Resources{Level: sandbox.ResourcesUnlimited},
 		}.Levels()
 	}
-	return threadPolicy("", nil, nil).Levels()
+	return threadPolicy("", nil, nil, nil).Levels()
 }
 
-// threadPolicy is what a sandboxed thread runs under. Storage: only the mounts
-// (home is empty). Network: open, for now (the user's decision; §8). Exec:
-// confined. Credentials: only the variables named. Resources: no limits yet.
-func threadPolicy(home string, mounts []sandbox.Mount, env []string) sandbox.Policy {
+// CheckThreadSandbox reports whether a project's threads can run in runtime
+// here: the runtime is here, gives every level a thread asks for, and starts
+// a process under the thread policy (so a missing tool for one level, such
+// as pasta for the network, shows before a thread fails). A result is kept
+// for a minute.
+func CheckThreadSandbox(ctx context.Context, runtime string) error {
+	if runtime == "" || runtime == sandbox.HostName {
+		return nil
+	}
+	checkMu.Lock()
+	defer checkMu.Unlock()
+	if c, ok := checked[runtime]; ok && time.Since(c.at) < time.Minute {
+		return c.err
+	}
+	err := probeThreadSandbox(ctx, runtime)
+	checked[runtime] = checkResult{at: time.Now(), err: err}
+	return err
+}
+
+type checkResult struct {
+	at  time.Time
+	err error
+}
+
+var (
+	checkMu sync.Mutex
+	checked = map[string]checkResult{}
+)
+
+func probeThreadSandbox(ctx context.Context, runtime string) error {
+	rt, ok := sandbox.Get(runtime)
+	if !ok {
+		return fmt.Errorf("sandbox %q is not in this build", runtime)
+	}
+	if err := rt.Check(ctx); err != nil {
+		return err
+	}
+	home, err := os.MkdirTemp("", "tb-sandbox-check-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(home)
+	proc, err := sandbox.Start(ctx, runtime, sandbox.Cmd{Args: []string{"true"}, Env: []string{"PATH=/usr/bin:/bin"}}, threadPolicy(home, nil, []string{"PATH"}, nil))
+	if err != nil {
+		return err
+	}
+	_ = proc.Stdin().Close()
+	_, _ = io.Copy(io.Discard, proc.Stdout())
+	return proc.Wait()
+}
+
+// threadPolicy is what a sandboxed thread runs under (.design/sandbox.md §5).
+// Storage: only the mounts (home is empty). Network: the public internet,
+// and of the host only the ports its launch talks to (the model gateway,
+// MCP servers). Exec: confined. Credentials: only the variables named.
+// Resources: no limits yet.
+func threadPolicy(home string, mounts []sandbox.Mount, env []string, expose []sandbox.Endpoint) sandbox.Policy {
 	return sandbox.Policy{
 		Storage:     sandbox.Storage{Level: sandbox.StorageConfined, Home: home, Mounts: mounts},
-		Network:     sandbox.Network{Level: sandbox.NetworkOpen},
+		Network:     sandbox.Network{Level: sandbox.NetworkInternet, Expose: expose},
 		Exec:        sandbox.Exec{Level: sandbox.ExecConfined},
 		Credentials: sandbox.Credentials{Level: sandbox.CredentialsExplicit, Env: env},
 		Resources:   sandbox.Resources{Level: sandbox.ResourcesUnlimited},
@@ -153,7 +211,45 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 			keep = append(keep, name)
 		}
 	}
-	return &process.Sandbox{Runtime: p.ThreadSandbox, Policy: threadPolicy(home, ms, keep)}, nil
+	return &process.Sandbox{Runtime: p.ThreadSandbox, Policy: threadPolicy(home, ms, keep, hostEndpoints(opts))}, nil
+}
+
+// loopbackURL finds a URL on the host's loopback.
+var loopbackURL = regexp.MustCompile(`https?://(?:127\.0\.0\.1|localhost|\[::1\]):(\d+)`)
+
+// hostEndpoints are the ports of the host's loopback a launch talks to: the
+// URLs on it in its environment (the model gateway), its settings file and
+// its MCP configuration. These, and nothing else of the host, are exposed.
+func hostEndpoints(opts *agentboot.ExecutionOptions) []sandbox.Endpoint {
+	var text []string
+	for _, kv := range opts.Env {
+		if _, v, ok := strings.Cut(kv, "="); ok {
+			text = append(text, v)
+		}
+	}
+	for _, path := range append([]string{opts.SettingsPath, opts.MCPConfigPath}, opts.AdditionalMCPConfigPaths...) {
+		switch {
+		case path == "":
+		case strings.HasPrefix(strings.TrimSpace(path), "{"):
+			text = append(text, path) // inline JSON
+		default:
+			if b, err := os.ReadFile(path); err == nil {
+				text = append(text, string(b))
+			}
+		}
+	}
+	var out []sandbox.Endpoint
+	seen := map[int]bool{}
+	for _, t := range text {
+		for _, m := range loopbackURL.FindAllStringSubmatch(t, -1) {
+			if port, err := strconv.Atoi(m[1]); err == nil && port > 0 && port < 65536 && !seen[port] {
+				seen[port] = true
+				out = append(out, sandbox.Endpoint{Port: port})
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b sandbox.Endpoint) int { return a.Port - b.Port })
+	return out
 }
 
 // gitMounts are a repository's git directory, writable (commits, branches)

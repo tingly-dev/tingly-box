@@ -190,7 +190,7 @@ export const project: Dict<typeof projectEn> = {
         axes: { storage: '文件', network: '网络', exec: '进程', credentials: '凭据', resources: '资源' },
         levels: {
             storage: { host: '你能读的都能读', confined: '只有自己的目录、仓库、资料库和记忆' },
-            network: { open: '开放', none: '断开' },
+            network: { open: '开放（含本机）', none: '断开', allowlist: '仅名单内主机', internet: '可上网，不能访问本机' },
             exec: { host: '以你的用户身份', confined: '隔离、无特权' },
             credentials: { inherit: '继承你的环境变量', explicit: '只给需要的' },
             resources: { unlimited: '不限', limited: '有上限' },

@@ -233,17 +233,17 @@ type Usage interface {
 
 **`internet` 的实测（2026-11-25）**：非特权 user namespace 里直接跑 `nft` 被 AppArmor 拒（`kernel.apparmor_restrict_unprivileged_userns=1`）；在 pasta 建的命名空间里可以（pasta 有自己的 AppArmor 配置，只允许执行 `/usr/bin` 下的命令，所以由 `/usr/bin/sh` 装规则再 exec bwrap）。pasta 默认把宿主正在监听的端口（含宿主回环上的）转发进命名空间，等于把宿主回环暴露给沙箱——一致性测试抓到了（`LEAK-host[127.0.0.1]`），必须显式关掉全部转发。变异检查：不装规则时，宿主其它网卡地址（`192.168.122.1`、容器网桥 `10.200.x`）可达。
 
-## 5 Projects 的默认值（决定）
+## 5 Projects 的默认值
 
 | 轴 | 默认 | 说明 |
 |---|---|---|
 | storage | confined | 挂载清单见 `projects/.design/thread-runtime.md` §10.6 |
-| network | `internet` + `Expose{网关端口, Projects MCP 端口}` | 端口从线程的启动配置（`ANTHROPIC_BASE_URL`、MCP 配置）里取，自动计算，不让用户填 |
+| network | `internet` + Expose（已实施） | Expose 的端口自动算出：启动环境、设置文件与 MCP 配置里所有指向宿主回环的 URL（`http(s)://127.0.0.1|localhost|[::1]:端口`）的端口，即模型网关与 MCP 服务；不让用户填 |
 | exec | confined | |
 | credentials | explicit | 白名单 `sandboxEnv` + 启动自己设的变量 |
 | resources | unlimited（记账开） | 项目设置可选填配额，**不预设** |
 
-- **运行时选择**：项目设置"线程运行环境"列出本机能用的运行时（现为本机 / bwrap；microvm 在 network `internet` 可用后加入）。
+- **运行时选择**：项目设置"线程运行环境"列出运行时；某运行时是否可用，按线程策略在本机实际起一次 `true` 判定（`CheckThreadSandbox`，结果缓存一分钟），所以缺 pasta 之类某一级别的工具时，设置里就显示不可用及原因，而不是等线程失败。现为本机 / bwrap；microvm 在它支持 `internet` 后加入。
 - **配额（决定）**：写在项目上、按线程生效；可另设项目总额（项目一个 systemd slice，线程是其下的 scope；VM 运行时按线程）。界面上留空即不限，填了做下限校验（内存过小 Claude Code 起不来），并显示当前用量作参考。前后端都支持，走 codegen。
 - **网络级别**：`internet` 为默认；`allowlist`（附名单编辑）给敏感项目；`open` 不作为普通选项，若保留则明确标为危险（包含宿主回环与内网）。
 - **可见性**：线程因 OOM、配额或沙箱失败结束时，写成线程事件并显示原因与用量。
@@ -257,7 +257,7 @@ type Usage interface {
 | S1 | **原语与校验（已完成）**：`Endpoint`/`Expose`、`ExitError{Reason}`、`Resources.CPU`、`Usage` 接口、`NetworkInternet` 常量（运行时尚不声明）；§2.6 的结构校验（`WellFormed`）；地址分面（`Classify`）与授予（`ParseGrant`/`Permits`）；代理按 §2.2 的授予规则改；bwrap 与 microvm 实现 Expose；bwrap 的 CPU 配额；结束原因除 `oom` 外统一；一致性测试：allowlist 重写、expose、cpu | 无 |
 | S2 | **记账与 OOM（已完成）**：bwrap 有 systemd 用户会话时一律进 scope，按 systemd 记录的 scope 结果（`oom-kill`）判定 `oom`，并实现 `Usage`（读 scope 的 cgroup）；microvm 按 guest 的 `oom_kill` 计数判定 `oom` | S1 |
 | S3 | **`internet`（bwrap 已完成）**：pasta + 命名空间内 nftables，通过 `network/internet`（上界：宿主回环与全部宿主地址不可达；下限：公网按名可达）；microvm 的 `internet` 待做 | S1 |
-| S4 | **Projects 默认切换**：线程策略改为 `internet` + 自动 Expose；live 测试覆盖（模型经网关、MCP 工具可用、宿主回环与内网不可达） | S2、S3 |
+| S4 | **Projects 默认切换（已完成）**：线程策略改为 `internet` + 自动 Expose；设置里的可用性按线程策略实测；live 测试：真实 CLI 在 internet 下完成回合，模型经 Expose，公网 200 | S2、S3 |
 | S5 | **配额**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
 | S6 | **microvm 进 Projects**：VM `unlimited` 改为宿主规格；加入运行时列表 | S3、S4 |
 | S7 | 项目总额（slice）；已知缺口：运行中审批新增的目录挂进沙箱、`library/.cache` 线程间共享、主仓库 git 引用可写 | 按需 |
