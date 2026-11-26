@@ -62,6 +62,9 @@ func Run(t *testing.T, rt sandbox.Runtime) {
 	if c.supports(sandbox.AxisNetwork, sandbox.NetworkAllowlist) {
 		t.Run("network/allowlist", c.networkAllowlist)
 	}
+	if c.supports(sandbox.AxisNetwork, sandbox.NetworkInternet) {
+		t.Run("network/internet", c.networkInternet)
+	}
 	for _, l := range []sandbox.Level{sandbox.NetworkNone, sandbox.NetworkAllowlist, sandbox.NetworkInternet} {
 		if c.supports(sandbox.AxisNetwork, l) {
 			t.Run("network/"+string(l)+" expose", func(t *testing.T) { c.networkExpose(t, l) })
@@ -450,6 +453,63 @@ echo END
 	if !online {
 		t.Log("offline: the lower bound (a listed public host is reached) is not checked")
 	}
+}
+
+// networkInternet: the upper bound, a listener on every address of the host,
+// its loopback included, is unreachable; the lower
+// bound, with a network, a public host is reached by name.
+func (c *suite) networkInternet(t *testing.T) {
+	p := c.policy(t)
+	p.Network = sandbox.Network{Level: sandbox.NetworkInternet}
+	proc, err := sandbox.Start(context.Background(), c.info.Name, sandbox.Cmd{Args: []string{"true"}, Env: []string{hostPath}}, p)
+	if errors.Is(err, sandbox.ErrUnavailable) {
+		t.Skipf("the internet level is not available here: %v", err)
+	}
+	must(t, err)
+	_ = proc.Stdin().Close()
+	_ = proc.Wait()
+
+	ln, err := net.Listen("tcp", ":0")
+	must(t, err)
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+	// The host's loopback too: a runtime must not forward it (pasta does,
+	// unless told not to).
+	targets := []string{"127.0.0.1"}
+	for _, a := range sandbox.HostAddrs() {
+		if !a.IsLoopback() && !a.IsLinkLocalUnicast() {
+			targets = append(targets, a.String())
+		}
+	}
+	online := false
+	if conn, err := net.DialTimeout("tcp", "example.com:443", 3*time.Second); err == nil {
+		online = true
+		_ = conn.Close()
+	}
+	m, run := probe(t, fmt.Sprintf(`
+for a in %[1]s; do
+	timeout 3 bash -c "echo > /dev/tcp/$a/%[2]d" 2>/dev/null && echo "LEAK-host[$a]"
+done
+[ %[3]t = true ] && timeout 10 bash -c 'echo > /dev/tcp/example.com/443' && echo PUBLIC
+echo END
+`, strings.Join(targets, " "), port, online))
+	p = c.policy(t, m)
+	p.Network = sandbox.Network{Level: sandbox.NetworkInternet}
+	out := c.run(t, p, run)
+	expect(t, out, "END")
+	if online && !strings.Contains(out, "PUBLIC") {
+		t.Errorf("network=internet did not reach a public host by name:\n%s", out)
+	}
+	t.Logf("host addresses tried: %v; online: %v", targets, online)
 }
 
 // networkExpose: below open, an exposed port of the host's loopback is at

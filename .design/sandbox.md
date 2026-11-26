@@ -223,7 +223,7 @@ type Usage interface {
 | storage | host | confined：空根 + 系统目录只读 + `--tmpfs HOME` + 同路径 bind | confined：同一份 `bwrap.StorageArgs` 搭在 `/view`，virtiofsd（自身在 bwrap 里）作为 guest 根 |
 | network none | — | `--unshare-net` | guest 无网卡 |
 | network allowlist | — | `--unshare-net` + 宿主代理（unix socket）+ 沙箱内桥（本程序） | 宿主代理经 vsock + guest 内桥 |
-| network internet | — | **待验证**：pasta（passt 包）给用户态网络，`--no-map-gw` 关掉到宿主回环的映射；宿主网卡地址与 P 的过滤见下 | **待验证**：passt vhost-user 网卡 + guest 内 nftables（guest init 以 root 设置，agent 无权改） |
+| network internet | — | pasta（passt 包）给沙箱自己的网络命名空间并经宿主出网：`--no-map-gw`，关掉全部端口转发（`-t/-u/-T/-U none`），DNS 由 `--dns-forward 169.254.1.53 --dns-host <宿主解析器>` 转发，沙箱的 `resolv.conf` 指向它；pasta 起 `/usr/bin/sh`，先用 `nft` 在该命名空间装 `sandbox/netfilter` 的规则（自身回环与 DNS 放行 → 宿主回环与宿主全部地址拒绝 → 按地址授予的 P 放行 → P 拒绝），再 exec bwrap（`--uid/--gid` 映射回宿主用户） | **待实现**：passt vhost-user 网卡 + guest 内 nftables（guest init 以 root 设置，agent 无权改） |
 | network open | ✓ | 共用宿主网络 | 不支持（非特权给 VM 接宿主网络要 tap，正是要避开的） |
 | Expose | — | 桥（本程序）在沙箱 `127.0.0.1`/`::1` 的同号端口监听 → unix socket → 宿主 `127.0.0.1:端口` | 同上，guest 内桥经 vsock（端口 1100+i） |
 | exec confined | — | user/pid/ipc/uts 命名空间、`--disable-userns`、`--cap-drop ALL`、`--new-session`、`--die-with-parent` | 独立内核；guest init 关 user namespace、设 NoNewPrivs、以宿主 uid/gid 运行 |
@@ -231,10 +231,7 @@ type Usage interface {
 | resources limited | — | `systemd-run --user --scope -p MemoryMax -p MemorySwapMax=0 -p TasksMax`，CPU 为 `-p CPUQuota=<u/10>%` | VM 内存与 vCPU 数，Tasks 用 guest 内 cgroup（决定） |
 | 记账 | — | 有 systemd 用户会话时一律进 scope（`--unit=tb-sandbox-<随机>.scope`，失败的 scope 不回收，读完 `Result` 再 `reset-failed`）；`Usage` 读 scope 的 cgroup | guest 的 `/proc/vmstat` `oom_kill` 计数；`Usage` 未实现 |
 
-**`internet` 下对 H（宿主网卡地址）与 P 的过滤（待验证，S3 做）**：
-- bwrap：pasta 本身不按目标地址过滤。候选一，在沙箱网络命名空间里装 nftables 规则（沙箱内无 capability，改不了）；本机实测在非特权 user namespace 里 `nft` 被拒（`kernel.apparmor_restrict_unprivileged_userns=1`），要看 pasta 自带的 AppArmor 配置下能否做到。候选二，在沙箱模块里用用户态 TCP/IP 栈自己转发（可完全掌控目的地址，但要引入依赖）。两者都不行时，`internet` 在 bwrap 上暂不提供（`ErrUnavailable`），而不是退回 `open`。
-- microvm：guest 内核（Kata 的 6.18）内置 nf_tables，guest init 以 root 装规则后再以普通用户运行命令；passt 需要安装。
-- 依赖：**接受**新增 `passt`（apt 安装；开发机尚未安装，需要用户执行 `sudo apt install passt`）。
+**`internet` 的实测（2026-11-25）**：非特权 user namespace 里直接跑 `nft` 被 AppArmor 拒（`kernel.apparmor_restrict_unprivileged_userns=1`）；在 pasta 建的命名空间里可以（pasta 有自己的 AppArmor 配置，只允许执行 `/usr/bin` 下的命令，所以由 `/usr/bin/sh` 装规则再 exec bwrap）。pasta 默认把宿主正在监听的端口（含宿主回环上的）转发进命名空间，等于把宿主回环暴露给沙箱——一致性测试抓到了（`LEAK-host[127.0.0.1]`），必须显式关掉全部转发。变异检查：不装规则时，宿主其它网卡地址（`192.168.122.1`、容器网桥 `10.200.x`）可达。
 
 ## 5 Projects 的默认值（决定）
 
@@ -259,7 +256,7 @@ type Usage interface {
 |---|---|---|
 | S1 | **原语与校验（已完成）**：`Endpoint`/`Expose`、`ExitError{Reason}`、`Resources.CPU`、`Usage` 接口、`NetworkInternet` 常量（运行时尚不声明）；§2.6 的结构校验（`WellFormed`）；地址分面（`Classify`）与授予（`ParseGrant`/`Permits`）；代理按 §2.2 的授予规则改；bwrap 与 microvm 实现 Expose；bwrap 的 CPU 配额；结束原因除 `oom` 外统一；一致性测试：allowlist 重写、expose、cpu | 无 |
 | S2 | **记账与 OOM（已完成）**：bwrap 有 systemd 用户会话时一律进 scope，按 systemd 记录的 scope 结果（`oom-kill`）判定 `oom`，并实现 `Usage`（读 scope 的 cgroup）；microvm 按 guest 的 `oom_kill` 计数判定 `oom` | S1 |
-| S3 | **`internet` 机制验证**：pasta（bwrap）与 passt + nftables（microvm）实测 P 的过滤，定方案后实现并通过 `network/internet` | S1；需安装 passt |
+| S3 | **`internet`（bwrap 已完成）**：pasta + 命名空间内 nftables，通过 `network/internet`（上界：宿主回环与全部宿主地址不可达；下限：公网按名可达）；microvm 的 `internet` 待做 | S1 |
 | S4 | **Projects 默认切换**：线程策略改为 `internet` + 自动 Expose；live 测试覆盖（模型经网关、MCP 工具可用、宿主回环与内网不可达） | S2、S3 |
 | S5 | **配额**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
 | S6 | **microvm 进 Projects**：VM `unlimited` 改为宿主规格；加入运行时列表 | S3、S4 |
@@ -278,7 +275,7 @@ type Usage interface {
 
 ## 8 待定与已知缺口
 
-- `internet` 在 bwrap 上对宿主网卡地址与 P 的过滤机制（§4），S3 实测后定。
+- microvm 的 `internet`（passt vhost-user + guest 内 nftables）待实现。
 - 被允许的网络面上的外泄无法由沙箱防止；敏感项目用 `allowlist`。
 - 存储容量不限；工作区写入不受配额约束。
 - `Expose` 只支持 TCP、宿主回环；Unix socket 形式的宿主服务（如 Docker）不在范围内。
@@ -293,6 +290,7 @@ type Usage interface {
 - `V(q) = ⊥` 的路径不可读写，但**挂载点的各级父目录**作为空目录可见（看得到路径名，看不到内容）。
 
 **bwrap**
+- `internet`：`Allow` 只支持按地址/前缀授予 P（包过滤器无法按名字判定），按名字的条目使启动 `Unavailable`；宿主地址集合在启动时取一次，运行中宿主新增的地址不在规则里；pasta 把宿主的地址复制到命名空间的网卡上，连这些地址落在沙箱自己（也被规则拒绝）。需要 passt 与 nftables，缺了 `internet` 为 `Unavailable`。
 - `exec confined` 由 user/pid/ipc/uts 命名空间、`--disable-userns`、`--cap-drop ALL`、`--new-session`、`--die-with-parent` 给出；进程以宿主 uid 运行（在 user namespace 里映射为自身）。
 - `network none/allowlist` 用 `--unshare-net`：沙箱里只有回环，宿主网络命名空间里的抽象 unix socket 也不可达。`open` 共用宿主网络，包括抽象 socket。
 - `allowlist` 的功能下限只覆盖读取代理环境变量的客户端；沙箱内的桥是本程序，作为命令的父进程常驻。

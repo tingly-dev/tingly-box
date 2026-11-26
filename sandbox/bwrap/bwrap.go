@@ -1,12 +1,15 @@
 // Package bwrap isolates a process with bubblewrap on Linux: storage and exec
-// confined, the network open, none, or an allowlist through a proxy on the
-// host, with host ports exposed (sandbox/netproxy), and, through a transient
-// systemd user scope, memory, task and CPU limits. Importing it registers the runtime.
+// confined; the network none, an allowlist through a proxy on the host, the
+// public internet through pasta and a packet filter, or the host's own, with
+// host ports exposed (sandbox/netproxy); and, through a transient systemd
+// user scope, memory, task and CPU limits and the oom end. Importing it
+// registers the runtime.
 package bwrap
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +38,7 @@ var lookSystemdRun = func() (string, error) { return exec.LookPath("systemd-run"
 func (Runtime) Info() sandbox.Info {
 	return sandbox.Info{Name: Name, Isolation: sandbox.IsolationProcess, Supports: map[sandbox.Axis][]sandbox.Level{
 		sandbox.AxisStorage:     {sandbox.StorageConfined},
-		sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone, sandbox.NetworkAllowlist},
+		sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone, sandbox.NetworkAllowlist, sandbox.NetworkInternet},
 		sandbox.AxisExec:        {sandbox.ExecConfined},
 		sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
 		sandbox.AxisResources:   {sandbox.ResourcesUnlimited, sandbox.ResourcesLimited},
@@ -60,30 +63,47 @@ func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sa
 	if err != nil {
 		return nil, fmt.Errorf("%w: bubblewrap (bwrap) is not installed", sandbox.ErrUnavailable)
 	}
-	var extra []string
-	var host *netproxy.Host
+	var extra, via []string
+	var closers []io.Closer
+	closeAll := func() {
+		for _, c := range closers {
+			_ = c.Close()
+		}
+	}
+	if p.Network.Level == sandbox.NetworkInternet {
+		in, err := newInternet(ctx, p.Network)
+		if err != nil {
+			return nil, err
+		}
+		closers = append(closers, in)
+		via, extra = in.via, in.extra
+	}
 	if pl := netproxy.PlanFor(p.Network); !pl.Empty() {
 		// The sandbox's own network reaches the host only through the
 		// bridge (this binary), which offers the host's endpoints on the
 		// sandbox's loopback through their sockets.
-		if host, err = netproxy.ListenDir(p.Network); err != nil {
+		host, err := netproxy.ListenDir(p.Network)
+		if err != nil {
+			closeAll()
 			return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 		}
+		closers = append(closers, host)
 		if cmd, err = netproxy.Wrap(cmd, netDir, pl); err != nil {
-			_ = host.Close()
+			closeAll()
 			return nil, err
 		}
-		extra = []string{"--ro-bind", host.Dir(), netDir, "--ro-bind", cmd.Args[0], cmd.Args[0]}
+		extra = append(extra, "--ro-bind", host.Dir(), netDir, "--ro-bind", cmd.Args[0], cmd.Args[0])
 	}
-	proc, err := start(ctx, bin, cmd, p, extra)
+	proc, err := start(ctx, bin, cmd, p, via, extra)
 	if err != nil {
-		if host != nil {
-			_ = host.Close()
-		}
+		closeAll()
 		return nil, err
 	}
-	if host != nil {
-		return netproxy.Serve(host, proc), nil
+	if len(closers) > 0 {
+		go func() {
+			<-proc.Done()
+			closeAll()
+		}()
 	}
 	return proc, nil
 }
@@ -91,8 +111,9 @@ func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sa
 // netDir is where the sandbox sees the host's endpoint sockets.
 const netDir = "/run/tb-sandbox-net"
 
-// start runs cmd in bubblewrap, with extra arguments after the mounts.
-func start(ctx context.Context, bin string, cmd sandbox.Cmd, p sandbox.Policy, extra []string) (sandbox.Proc, error) {
+// start runs cmd in bubblewrap, with extra arguments after the mounts, and
+// via (the command that runs bubblewrap, if any) before it.
+func start(ctx context.Context, bin string, cmd sandbox.Cmd, p sandbox.Policy, via, extra []string) (sandbox.Proc, error) {
 	args, err := buildArgs(p, cmd.Dir, extra)
 	if err != nil {
 		return nil, err
@@ -103,12 +124,13 @@ func start(ctx context.Context, bin string, cmd sandbox.Cmd, p sandbox.Policy, e
 	if err != nil {
 		return nil, err
 	}
-	prefix := []string{bin}
+	var prefix []string
 	if sc != nil {
 		var restore []string
-		prefix, restore, cmd.Env = sc.wrap(bin, cmd.Env)
+		prefix, restore, cmd.Env = sc.wrap(cmd.Env)
 		args = append(restore, args...)
 	}
+	prefix = append(append(prefix, via...), bin)
 	cmd.Args = append(append(prefix, args...), cmd.Args...)
 	// bwrap changes into cmd.Dir inside; outside it starts where we are.
 	cmd.Dir = ""
@@ -133,7 +155,9 @@ func buildArgs(p sandbox.Policy, dir string, extra []string) ([]string, error) {
 		"--cap-drop", "ALL", "--new-session", "--die-with-parent",
 		"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
 	}
-	if p.Network.Level != sandbox.NetworkOpen {
+	// Internet's network is pasta's, which bubblewrap runs in; open is
+	// the host's.
+	if p.Network.Level == sandbox.NetworkNone || p.Network.Level == sandbox.NetworkAllowlist {
 		args = append(args, "--unshare-net")
 	}
 	storage, err := StorageArgs(p, "")
