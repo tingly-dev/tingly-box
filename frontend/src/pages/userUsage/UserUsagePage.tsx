@@ -18,8 +18,6 @@ import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import {
     formatNumber,
     StatCard,
-    RosterTopList,
-    getTotalTokens,
     getCacheHitRateColor,
     formatCacheBreakdown,
     hasCacheWrites,
@@ -28,7 +26,7 @@ import {
     computeUsageSummary,
     useRosterAxis,
 } from '@/components/dashboard';
-import type { AggregatedStat, SortField, UsageMetricLabels, ShareBarItem } from '@/components/dashboard';
+import type { AggregatedStat, SortField, UsageMetricLabels } from '@/components/dashboard';
 import RosterTable from './RosterTable';
 import RosterDetailSection from './RosterDetailSection';
 import { useUserUsageData } from './useUserUsageData';
@@ -132,54 +130,6 @@ export default function UserUsagePage() {
         : viewMode === 'model'
         ? selectedModel
         : selectedProvider;
-
-    // Share-bar input for the visual band — follows the active axis and uses
-    // each axis' own key space, so a bar click selects the exact roster row.
-    const shareItems = useMemo<ShareBarItem[]>(() => {
-        if (viewMode === 'account') {
-            return rows.map((row) => ({
-                key: accountKey(row),
-                name: row.display_name || row.user_id,
-                tokens: row.total_tokens,
-            }));
-        }
-        if (viewMode === 'model') {
-            return modelRoster.map((row) => ({
-                key: getModelKey(row),
-                name: modelName(row),
-                tokens: getTotalTokens(row),
-            }));
-        }
-        return providerRoster.map((row) => ({
-            key: getProviderKey(row),
-            name: providerName(row),
-            tokens: getTotalTokens(row),
-        }));
-    }, [viewMode, rows, modelRoster, providerRoster]);
-
-    // Detail-panel Top list input — ranks the selected subject's breakdown
-    // (their models, or the accounts using the selected model/provider).
-    // Display-only: the breakdown table has no row-selection state to link.
-    const detailList = viewMode === 'account'
-        ? accountAxis.detail
-        : viewMode === 'model'
-        ? modelAxis.detail
-        : providerAxis.detail;
-    const showDetailTop = !activeAxis.detailLoading && detailList.length > 0;
-    const detailShareItems = useMemo<ShareBarItem[]>(() => {
-        if (viewMode === 'account') {
-            return detailList.map((model) => ({
-                key: `${model.provider_uuid}-${model.model || model.key}`,
-                name: model.model || model.key,
-                tokens: getTotalTokens(model),
-            }));
-        }
-        return detailList.map((account) => ({
-            key: account.user_id || account.key,
-            name: accountDisplayName(account.user_id || account.key),
-            tokens: getTotalTokens(account),
-        }));
-    }, [viewMode, detailList, accountDisplayName]);
 
     // Single pass over the active axis' rows for every summary aggregate.
     const summary = useMemo(() => {
@@ -395,12 +345,12 @@ export default function UserUsagePage() {
                 ))}
             </Grid>
 
-            {/* Roster table with the ranked Top list beside it (right) —
-                same active axis, one selection state; clicking a Top entry
-                selects the same subject the roster row would. Trend over time
-                is the personal Usage Dashboard's job, not this page's. */}
+            {/* Roster table, full width — the ranked Top list that used to sit
+                beside it duplicated the table's own rows (same data, same
+                default total-desc order); the unique share % is now a column
+                on the table itself. */}
             <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-                <Grid size={{ xs: 12, lg: 9 }} sx={{ display: 'flex', minWidth: 0 }}>
+                <Grid size={{ xs: 12 }} sx={{ display: 'flex', minWidth: 0 }}>
                     <RosterTable
                         viewMode={viewMode}
                         onViewModeChange={setViewMode}
@@ -421,36 +371,18 @@ export default function UserUsagePage() {
                         onSelectRow={(key) => { activeAxis.setSelectedKey(key); scrollDetailIntoView(); }}
                     />
                 </Grid>
-                <Grid size={{ xs: 12, lg: 3, xl: 2.4 }} sx={{ display: 'flex', minWidth: 0 }}>
-                    <RosterTopList
-                        items={shareItems}
-                        selectedKey={activeAxis.selectedKey}
-                        onSelect={(key) => { activeAxis.setSelectedKey(key); scrollDetailIntoView(); }}
-                        title={viewMode === 'account'
-                            ? t('dashboard.userUsage.topAccounts', { defaultValue: 'Top accounts' })
-                            : viewMode === 'model'
-                            ? t('dashboard.userUsage.topModels', { defaultValue: 'Top models' })
-                            : t('dashboard.userUsage.topProviders', { defaultValue: 'Top providers' })}
-                        othersLabel={t('dashboard.userUsage.others', { defaultValue: 'Others' })}
-                        emptyLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
-                        emptyHint={t('dashboard.userUsage.noUsageHintShort', { defaultValue: 'Try a longer time range.' })}
-                    />
-                </Grid>
-
             </Grid>
 
             <RosterDetailSection
                 panelRef={detailPanelRef}
                 viewMode={viewMode}
                 detailSubject={detailSubject}
-                showDetailTop={showDetailTop}
                 activeAxis={activeAxis}
                 selectedUser={selectedUser}
                 selectedModel={selectedModel}
                 selectedProvider={selectedProvider}
                 usageMetricLabels={usageMetricLabels}
                 accountDisplayName={accountDisplayName}
-                detailShareItems={detailShareItems}
             />
         </Box>
     );

@@ -9,8 +9,8 @@ import {
     Typography,
 } from '@mui/material';
 import { Cloud, Server, Users } from '@/components/icons';
-import { RosterBreakdownTable, RosterTopList } from '@/components/dashboard';
-import type { AggregatedStat, MetricRow, RosterAxisState, UsageMetricLabels, ShareBarItem } from '@/components/dashboard';
+import { RosterBreakdownTable } from '@/components/dashboard';
+import type { AggregatedStat, MetricRow, RosterAxisState, UsageMetricLabels } from '@/components/dashboard';
 import RosterDetailHeader from './RosterDetailHeader';
 import { usageTableCardSx } from './RosterTable';
 import type { UserUsageRow, ViewMode } from './userUsageModel';
@@ -22,34 +22,31 @@ type ActiveAxis =
 
 /**
  * The detail card below the roster: subject identity header + breakdown
- * table (per-account models, or accounts behind a model/provider), plus the
- * ranked Top list beside it. The breakdown table shares the roster card's
- * anatomy, so both tables read as one style.
+ * table (per-account models, or accounts behind a model/provider). The
+ * breakdown table shares the roster card's anatomy, so both tables read as
+ * one style. The ranked Top list that used to sit beside it was the same
+ * data as this table; the share % is a column on the table now.
  */
 export default function RosterDetailSection({
     panelRef,
     viewMode,
     detailSubject,
-    showDetailTop,
     activeAxis,
     selectedUser,
     selectedModel,
     selectedProvider,
     usageMetricLabels,
     accountDisplayName,
-    detailShareItems,
 }: {
     panelRef: React.Ref<HTMLDivElement>;
     viewMode: ViewMode;
     detailSubject: MetricRow | undefined;
-    showDetailTop: boolean;
     activeAxis: ActiveAxis;
     selectedUser?: UserUsageRow;
     selectedModel?: AggregatedStat;
     selectedProvider?: AggregatedStat;
     usageMetricLabels: UsageMetricLabels;
     accountDisplayName: (userID: string) => string;
-    detailShareItems: ShareBarItem[];
 }) {
     const { t } = useTranslation();
 
@@ -66,7 +63,7 @@ export default function RosterDetailSection({
             sx={{ alignItems: 'stretch', scrollMarginTop: { xs: 72, lg: 0 } }}
         >
             {detailSubject ? (<>
-                <Grid size={{ xs: 12, lg: showDetailTop ? 9 : 12 }} sx={{ display: 'flex', minWidth: 0 }}>
+                <Grid size={{ xs: 12 }} sx={{ display: 'flex', minWidth: 0 }}>
                     <Paper elevation={0} sx={{ ...usageTableCardSx, display: 'flex', flexDirection: 'column' }}>
                         <Box
                             sx={{
@@ -116,6 +113,7 @@ export default function RosterDetailSection({
                                 noUsageLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
                                 noUsageHint={t('dashboard.userUsage.noUsageHint', { defaultValue: 'The user remains listed because their access is registered.' })}
                                 usageMetricLabels={usageMetricLabels}
+                                shareLabel={t('dashboard.userUsage.share', { defaultValue: 'Share' })}
                             />
                         ) : (
                             <RosterBreakdownTable
@@ -142,22 +140,11 @@ export default function RosterDetailSection({
                                     : t('dashboard.userUsage.accountsUsingProviderTitle', { defaultValue: 'Accounts using this provider' })}
                                 noUsageLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
                                 usageMetricLabels={usageMetricLabels}
+                                shareLabel={t('dashboard.userUsage.share', { defaultValue: 'Share' })}
                             />
                         )}
                     </Paper>
                 </Grid>
-                {showDetailTop && (
-                    <Grid size={{ xs: 12, lg: 3, xl: 2.4 }} sx={{ display: 'flex', minWidth: 0 }}>
-                        <RosterTopList
-                            items={detailShareItems}
-                            title={viewMode === 'account'
-                                ? t('dashboard.userUsage.topModels', { defaultValue: 'Top models' })
-                                : t('dashboard.userUsage.topAccounts', { defaultValue: 'Top accounts' })}
-                            othersLabel={t('dashboard.userUsage.others', { defaultValue: 'Others' })}
-                            emptyLabel={t('dashboard.userUsage.noUsage', { defaultValue: 'No usage in this period' })}
-                        />
-                    </Grid>
-                )}
             </>) : (
                 <Grid size={{ xs: 12 }} sx={{ display: 'flex' }}>
                     <Paper elevation={0} sx={{ ...usageTableCardSx, display: 'flex' }}>
