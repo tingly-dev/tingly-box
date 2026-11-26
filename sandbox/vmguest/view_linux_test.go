@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -23,20 +24,21 @@ import (
 // KVM, Cloud Hypervisor, virtiofsd (TB_SANDBOX_VMM, TB_SANDBOX_VIRTIOFSD), a
 // guest kernel, mkfs.ext4 and a static busybox are.
 func TestGuestBuildsItsOwnView(t *testing.T) {
-	need := func(env, fallback string) string {
+	need := func(env, fallback string, mode uint32) string {
 		p := os.Getenv(env)
 		if p == "" {
 			p = fallback
 		}
-		if _, err := os.Stat(p); err != nil {
-			t.Skipf("%s: %v", env, err)
+		if err := syscall.Access(p, mode); err != nil {
+			t.Skipf("%s (%s): %v", env, p, err)
 		}
 		return p
 	}
-	vmm := need("TB_SANDBOX_VMM", "/opt/kata/bin/cloud-hypervisor")
-	fsd := need("TB_SANDBOX_VIRTIOFSD", "/opt/kata/libexec/virtiofsd")
-	kernel := need("TB_SANDBOX_KERNEL", "/opt/kata/share/kata-containers/vmlinux.container")
-	busybox := need("TB_SANDBOX_BUSYBOX", "/bin/busybox")
+	const readable, runnable = 4, 1
+	vmm := need("TB_SANDBOX_VMM", "/opt/kata/bin/cloud-hypervisor", runnable)
+	fsd := need("TB_SANDBOX_VIRTIOFSD", "/opt/kata/libexec/virtiofsd", runnable)
+	kernel := need("TB_SANDBOX_KERNEL", "/opt/kata/share/kata-containers/vmlinux.container", readable)
+	busybox := need("TB_SANDBOX_BUSYBOX", "/bin/busybox", readable)
 	if f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0); err != nil {
 		t.Skip(err)
 	} else {
