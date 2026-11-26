@@ -5,7 +5,7 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 ## 决定
 
 1. **逐层懒加载。** 只在打开文件夹时请求它那一层。资料库里有很多线程产出时，不再一次遍历整棵树。
-2. **新接口 `GET /projects/:id/library/tree?path=<dir>&sort=time|name&order=desc|asc`**，返回 `{dir, path, entries[]}`，`entries` 是该目录的直接子项（`name`、`path`、`kind: dir|file`、`size`、`updated_at`、`origin`）。文件夹在前、按名字；文件按 `sort`/`order` 排，默认按修改时间倒序（见“上传的显示名与排序”）。旧的平铺 `GET /library` 仍在（上传接口还用它的返回形状），前端不再调用。
+2. **新接口 `GET /projects/:id/library/tree?path=<dir>`**，返回 `{dir, path, entries[]}`，`entries` 是该目录的直接子项（`name`、`path`、`kind: dir|file`、`size`、`updated_at`、`origin`）。文件夹在前，之后文件，各按名字排序（服务器只保证这一种稳定顺序；显示名、搜索与排序在前端做，见“上传的显示名、搜索与排序”）。旧的平铺 `GET /library` 仍在（上传接口还用它的返回形状），前端不再调用。
 3. **访问检查只收紧不放宽**（`Layout.ListLibraryDir`）：
    - 路径各段不能是 `..`，不能以 `.` 开头——**唯一例外是 `.tmp` 子树**（线程的 TMPDIR，见第 4 条），它既列出也可以直接请求；`.tmp` 之下的隐藏段（`.tmp/x/.h`）仍拒绝（400）。
    - 先走 `LibraryPath`（拒绝逃出资料库根），再 `EvalSymlinks` 确认真实路径仍在资料库内。
@@ -16,23 +16,19 @@ Overview 的 Library 页把项目资料库显示成可展开的目录树，而�
 5. **来源 chip 去掉。** 平铺列表里每行一个“上传/线程产出”标签；树里 `outputs/` 目录本身已说明来源，标签只会增加噪音。`origin` 字段仍由接口返回。**2026-11-17：**`origin: "scratch"` 在树里重新用一个标签（“线程临时文件”），因为 scratch 的来源从路径看不出来了（见第 4 条）。
 6. **`.cache` 不列出（2026-11-17）。** 项目共享的工具缓存按约定住在 `library/.cache/`（线程靠提示词把 `GOMODCACHE` 等工具缓存变量指过去，见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10）。它与 `.tmp` 同为点目录，但归项目而非线程：树、平铺列表、文件下载和 zip 都不列出/不服务它；上传同样拒绝写入。
 
-## 上传的显示名与排序（2026-11-25）
+## 上传的显示名、搜索与排序（2026-11-26）
 
-**问题。** 上传以 `uploads/<12 位十六进制 id>-<原文件名>` 落盘（`SaveAttachment`，id 只为保证唯一），树直接显示了磁盘名，列表全是 `013afc52a43f-pasted-text.txt` 这类前缀；文件顺序固定按名字，看不出时间，用户无法按时间浏览。
+**问题。** 上传以 `uploads/<12 位十六进制 id>-<原文件名>` 落盘（`SaveAttachment`，id 只为保证唯一），树直接显示了磁盘名，列表全是 `013afc52a43f-pasted-text.txt` 这类前缀；文件顺序固定按名字，看不出时间，也搜不了。
 
-**显示名。** 接口 `entries[].name` 现在是“给人看的名字”，`path` 仍是可直接下载/删除的真实路径：
+**分工：后端原样，前端派生。** 2026-11-25 曾在后端加 `displayLibraryName` 和 `sort`/`order` 参数；2026-11-26 回退：列表接口返回真实的 basename（`entries[].name`），`path` 不变。显示名、搜索、排序都在浏览器完成。纯函数在 `frontend/packages/projects/src/components/project/libraryEntries.ts`（可单测），`Library.tsx` 使用：
 
-- `uploads/` 下**直接**放着、且匹配 `^[0-9a-f]{12}-.+$` 的**文件**，去掉一个前缀。只去**一个**：`SaveAttachment` 总是写 `<id>-<原名>`，所以原名本身以“12 位十六进制-”开头时存成 `<id>-<12 位>-…`，去掉第一个前缀正好还原原名（`uploads/` 之外不动，例如线程自己的 `outputs/0123456789ab-x.txt` 保持原样）。文件夹不剥前缀。
-- 判别不靠前端猜字符串：`displayLibraryName` 与下载文件名的 `DownloadName` 共用同一规则（`internal/project/attachment.go`），只在 API 层做。
-- `.tmp/<thread>` 文件夹仍由 handler 把 `name` 换成线程标题（`path` 不变）。
+- **显示名** `displayName(path)`：`uploads/` 下**直接**放着、匹配 `^[0-9a-f]{12}-[^/]+$` 的**文件**去掉一个前缀。只去**一个**：`SaveAttachment` 总是写 `<id>-<原名>`，所以原名本身以“12 位十六进制-”开头时存成 `<id>-<12 位>-…`，去掉第一个正好还原原名。`uploads/` 之外不动（例如线程自己的 `outputs/0123456789ab-x.txt` 保持原样）。文件夹不剥（`.tmp/<thread>` 仍由 handler 换成线程标题）。
+- **下载名**：后端 `DownloadName` 继续为下载剥前缀（既有行为）；前端行内下载直接用行上的显示名。
+- **搜索** `matchesQuery(name, query)`：名字子串匹配，大小写不敏感（中文按原样匹配），空查询不过滤。前端在**已加载**的层上过滤：文件按名字保留；文件夹在自身匹配、或已加载的子层里有匹配时保留；有命中的已加载文件夹会自动展开，已展开状态不丢；根层没有命中时显示“没有匹配的文件”。未展开的层不为了搜索去预取。
+- **排序** `sortLibraryEntries(entries, sort)`：文件夹在前；`time` 时文件按 `updated_at`、文件夹按名字；`name` 时文件夹与文件都按显示名，方向随选择；同键按 `path`，结果稳定。默认“最新优先”，偏好记在 `localStorage['tingly-project.library.sort']`。排序作用在已加载的列表上，切换排序不重新请求。
+- **性能**：每层过滤 O(n)、排序 O(n log n)（n 是一层的条目数），且只有已加载的层参与；树本身逐层懒加载。当前规模不需要虚拟化或防抖；单层上千条再评估。
 
-**排序。** `ListLibraryDirOrdered`（`internal/project/library_root.go`）接受 `LibraryOrder{By: "time"|"name", Desc bool}`；`ListLibraryDir` 是默认的 `LibraryNewestFirst`（时间倒序）。
-
-- 文件夹永远在前；`By=time` 时文件夹按名字（目录 mtime 会随内容变化而抖动，不适合当排序键），`By=name` 时随方向。
-- 文件按 `updated_at` 或显示名排序，同值时按 `path`，结果稳定。
-- HTTP 层校验：`sort` 只能是 `time`/`name`，`order` 只能是 `asc`/`desc`，否则 400；缺省为 `time`+`desc`。
-
-**前端。** `Library.tsx` 头部有一个“排序”下拉（最新/最早/名称 A–Z/名称 Z–A），默认“最新优先”，按浏览器记在 `localStorage['tingly-project.library.sort']`。切换时把 `sort`/`order` 带给 `load()` 并触发已展开目录重新加载，行内下载直接用接口给的 `name` 作为保存文件名。
+**接口变化。** 去掉 `sort`/`order` 查询参数（对外无兼容负担）；列表按名字稳定排序；`entries[].name` 回到磁盘 basename。`LazyTree` 新增可选的 `sortItems` / `filter` / `noResults`，默认不改变原有行为。
 
 ## 前端
 
@@ -89,7 +85,7 @@ HTML 标签（`<script>`、`<iframe>`、`<img onerror>`、`<style>`、`<form>`�
 
 ### 图片切换
 
-打开图片预览后，可在**同一文件夹**的图片之间切换（只算图片，按树里的顺序，即服务器返回的顺序；其他文件和 SVG 跳过，子文件夹和父文件夹的图片不算）：
+打开图片预览后，可在**同一文件夹**的图片之间切换（只算图片，按服务器返回的顺序；浏览器里的排序/搜索不影响这个顺序；其他文件和 SVG 跳过，子文件夹和父文件夹的图片不算）：
 
 - 键盘：← / ↑ 上一张，→ / ↓ 下一张；带 Alt/Ctrl/Meta/Shift 的不处理（Alt+← 是浏览器后退）。非图片预览里方向键不拦截，照常滚动文本。
 - 头部有上一张/下一张按钮和“n / m”（`aria-live=polite`）。文件夹里只有一张图时都不显示。

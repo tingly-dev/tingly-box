@@ -172,6 +172,7 @@ export const project: PluralDict<typeof en> = {
         tree: 'Файлы Библиотеки', tooLarge: 'Файл слишком велик для просмотра.', notPreviewable: 'Этот файл нельзя просмотреть. Скачайте его.',
         previousImage: 'Предыдущее изображение', nextImage: 'Следующее изображение', scratch: 'Временные файлы (TMPDIR)',
         sort: 'Сортировка файлов', sortTimeDesc: 'Сначала новые', sortTimeAsc: 'Сначала старые', sortNameAsc: 'Имя А–Я', sortNameDesc: 'Имя Я–А',
+        search: 'Поиск файлов', noResults: 'Нет файлов, подходящих под запрос.',
     },
     projectSettings: {
         maxRunning: 'Одновременно работающих потоков',

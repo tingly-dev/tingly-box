@@ -198,39 +198,13 @@ func (l Layout) WriteLibraryFile(projectID, rel string, src io.Reader, exclusive
 	return n, err
 }
 
-// LibraryOrder is how a folder's files are listed: folders always come first,
-// by name; files follow in the given order.
-type LibraryOrder struct {
-	// By is "time" (the file's modified time) or "name"; empty means "time".
-	By string
-	// Desc is newest first, or Z to A for names.
-	Desc bool
-}
-
-const (
-	LibraryOrderTime = "time"
-	LibraryOrderName = "name"
-)
-
-// LibraryNewestFirst is the library's default order.
-var LibraryNewestFirst = LibraryOrder{By: LibraryOrderTime, Desc: true}
-
 // ListLibraryDir lists one level of the library: rel is a library-relative
-// directory ("" is the root). Folders come first, by name, then files newest
-// first; change that with ListLibraryDirOrdered.
-//
+// directory ("" is the root). Folders come first, then files, each by name.
 // Hidden (dot) entries are left out, except the scratch subtree (ScratchDir
 // and everything under it), and symlinks are left out; a hidden, escaping or
 // symlinked rel is refused, so the tree never leads outside the library. A
 // library that does not exist yet is empty.
 func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
-	return l.ListLibraryDirOrdered(projectID, rel, LibraryNewestFirst)
-}
-
-// ListLibraryDirOrdered is ListLibraryDir with the files of the folder in the
-// given order. Name is the display name (an upload's original name, without
-// its stored id); Path keeps the real one.
-func (l Layout) ListLibraryDirOrdered(projectID, rel string, order LibraryOrder) ([]LibraryEntry, error) {
 	rel, err := cleanLibraryRel(rel)
 	if err != nil {
 		return nil, err
@@ -277,11 +251,7 @@ func (l Layout) ListLibraryDirOrdered(projectID, rel string, order LibraryOrder)
 		if rel != "" {
 			p = rel + "/" + p
 		}
-		name := e.Name()
-		if !fi.IsDir() {
-			name = displayLibraryName(p, name)
-		}
-		entry := LibraryEntry{Name: name, Path: p, Kind: "file", UpdatedAt: fi.ModTime(), Origin: "upload"}
+		entry := LibraryEntry{Name: e.Name(), Path: p, Kind: "file", UpdatedAt: fi.ModTime(), Origin: "upload"}
 		if fi.IsDir() {
 			entry.Kind = "dir"
 		} else if fi.Mode().IsRegular() {
@@ -297,35 +267,11 @@ func (l Layout) ListLibraryDirOrdered(projectID, rel string, order LibraryOrder)
 		}
 		out = append(out, entry)
 	}
-	by := order.By
-	if by == "" {
-		// An unset order is the library's default, not "time, ascending".
-		order = LibraryNewestFirst
-		by = order.By
-	}
 	sort.SliceStable(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if (a.Kind == "dir") != (b.Kind == "dir") {
-			return a.Kind == "dir"
+		if (out[i].Kind == "dir") != (out[j].Kind == "dir") {
+			return out[i].Kind == "dir"
 		}
-		switch {
-		case a.Kind == "dir" && by != LibraryOrderName:
-			// A folder's mtime changes whenever something inside it does, so
-			// folders stay by name unless names themselves are being ordered.
-			if a.Name != b.Name {
-				return a.Name < b.Name
-			}
-		case by == LibraryOrderName:
-			if a.Name != b.Name {
-				return (a.Name < b.Name) != order.Desc
-			}
-		case !a.UpdatedAt.Equal(b.UpdatedAt):
-			if order.Desc {
-				return a.UpdatedAt.After(b.UpdatedAt)
-			}
-			return a.UpdatedAt.Before(b.UpdatedAt)
-		}
-		return a.Path < b.Path
+		return out[i].Name < out[j].Name
 	})
 	return out, nil
 }

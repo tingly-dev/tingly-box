@@ -21,9 +21,7 @@ import (
 
 // UploadsDir is where everything a person attaches lives, inside the
 // project library: one flat file per upload, stored as
-// `uploads/<12 hex id>-<original name>`. The id keeps stored names unique;
-// the name to show a person is derived by displayLibraryName, so the id does
-// not have to reach the UI.
+// `uploads/<12 hex id>-<original name>`. The id keeps stored names unique.
 const UploadsDir = "uploads"
 
 // SessionOwner is where a folder thread's uploads lived before they were
@@ -91,21 +89,11 @@ var uploadNameRe = regexp.MustCompile(`^[0-9a-f]{12}-.+$`)
 // names unique), the stored name for anything else.
 func DownloadName(rel string) string {
 	rel = filepath.ToSlash(filepath.Clean(rel))
-	return displayLibraryName(rel, filepath.Base(rel))
-}
-
-// displayLibraryName is the name to show a person for a library entry: an
-// upload's original name, the stored name for anything else. Only files
-// directly in uploads/ lose a prefix, and only one: SaveAttachment always
-// stores `<id>-<original name>`, so an original name that itself begins with
-// twelve hex digits and a dash is kept as `<id>-<12 hex>-name` and stripping
-// exactly the first prefix gives it back. Files anywhere else are never
-// touched — a thread's own `outputs/<12 hex>-x` is its real name.
-func displayLibraryName(rel, name string) string {
-	if filepath.ToSlash(filepath.Dir(rel)) == UploadsDir && uploadNameRe.MatchString(name) {
-		return name[idLen+1:]
+	base := filepath.Base(rel)
+	if filepath.ToSlash(filepath.Dir(rel)) == UploadsDir && uploadNameRe.MatchString(base) {
+		return base[idLen+1:]
 	}
-	return name
+	return base
 }
 
 // maxNameBytes keeps id and name within a file name limit.

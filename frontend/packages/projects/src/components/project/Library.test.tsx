@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { downloadName, Library } from './Library';
+import { Library } from './Library';
 
 const m = vi.hoisted(() => ({ fetch: vi.fn(), del: vi.fn(), notify: vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
@@ -122,14 +122,6 @@ it("shows the server's message as a toast when the folder is over the limit, and
     anchor.mockRestore();
 });
 
-it('saves an upload under the name it was given, without the stored id', () => {
-    expect(downloadName('uploads/0123456789ab-report final.pdf')).toBe('report final.pdf');
-    expect(downloadName('uploads/0123456789ab-a-b.txt')).toBe('a-b.txt');
-    expect(downloadName('uploads/notes.md')).toBe('notes.md');
-    expect(downloadName('outputs/0123456789ab-x.txt')).toBe('0123456789ab-x.txt');
-    expect(downloadName('notes.md')).toBe('notes.md');
-});
-
 it('lists the threads scratch under .tmp, labelled as scratch', async () => {
     render(<Library projectId="p1" refreshKey={0} />);
     await screen.findByText('.tmp');
@@ -143,27 +135,47 @@ it('lists the threads scratch under .tmp, labelled as scratch', async () => {
     expect(requestedPaths()).toEqual(['', '.tmp', '.tmp/t1']);
 });
 
-it('asks for the files newest first by default, and reloads them when the order changes', async () => {
+const rowNames = () => screen.getAllByRole('treeitem').map((r) => r.getAttribute('aria-label'));
+const treeCalls = () => m.fetch.mock.calls.filter((c) => String(c[0]).includes('/library/tree'));
+
+it('orders files in the browser, asks for no sort parameter, and remembers the choice', async () => {
+    const file = (name: string, at: string) => ({ name, path: name, kind: 'file' as const, size: 1, updated_at: at, origin: 'upload' });
+    m.fetch.mockImplementation((url: string) => {
+        const u = new URL(url, 'http://x');
+        if (u.pathname.endsWith('/library/tree')) return Promise.resolve(json({
+            dir: '/lib', path: '', entries: [
+                file('b.txt', '2026-01-01T00:00:03Z'),
+                file('a.txt', '2026-01-01T00:00:01Z'),
+                file('c.txt', '2026-01-01T00:00:02Z'),
+            ],
+        }));
+        return Promise.resolve(new Response('data'));
+    });
     render(<Library projectId="p1" refreshKey={0} />);
-    await screen.findByText('notes.md');
-    const sorts = () => m.fetch.mock.calls
-        .filter((c) => String(c[0]).includes('/library/tree'))
-        .map((c) => { const u = new URL(String(c[0]), 'http://x'); return `${u.searchParams.get('sort')}-${u.searchParams.get('order')}`; });
-    expect(sorts()).toEqual(['time-desc']);
+    await screen.findByText('a.txt');
+    expect(rowNames()).toEqual(['b.txt', 'c.txt', 'a.txt']);
+    const before = treeCalls().length;
 
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(await screen.findByRole('option', { name: 'library.sortNameAsc' }));
-    await waitFor(() => expect(sorts()).toEqual(['time-desc', 'name-asc']));
+    await waitFor(() => expect(rowNames()).toEqual(['a.txt', 'b.txt', 'c.txt']));
+    // Sorting is local: nothing is fetched again.
+    expect(treeCalls().length).toBe(before);
     expect(localStorage.getItem('tingly-project.library.sort')).toBe('name-asc');
+    // The tree endpoint is asked for its level only, never with sort/order.
+    expect(treeCalls().every((c) => {
+        const u = new URL(String(c[0]), 'http://x');
+        return !u.searchParams.has('sort') && !u.searchParams.has('order');
+    })).toBe(true);
 });
 
-it('lists a name that can be read and downloads the file under it', async () => {
+it('shows an upload without its stored id and downloads it under the readable name', async () => {
     const click = vi.fn();
     let download = '';
     const URLspy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
     const anchor = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { download = this.download; click(); });
-    // The server lists an upload under its original name, its id only in the path.
-    const entry = { name: 'report final.md', path: 'uploads/0123456789ab-report final.md', kind: 'file' as const, size: 12, updated_at: '2026-10-22T00:00:00Z', origin: 'upload' };
+    // The server lists the stored basename; the browser derives the readable name.
+    const entry = { name: '0123456789ab-report final.md', path: 'uploads/0123456789ab-report final.md', kind: 'file' as const, size: 12, updated_at: '2026-10-22T00:00:00Z', origin: 'upload' };
     m.fetch.mockImplementation((url: string) => {
         const u = new URL(url, 'http://x');
         if (u.pathname.endsWith('/library/tree')) return Promise.resolve(json({ dir: '/lib', path: '', entries: [entry] }));
@@ -171,9 +183,47 @@ it('lists a name that can be read and downloads the file under it', async () => 
     });
     render(<Library projectId="p1" refreshKey={0} />);
     await screen.findByText('report final.md');
+    expect(screen.queryByText('0123456789ab-report final.md')).not.toBeInTheDocument();
     fireEvent.click(within(screen.getByRole('treeitem', { name: 'report final.md' })).getByRole('button', { name: 'library.download' }));
     await waitFor(() => expect(click).toHaveBeenCalled());
     expect(download).toBe('report final.md');
     URLspy.mockRestore();
     anchor.mockRestore();
+});
+
+it('filters by name (case-insensitive, CJK) and shows a no-results state', async () => {
+    m.fetch.mockImplementation((url: string) => {
+        const u = new URL(url, 'http://x');
+        if (u.pathname.endsWith('/library/tree')) return Promise.resolve(json({
+            dir: '/lib', path: '', entries: [e('Report.txt', 'file'), e('季度报告.md', 'file'), e('notes.md', 'file'), e('outputs', 'dir')],
+        }));
+        return Promise.resolve(new Response('data'));
+    });
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('notes.md');
+    const search = screen.getByPlaceholderText('library.search');
+
+    fireEvent.change(search, { target: { value: 'REPORT' } });
+    await waitFor(() => expect(rowNames()).toEqual(['Report.txt']));
+    fireEvent.change(search, { target: { value: '报告' } });
+    await waitFor(() => expect(rowNames()).toEqual(['季度报告.md']));
+    fireEvent.change(search, { target: { value: 'nothing-matches' } });
+    await screen.findByText('library.noResults');
+    fireEvent.change(search, { target: { value: '' } });
+    await screen.findByText('notes.md');
+});
+
+it('keeps expanded folders while filtering and reveals their matches', async () => {
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('notes.md');
+    fireEvent.click(screen.getByRole('treeitem', { name: 'outputs' }));
+    await screen.findByText('a.txt');
+
+    fireEvent.change(screen.getByPlaceholderText('library.search'), { target: { value: 'a.txt' } });
+    await waitFor(() => expect(rowNames()).toEqual(['outputs', 'a.txt']));
+
+    fireEvent.change(screen.getByPlaceholderText('library.search'), { target: { value: '' } });
+    await screen.findByText('notes.md');
+    // The folder is still open, so its files come back with it.
+    expect(screen.getByText('a.txt')).toBeInTheDocument();
 });

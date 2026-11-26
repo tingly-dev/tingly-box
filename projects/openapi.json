@@ -1156,8 +1156,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List one directory level of the library (folders first, then files newest first); expand a folder by asking for its path. An upload's name is shown without its stored id. The threads' scratch (.tmp/) is listed too",
-        "description": "List one directory level of the library (folders first, then files newest first); expand a folder by asking for its path. An upload's name is shown without its stored id. The threads' scratch (.tmp/) is listed too",
+        "summary": "List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "description": "List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
         "operationId": "apiV1ProjectsIdLibraryTreeGet",
         "parameters": [
           {
@@ -1173,24 +1173,6 @@
             "name": "path",
             "in": "query",
             "description": "Library-relative directory; empty is the library root",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "description": "Order of the folder's files: \"time\" (default, modified time) or \"name\"",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "order",
-            "in": "query",
-            "description": "Sort direction: \"desc\" (default, newest or Z–A first) or \"asc\"",
             "required": false,
             "schema": {
               "type": "string"

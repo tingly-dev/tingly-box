@@ -238,7 +238,14 @@ const libraryTree: Record<string, ReturnType<typeof entry>[]> = {
     'outputs/load-test-2026-10-14': [entry('outputs/load-test-2026-10-14/charts', 'dir', 0, 18), entry('outputs/load-test-2026-10-14/report.md', 'file', 4_812, 18), entry('outputs/load-test-2026-10-14/results.json', 'file', 96_020, 19)],
     'outputs/load-test-2026-10-14/charts': [entry('outputs/load-test-2026-10-14/charts/p99.png', 'file', 54_300, 18), entry('outputs/load-test-2026-10-14/charts/throughput.png', 'file', 61_870, 18)],
     'outputs/redis-keys': [entry('outputs/redis-keys/design.md', 'file', 3_120, 60 * 3)],
-    uploads: [entry('uploads/incident-2026-10-02.pdf', 'file', 842_000, 60 * 22), entry('uploads/slo-targets.xlsx', 'file', 18_950, 60 * 30)],
+    // Uploads are stored as uploads/<12 hex id>-<original name>; the API
+    // returns that stored basename and the Library derives the readable name.
+    uploads: [
+        entry('uploads/0123456789ab-incident-2026-10-02.pdf', 'file', 842_000, 60 * 22),
+        entry('uploads/abcdefabcdef-slo-targets.xlsx', 'file', 18_950, 60 * 2),
+        entry('uploads/0123456789ab-annual-summary.csv', 'file', 4_200, 60 * 48),
+        entry('uploads/0123456789ab-fedcba987654-looks-stored.txt', 'file', 900, 60 * 10),
+    ],
 }
 
 // Library file bodies for the preview: a chart PNG, text for the rest.
