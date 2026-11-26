@@ -247,6 +247,33 @@ func InspectDirectory(ctx context.Context, raw string) (DirectoryInfo, error) {
 	return DirectoryInfo{Root: root, Kind: db.RepoGit, Branch: info.Branch, Dirty: info.Dirty}, nil
 }
 
+// checkWorkspace refuses a new thread that would not run where the project
+// configured it, and returns that workspace: the directory's resolved path, the
+// one form its spellings share (symlink, "..", trailing slash). A shared
+// thread runs in the directory itself, so only its existence matters; what Git
+// says about it (git init in it, a removed .git, a repository created around
+// it) is not part of its identity. A worktree thread's branch and worktree are
+// created at the directory, so it must still be a Git repository root; the
+// message says which setting to change when it is not.
+func checkWorkspace(ctx context.Context, repo db.Repo) (string, error) {
+	path, err := CleanFolder(repo.Path)
+	if err != nil {
+		return "", fmt.Errorf("directory %q is not available any more (%v); select it again in the project's settings", repo.Path, err)
+	}
+	workspace := db.CanonicalPath(path)
+	if repo.WorkspaceMode == db.WorkspaceShared {
+		return workspace, nil
+	}
+	info, err := InspectDirectory(ctx, workspace)
+	if err != nil {
+		return "", fmt.Errorf("directory %q is no longer a Git repository (%v); switch it to shared mode or select a Git repository in the project's settings", repo.Path, err)
+	}
+	if info.Kind != db.RepoGit || db.PathKey(info.Root) != db.PathKey(workspace) {
+		return "", fmt.Errorf("directory %q is no longer the Git repository it was configured as; switch it to shared mode or select a Git repository in the project's settings", repo.Path)
+	}
+	return workspace, nil
+}
+
 // ResolveDirectories checks paths and applies defaults, preserving previously
 // configured modes and base branches for unchanged directories.
 func ResolveDirectories(ctx context.Context, specs []DirectorySpec, previous []db.Repo, disabled bool) ([]db.Repo, error) {
