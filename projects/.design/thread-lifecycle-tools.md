@@ -53,7 +53,7 @@
 | worktree | **保留** | **删除**（`git worktree remove --force`，脏的或在跑的拒绝） | 不涉及 | 在原路径从分支重建；分支没了则只恢复记录并说明 |
 | 分支、对话记录、Claude 会话文件、Links（PR）、library 产出 | 保留 | 保留 | 原样可用 | 原样可用 |
 
-**已核实的缺口**：`Reopen` 只清 `ResolvedAt`、重选歇着状态（`threads.go:1749`），**不碰 `ArchivedAt` / `WorktreeFreedAt`**；`Restore` 只清这两个标志，**不改 resolved**。所以已归档的线程要“能说话”必须先 Restore 再 Reopen 两步；只 Reopen 的话状态变回 idle，但 `sendWith` 仍以 `ErrThreadArchived`（“restore it first”）拒绝，且 worktree 还没有。协调者没有 Restore 工具，所以对已归档线程没有任何出路；网页用户也要点两次。
+**已核实的缺口**：`Reopen` 只清 `ResolvedAt`、重选歇着状态（`threads.go:1749`），**不碰 `ArchivedAt` / `WorktreeFreedAt`**；`Restore` 只清这两个标志，**不改 resolved**。所以已归档的线程要“能说话”必须先 Restore 再 Reopen 两步；只 Reopen 的话状态变回 idle，但 `sendWith` 仍以 `ErrThreadArchived`（“restore it first”）拒绝，且 worktree 还没有。按 §4.5，这种线程协调者不可见、不可操作，不需要出路；网页用户要点两次，见 §6。
 
 ## 3 要不要 reopen
 
@@ -100,10 +100,10 @@
 | 做法 | 评价 |
 |---|---|
 | (a) 报错并点名工具：`the thread is resolved; call reopen_thread first`（archived：`…reopen_thread restores it`） | 一步显式、协调者要多一次调用；保留“resolved 是用户的决定”这道闸，也防止协调者把 PR 事件等转述自动推给已完成的线程 |
-| (b) `message_thread(…, reopen=true)` 一次完成 | 少一轮调用，但把“重开”藏在发消息里，描述变长，审计事件里要分两条；等 (a) 上线、看协调者是否真的因为多一步而出问题再决定 |
+| (b) `message_thread(…, reopen=true)` 一次完成 | **不做**（用户决定，2026-11-26） |
 | (c) 自动重开 | **不做**：resolved 是用户的验收结论（`thread-lifecycle.md` 原则 4），消息不应悄悄推翻它；网页 / IM 对 resolved 线程同样拒绝，三个入口保持一致 |
 
-推荐 **(a)**，(b) 留作阶段 3 观察项。
+**采用 (a)**。归档的线程对协调者不可见（§4.5），所以 (a) 的提示只有 resolved 一种。
 
 ### 4.3 各切换的批准要求
 
@@ -113,8 +113,8 @@
 |---|---|---|
 | `stop_thread` | 用户明说 | 不变：`cite` 必填 |
 | `resolve_thread` | 用户明说，**或**系统验证“已交接完成” | 见下 |
-| `reopen_thread` | 不需要 | 可撤销、不丢东西、线程里留痕；不要 `cite`。描述里写判断依据（§3.2） |
-| archive / unarchive(restore) / delete | 协调者**没有这些工具** | archive 会删用户磁盘上的 worktree，delete 不可撤销，是用户管理磁盘的事；restore 并入 `reopen_thread`（§4.4） |
+| `reopen_thread` | 不需要；`cite` **可选**（用户决定） | 可撤销、不丢东西、线程里留痕。给了 `cite` 就经 `quoteUser` 校验并和 `message_thread` 一样引用给线程；不给不影响。描述里写判断依据（§3.2） |
+| archive / restore / delete | 协调者**没有这些工具，也看不到已归档的线程**（§4.5） | archive 会删用户磁盘上的 worktree，delete 不可撤销，是用户管理磁盘的事 |
 
 **`resolve_thread` 的授权落到代码。** 现在的规则只在描述里，而用户已经给过一个窄授权（已合并、没有剩余工作 → 交接后可直接 resolve），应让工具检查事实，而不是靠协调者自觉：
 
@@ -133,15 +133,24 @@ resolve_thread(thread_id, cite?)
 ### 4.4 `reopen_thread` 的行为
 
 ```
-reopen_thread(thread_id)
-  resolved，未归档     → Reopen；歇着（ready / idle）；“reopened; the thread is now idle”
-  resolved + 已归档    → Restore（重建 worktree）后 Reopen；Restore 失败（目录被占、分支没了只恢复记录）如实返回，线程保持原样
+reopen_thread(thread_id, cite?)
+  resolved             → Reopen；歇着（ready / idle）；“reopened; the thread is now idle”
   已是 open            → “already open”，不算错（与 stop_thread 的无事可做一致）
-  主线程 / 别的项目     → 找不到（findThread）
+  已归档 / 主线程 / 别的项目 → 找不到（findThread，§4.5）
   项目暂停 / 归档       → 与其他工具同闸，拒绝
 ```
 
-`Threads.Reopen` 同时改成“已归档则先 Restore”，让**网页 Reopen 也一步到位**（现在要两步，§2.4），工具和网页仍然是同一个方法。结果和事件里要明确两件“不恢复”的事：授权需要重新批准、IM 绑定没有迁回；协调者读到后自己决定要不要提醒用户。
+重开后线程的授权保持清空、IM 绑定不迁回：这是线程关闭的既有行为（`close`），**不为它加新的记录或提示**（用户决定）。需要时用户重新批准即可。
+
+### 4.5 已归档的线程对协调者不可见
+
+用户决定：归档的线程协调者不能操作，理论上也不应看到。现状：`findThread`（`coordinator.go:575`）不排除已归档的线程，`list_threads` 的描述还特意写了“包括已归档的”。改为：
+
+- `findThread` 跳过 `ArchivedAt != nil` 的线程，按编号或 id 都是 “no thread … in this project”，所有协调者工具（`get_thread`、`message_thread`、`stop_thread`、`resolve_thread`、`reopen_thread`、`rename_thread`）一致；
+- `list_threads` 不再返回已归档的线程，描述同步改；
+- 因此 `message_thread` 的 `ErrThreadArchived` 提示对协调者不会出现，`Threads.Reopen` 也不需要处理归档（网页上用户仍是先 Restore 再 Reopen，见 §6）。
+
+需注意：被归档的线程仍可能出现在协调者历史里的旧消息或报告中（`#N`）；工具对它统一回答“找不到”，不泄漏它被归档了。
 
 ## 5 状态切换表
 
@@ -151,30 +160,34 @@ reopen_thread(thread_id)
 |---|---|---|---|---|
 | 歇着 / waiting / failed → resolved | Resolve（单个、批量） | `resolve_thread` | 网页：无；协调者：`cite`，或系统验证交接完成（§4.3） | working / waiting 的线程需要 `cite` |
 | working → 歇着（Stop） | Stop | `stop_thread` | `cite` | 不变 |
-| resolved → 歇着 | Reopen | `reopen_thread`（新） | 无 | 已归档的先 Restore |
-| resolved → 归档（释放 worktree） | Archive（单个、批量） | **不提供** | — | 有未提交改动 / 在跑时拒绝 |
-| 归档 → 未归档（重建 worktree） | Restore | 并入 `reopen_thread` | 无 | 网页保留独立的 Restore |
+| resolved → 歇着 | Reopen | `reopen_thread`（新） | 无（`cite` 可选） | 已归档的线程协调者看不到 |
+| resolved → 归档（释放 worktree） | Archive（单个、批量） | **不提供** | — | 有未提交改动 / 在跑时拒绝；归档后协调者看不到 |
+| 归档 → 未归档（重建 worktree） | Restore | **不提供** | — | 归档的线程协调者不可见 |
 | 删除 | Delete（仅已归档） | **不提供** | 用户确认框 | 不可撤销 |
 | 任意 → working / waiting / failed | — | **不能直接设** | — | 只由一轮产生（原则 1） |
 | 主线程的任何切换 | 不可 | 不可 | — | `ErrNotWorker` / `findThread` |
 
-## 6 与网页一致性的两处调整
+## 6 与网页
 
-1. `Threads.Reopen` 处理已归档线程（先 Restore），网页的 Reopen 按钮对已归档线程也出现，一次完成。
-2. 看板批量只有 Resolve / Archive；是否加批量 Reopen 看实际需求（误操作批量 Resolve 的场景），不阻塞本方案。
+网页行为不变：已归档线程先 Restore 再 Reopen（两步），是用户自己的磁盘管理动作，不为协调者改 `Threads.Reopen`。看板批量仍只有 Resolve / Archive；是否加批量 Reopen 看实际需求，不阻塞本方案。
 
 ## 7 分阶段
 
 | 阶段 | 内容 | 风险 |
 |---|---|---|
-| 1 | 加 `reopen_thread`（含 Restore 并入）；`Threads.Reopen` 处理已归档；`ErrResolved` / `ErrThreadArchived` 的协调者提示点名工具；改 `thread-lifecycle.md` 原则 4 / §6.1 / §11（重开“用户或协调者”）、`mcp-tools.md`、`harness` 对等测试（服务 / HTTP / MCP 同一夹具）、`coordtest` 的 resolve → reopen → message 流程；工具列表 golden 和 12000 字节上限测试 | 低：只增加一个可撤销的工具 |
-| 2 | `resolve_thread` 的授权落到代码（§4.3）：加 `cite`，无 `cite` 时校验“交接完成”；改描述；补测试（缺一条就拒绝，各条件做变异检查） | 中：会拒绝以前能过的调用，要先确认协调者提示词里“用户授权后直接 resolve”的写法同步更新 |
-| 3（可选，看数据） | `message_thread` 的 `reopen=true`；`start_thread` 的 `from_thread`（给新线程一个指向旧线程转录的入口）；网页批量 Reopen | 视使用情况 |
+| 1 | 加 `reopen_thread(thread_id, cite?)`；`ErrResolved` 的协调者提示点名工具；`findThread` 和 `list_threads` 排除已归档线程（§4.5）；改 `thread-lifecycle.md` 原则 4 / §6.1 / §11（重开“用户或协调者”）、`mcp-tools.md`；对等测试（服务 / HTTP / MCP 同一夹具）、`coordtest` 的 resolve → reopen → message 流程；工具列表 golden 和 12000 字节上限测试 | 低：增加一个可撤销的工具；隐藏归档线程是行为收紧，要看协调者提示词里有没有依赖归档线程的写法 |
+| 2 | `resolve_thread` 的授权落到代码（§4.3）：加 `cite`，无 `cite` 时校验“交接完成”；改描述；补测试（缺一条就拒绝，各条件做变异检查） | 中：会拒绝以前能过的调用，提示词里“用户授权后直接 resolve”的写法要同步更新 |
+| 可选 | `start_thread` 的 `from_thread`（给新线程一个指向旧线程转录的入口）；网页批量 Reopen | 视使用情况；`message_thread` 的 `reopen=true` 已决定不做 |
 
-## 8 需要用户拍板
+## 8 已定与待定
 
-1. **`reopen_thread` 不要 `cite`？** 推荐不要（可撤销、留痕）。若要，则和 `stop_thread` 一样必填，但“协调者想继续一个用户没提的已完成线程”在 §3.1 的 B/C 里很常见，会多一步用户确认。
-2. **`resolve_thread` 的授权**：采用“`cite` 或系统验证交接完成”（推荐），还是一律要求 `cite`？后者更严，但会取消你已经给过的“已合并且无剩余工作可直接 resolve”的授权。
-3. **重开已归档线程时自动 Restore（重建 worktree）** 是否接受？推荐接受；失败时线程保持原样并如实返回。
-4. **`message_thread` 遇 resolved**：先走 (a) 报错点名工具（推荐），观察后再决定要不要 (b)；(c) 自动重开不做。
-5. **重开后授权被清空、IM 绑定不迁回**，保持现状（推荐，重开不应悄悄恢复旧的授权）还是在 Reopen 时恢复？
+用户 2026-11-26 的决定：
+
+1. `reopen_thread` 的 `cite` 可选。
+2. 归档的线程协调者不能操作，也不应可见；重开不处理归档，不自动 Restore。
+3. `message_thread` 不加 `reopen=true`，也不自动重开。
+4. 重开后授权清空、IM 绑定不迁回：保持现状，不加新记录。
+
+仍待确认：
+
+- `resolve_thread` 的授权：本稿仍按“`cite`，或系统验证交接完成”写（§4.3），即没有 `cite` 也能 resolve 已合并、无剩余工作的线程；如果你的意思是 `resolve_thread` 也完全不检查，请说一声。
