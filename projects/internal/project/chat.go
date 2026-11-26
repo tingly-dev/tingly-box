@@ -254,6 +254,9 @@ func (m *Threads) enqueueChat(threadID, text string, atts []Attachment) error {
 	if len([]rune(text)) > 100000 {
 		return errors.New("the message is too long; send it in parts or attach it as a file")
 	}
+	if len(text) > 256<<10 {
+		return errors.New("the message is larger than 256 KiB; send it in parts or attach it as a file")
+	}
 	return m.enqueue(threadID, queued{text: text, atts: atts})
 }
 
