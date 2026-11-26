@@ -171,10 +171,10 @@ func buildHours(tx *gorm.DB, from, to time.Time) error {
 		return err
 	}
 	// The timestamp range prunes via the index; the strftime key guard is
-	// exact. Bind times converted to server-local so the driver formats them
-	// with the same offset the records were stored with.
-	scanStart := from.Add(-dstScanPad).In(time.Local)
-	scanEnd := to.Add(dstScanPad).In(time.Local)
+	// exact. Bind times in UTC to match the offset records are stored with
+	// (storage is UTC — see prepareUsageRecord).
+	scanStart := from.Add(-dstScanPad).UTC()
+	scanEnd := to.Add(dstScanPad).UTC()
 	const keyed = `FROM (SELECT strftime('%Y-%m-%d %H', timestamp) AS k, * FROM usage_records
 		WHERE timestamp >= ? AND timestamp < ?) WHERE k >= ? AND k < ?`
 

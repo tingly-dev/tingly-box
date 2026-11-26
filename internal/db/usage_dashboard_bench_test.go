@@ -49,8 +49,8 @@ func seedDashboardUsage(tb testing.TB, store *UsageStore, n int) {
 	tb.Helper()
 	rng := rand.New(rand.NewSource(42))
 	scenarios := []string{"claude_code", "codex", "opencode", "anthropic", "openai"}
-	now := time.Now()
-	todayAge := int64(now.Sub(utcDayStart(now.Local())))
+	now := time.Now().UTC()
+	todayAge := int64(now.Sub(utcDayStart(now)))
 	records := make([]UsageRecord, n)
 	for i := range records {
 		var age time.Duration

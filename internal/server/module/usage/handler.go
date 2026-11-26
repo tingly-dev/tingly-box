@@ -87,8 +87,8 @@ func (h *Handler) GetStats(c *gin.Context) {
 
 	response := UsageStatsResponse{
 		Meta: UsageStatsMeta{
-			StartTime:  query.StartTime.Format(time.RFC3339),
-			EndTime:    query.EndTime.Format(time.RFC3339),
+			StartTime:  query.StartTime.UTC().Format(time.RFC3339),
+			EndTime:    query.EndTime.UTC().Format(time.RFC3339),
 			GroupBy:    query.GroupBy,
 			TotalCount: len(data),
 		},
@@ -153,8 +153,8 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 	response := TimeSeriesResponse{
 		Meta: TimeSeriesMeta{
 			Interval:  interval,
-			StartTime: startTime.Format(time.RFC3339),
-			EndTime:   endTime.Format(time.RFC3339),
+			StartTime: startTime.UTC().Format(time.RFC3339),
+			EndTime:   endTime.UTC().Format(time.RFC3339),
 		},
 		Data: result,
 	}
@@ -221,7 +221,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			RuleUUID:         r.RuleUUID,
 			UserID:           r.UserID,
 			RequestModel:     r.RequestModel,
-			Timestamp:        r.Timestamp.Format(time.RFC3339),
+			Timestamp:        r.Timestamp.UTC().Format(time.RFC3339),
 			InputTokens:      r.InputTokens,
 			OutputTokens:     r.OutputTokens,
 			TotalTokens:      r.TotalTokens,
@@ -317,7 +317,7 @@ func (h *Handler) DeleteOldRecords(c *gin.Context) {
 	response := DeleteOldRecordsResponse{
 		Message:      "Records deleted successfully",
 		DeletedCount: deleted,
-		CutoffDate:   cutoffDate.Format(time.RFC3339),
+		CutoffDate:   cutoffDate.UTC().Format(time.RFC3339),
 	}
 
 	c.JSON(http.StatusOK, response)
