@@ -38,7 +38,7 @@ function render() {
   let list, detail;
   if (t === 'work') {
     list = workHome();
-    detail = sc === 'thread' ? threadScreen() : sc === 'project' ? projectScreen() : sc === 'folder' ? folderScreen() : '';
+    detail = sc === 'thread' ? threadScreen() : sc === 'session' ? sessionScreen() : sc === 'project' ? projectScreen() : sc === 'folder' ? folderScreen() : '';
   } else if (t === 'agent') { list = agentList(); detail = sc === 'detail' ? agentDetail() : ''; }
   else { list = me(); detail = sc === 'team' ? teamPage() : sc === 'cred' ? credPage() : sc.startsWith('fb:') ? fallbackPage(sc.slice(3)) : ''; }
   let main;

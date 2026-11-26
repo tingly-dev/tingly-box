@@ -1,0 +1,126 @@
+/* Phone session (transcript) prototype: `.design/mobile-session.md`.
+   Two options share every segment and data; only density differs:
+   A (conversation-first) folds a whole run into one line and puts process in a
+   sheet; B (structure kept) lists one line per call, folded open on tap.
+   Every tappable row is >= 44 px. */
+
+/* compact session bar: back, title + one status line, info, more */
+.sess-bar { min-height: 56px; }
+.sess-bar .ttl b { font-size: 17px; }
+.sess-bar .ttl span { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; font-size: 13px; color: var(--text2); }
+
+/* the transcript scroll: the conversation owns the middle */
+.sess-scroll { padding: 6px 16px 20px; }
+#phone[data-size=compact] .sess-scroll { padding-left: 12px; padding-right: 12px; }
+
+.daymark { text-align: center; color: var(--text3); font-size: 12px; margin: 4px 0 12px; }
+
+/* one message and its quiet action line */
+.turn { margin: 0 0 14px; }
+.turn .meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--text3); font-size: 12px; min-height: 24px; }
+.turn.me .meta { justify-content: flex-end; }
+.morebtn { min-width: 44px; min-height: 44px; margin: -10px 0 -10px 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--text3); }
+.morebtn .i { width: 16px; height: 16px; }
+
+/* assistant prose */
+.them p { margin: 0 0 10px; }
+.them p:last-child { margin-bottom: 0; }
+.them ul { margin: 0 0 10px; padding-left: 20px; }
+.them li { margin: 2px 0; }
+.them .code { margin: 10px 0; }
+.them .lbl { display: block; font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+.thin { border: 0; border-top: 1px solid var(--divider); margin: 10px 0; }
+
+/* a folded run / one call: one 44 px line, compact, quiet */
+.proc, .call, .settled, .cmdline, .errline, .subcard, .filesrow {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  min-height: 44px; padding: 0 10px; border-radius: 12px;
+  font-size: 14px; color: var(--text2); text-align: left;
+}
+.proc, .call, .settled, .cmdline, .errline { background: var(--paper); border: 1px solid var(--divider); }
+.proc { margin: 10px 0; }
+.proc .sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proc .sum b { color: var(--text); font-weight: 600; }
+.proc .sum .mut { color: var(--text3); }
+.call { margin: 4px 0; background: transparent; border-color: transparent; }
+.call b { color: var(--text); font-weight: 600; flex: none; }
+.call .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.call .ok { color: var(--ok); flex: none; font-size: 13px; }
+.call .err { color: var(--err); flex: none; font-size: 13px; }
+.call .wait { color: var(--warn); flex: none; font-size: 13px; }
+.grp { margin: 8px 0 12px; }
+.grp .hd { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--text3); font-size: 12px; padding: 0 2px; }
+.tline { padding-left: 10px; border-left: 2px solid var(--divider); margin: 2px 0 2px 6px; }
+
+/* a call's detail when opened (B), or inside the process sheet */
+.detail { margin: 4px 0 10px 16px; padding: 10px 12px; border-left: 2px solid var(--divider); }
+.detail .k { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
+.detail pre { margin: 0 0 10px; }
+
+/* subagent card */
+.subcard { align-items: flex-start; flex-direction: column; gap: 2px; padding: 10px 12px; background: var(--paper); border: 1px solid var(--divider); margin: 10px 0; }
+.subcard .top { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.subcard .top b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; }
+.subcard .top .cap { color: var(--text3); font-size: 12px; flex: none; }
+.subcard .rep { color: var(--text2); font-size: 13px; line-height: 1.4; }
+.subcard.one .rep { display: none; }
+.subcard .meta2 { color: var(--text3); font-size: 12px; }
+
+/* files sent together: one row of thumbs, one tap to preview */
+.filesrow { margin: 10px 0; background: var(--paper); border: 1px solid var(--divider); }
+.thumbs { display: flex; gap: 6px; flex: none; }
+.thumb { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, var(--hover), var(--divider)); border: 1px solid var(--divider); display: flex; align-items: center; justify-content: center; color: var(--text3); }
+.filesrow .sum { flex: 1; min-width: 0; color: var(--text); font-weight: 600; }
+.filesrow .sum span { display: block; font-weight: 400; color: var(--text3); font-size: 12px; }
+
+/* settled request / command / error one-liners */
+.settled, .cmdline, .errline { margin: 6px 0; }
+.settled .mono, .cmdline .mono, .errline .mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settled .ok, .cmdline .ok { color: var(--ok); flex: none; font-size: 13px; }
+.errline { color: var(--err); }
+.errline .err { flex: none; font-size: 13px; }
+.cmdline .cap { color: var(--text3); flex: none; font-size: 12px; }
+
+/* checklist: a 44 px strip (A) / a folded card header (B) */
+.progress { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; background: var(--paper); border-bottom: 1px solid var(--divider); font-size: 14px; color: var(--text); flex: none; }
+.progress b { font-weight: 600; }
+.progress .cur { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
+.progress .n { color: var(--text2); flex: none; }
+.progress-wrap { background: var(--paper); border-bottom: 1px solid var(--divider); flex: none; }
+.progress-wrap .items { padding: 4px 16px 12px; }
+.progress-wrap .items .it { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; }
+.progress-wrap .items .it.done { color: var(--text3); text-decoration: line-through; }
+.progress-wrap .items .it.now { font-weight: 600; }
+.progress-wrap .items .it .dot { background: var(--text3); }
+.progress-wrap .items .it.done .dot { background: var(--ok); }
+.progress-wrap .items .it.now .dot { background: var(--primary); }
+
+/* docked approval: thumb zone, 48 px buttons */
+.sess-dock { padding: 10px 16px 12px; }
+.sess-dock .h { font-size: 15px; }
+.sess-dock .q { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: var(--hover); border-radius: 10px; padding: 8px 10px; margin: 8px 0 10px; white-space: nowrap; overflow-x: auto; }
+.sess-dock .row2 { gap: 8px; }
+.sess-dock .row2 .btn { min-height: 48px; }
+.sess-dock .more { min-height: 44px; }
+
+/* typing: the dock folds to one line above the composer, still one tap away */
+.sess-wait { margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-bottom: 1px solid var(--divider); background: var(--paper); }
+.sess-wait .sum .mut { color: var(--text3); }
+
+/* composers: A one line, B one line + quick chips */
+.sess-comp { padding: 8px 8px 10px; }
+.sess-comp .line .field { min-height: 44px; padding: 10px 16px; }
+.sess-comp .send { width: 44px; height: 44px; }
+.sess-comp .chipbar { display: flex; gap: 8px; padding: 0 4px 8px 52px; overflow-x: auto; }
+.sess-comp .chip { min-height: 44px; min-width: 44px; }
+.sess-comp .settings { margin-left: auto; }
+
+/* safe-area aware bottom */
+.sess-comp { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+
+/* sheets reused from the phone kit: process, subagent, files, message actions, settings */
+.sheet .call { min-height: 48px; }
+.sheet .kv.mono span { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.sheet .actgrid { display: flex; gap: 8px; margin: 12px 0; }
+.sheet .actgrid .btn { flex: 1; min-height: 48px; }
+.msgacts .row { min-height: 52px; }
