@@ -291,8 +291,36 @@ func TestConversationPageBringsEveryUsageEvent(t *testing.T) {
 	assert.Equal(t, []string{"u1", "u2", "c", "d"}, got)
 }
 
-// A subagent found in the list is reached without paging: its own events by
-// call, and the conversation from its call to the loaded page in one read.
+// A long thread's checklist history is read without its whole transcript:
+// only the named tools' calls and their results.
+func TestPageThreadEventsByTool(t *testing.T) {
+	s := newStore(t)
+	_, main := newProject(t, s, "P")
+	add := func(e ThreadEvent) {
+		e.ThreadID = main.ID
+		require.NoError(t, s.AddThreadEvent(&e))
+	}
+	add(ThreadEvent{Kind: EvUser, Content: "hi"})
+	add(ThreadEvent{Kind: EvToolUse, Content: "TodoWrite", RequestID: "t1", Payload: `{"todos":[]}`})
+	add(ThreadEvent{Kind: EvToolResult, Content: "ok", RequestID: "t1"})
+	add(ThreadEvent{Kind: EvToolUse, Content: "Bash", RequestID: "b1"})
+	add(ThreadEvent{Kind: EvToolResult, Content: "huge output", RequestID: "b1"})
+	add(ThreadEvent{Kind: EvToolUse, Content: "TaskCreate", RequestID: "k1", Payload: `{"subject":"x"}`})
+	// A subagent's step uses the tool too, but is a line of its own.
+	add(ThreadEvent{Kind: EvToolUse, Content: "TodoWrite", RequestID: "t2", Parent: "a1"})
+	add(ThreadEvent{Kind: EvToolResult, Content: "ok", RequestID: "k1"})
+
+	page, more, err := s.PageThreadEvents(main.ID, EventPage{Tools: []string{"TodoWrite", "TaskCreate"}})
+	require.NoError(t, err)
+	assert.False(t, more)
+	var got []string
+	for _, e := range page {
+		got = append(got, e.Kind+":"+e.Content)
+	}
+	assert.Equal(t, []string{"tool_use:TodoWrite", "tool_result:ok", "tool_use:TaskCreate", "tool_result:ok"}, got,
+		"the named calls and their results only, in order; Bash and the subagent's step stay out")
+}
+
 func TestLocateSubagent(t *testing.T) {
 	s := newStore(t)
 	_, main := newProject(t, s, "P")

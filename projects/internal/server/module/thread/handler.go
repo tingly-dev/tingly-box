@@ -192,6 +192,9 @@ type MergeRequest struct {
 // maxUpload caps one uploaded file.
 const maxUpload = 200 << 20
 
+// maxTools caps the tool names one events read may filter by.
+const maxTools = 64
+
 // Handler is the thread HTTP module.
 type Handler struct {
 	svc *rt.Service
@@ -228,6 +231,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithQuery("from", "string", "An event id: every event from it on (up to `before`), to extend a loaded page back to it in one read; limit does not apply"),
 		swagger.WithQuery("call", "string", "A tool call's request id: that call's own events on the conversation (the call, its result, its task events); nothing else applies"),
 		swagger.WithQuery("since", "string", "RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit, before and from do not apply"),
+		swagger.WithQuery("tools", "string", "Comma-separated tool names: only the conversation's calls of those tools and their results, in order; a long thread's checklist without its whole transcript; other options do not apply"),
 		swagger.WithResponseModel(EventsResponse{}))
 	api.GET("/threads/:id/subagents", h.subagents, tag,
 		swagger.WithDescription("A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it"),
@@ -489,6 +493,21 @@ func (h *Handler) events(c *gin.Context) {
 			return
 		}
 		page.Since = since
+	}
+	if v := c.Query("tools"); v != "" {
+		for _, name := range strings.Split(v, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				page.Tools = append(page.Tools, name)
+			}
+		}
+		if len(page.Tools) == 0 {
+			apierr.BadRequest(c, "tools must name at least one tool")
+			return
+		}
+		if len(page.Tools) > maxTools {
+			apierr.BadRequest(c, "tools accepts at most "+strconv.Itoa(maxTools)+" tool names")
+			return
+		}
 	}
 	events, more, err := h.svc.Store.PageThreadEvents(t.ID, page)
 	if errors.Is(err, db.ErrNotFound) {

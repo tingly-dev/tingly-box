@@ -442,12 +442,32 @@ type EventPage struct {
 	// Since keeps the events written (added or changed) at or after it, all
 	// of them and of every line; Parent, Limit, Before and From do not apply.
 	Since time.Time
+	// Tools keeps only the conversation's calls of these tools and their
+	// results: a long thread's checklist history without reading its whole
+	// transcript, most of which is other tools' output. Parent, Limit, Before,
+	// From, Call and Since do not apply.
+	Tools []string
 }
 
 // PageThreadEvents returns part of a thread's transcript in order, and
 // whether older events were left out.
 func (s *Store) PageThreadEvents(threadID string, p EventPage) ([]ThreadEvent, bool, error) {
 	var out []ThreadEvent
+	if len(p.Tools) > 0 {
+		// The conversation's calls of these tools and the results answering
+		// them; a subagent's steps (parent set) are a line of their own.
+		err := s.db.Where(
+			`thread_id = ? AND parent = '' AND (
+				(kind = ? AND content IN ?) OR
+				(kind = ? AND request_id IN (
+					SELECT request_id FROM thread_events
+					WHERE thread_id = ? AND parent = '' AND kind = ? AND content IN ?
+				))
+			)`,
+			threadID, EvToolUse, p.Tools, EvToolResult, threadID, EvToolUse, p.Tools,
+		).Order("created_at ASC, rowid ASC").Find(&out).Error
+		return out, false, err
+	}
 	if !p.Since.IsZero() {
 		err := s.db.Where("thread_id = ? AND updated_at >= ?", threadID, p.Since.UTC()).Order("created_at ASC, rowid ASC").Find(&out).Error
 		return out, false, err

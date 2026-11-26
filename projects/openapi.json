@@ -2034,6 +2034,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "tools",
+            "in": "query",
+            "description": "Comma-separated tool names: only the conversation's calls of those tools and their results, in order; a long thread's checklist without its whole transcript; other options do not apply",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
