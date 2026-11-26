@@ -56,6 +56,8 @@ const GuardrailsCredentialsPage = lazy(() => import('@/pages/guardrails/Credenti
 const GuardrailsGroupsPage = lazy(() => import('@/pages/guardrails/GroupsPage'));
 const GuardrailsHistoryPage = lazy(() => import('@/pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
+// TEMPORARY prototype: bar vs line usage charts, for a screenshot comparison.
+const UsageChartProtoPage = lazy(() => import('@/pages/UsageChartProtoPage'));
 const UserUsagePage = lazy(() => import('@/pages/userUsage/UserUsagePage'));
 const QuotaHistoryPage = lazy(() => import('@/pages/QuotaHistoryPage'));
 const ModelTestPage = lazy(() => import('@/pages/ModelTestPage'));
@@ -168,6 +170,8 @@ export const appRoutes = (
         <Route path="/dashboard/users" element={<UserUsagePage />} />
             <Route path="/dashboard/quota-history" element={<QuotaHistoryPage />} />
             <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
+            {/* TEMPORARY prototype route — remove with the page after the form decision. */}
+            <Route path="/prototype/usage-charts" element={<UsageChartProtoPage />} />
             {/* Token Heatmap merged into the Usage Dashboard; keep old
                 /overview links working by redirecting to the dashboard. */}
             <Route path="/overview" element={<Navigate to="/dashboard/7d" replace />} />
