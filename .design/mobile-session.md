@@ -1,12 +1,13 @@
 # Mobile session (thread) layout
 
-> Status: **design approved** (LGTM, 2026-11-26). This is the agreed phone
-> session design (option A with B's per-call rows in the process sheet); the
-> product code is not changed yet. Implementation scope and cost are in §7.
+> Status: **implemented** in this PR (2026-11-26), behind `usePhoneShell` (the
+> phone shell; the desktop layout is unchanged). The design was approved
+> (option A with B's per-call rows in the process sheet); implementation and the
+> few deliberate deviations are in §10.
 > The prototype is in `.design/mobile-prototype/` (`app4.js` + `session.css`; open
 > `index.html?s=work,session&variant=A|B&theme=dark&w=390&h=844&frame=0`).
-> Screenshots: `library/outputs/tb-sign/mobile-session-{current,option}-*.png`
-> (the shared upload dir; paths in the report).
+> Screenshots: `library/outputs/tb-sign/mobile-session-{current,option}-*.png` (the
+> design/prototype) and `mobile-impl-*.png` (the implementation), in the shared upload dir.
 >
 > This continues `.design/mobile-ui.md` decision 8 ("Concise by default") and
 > rollout item 3 ("Workspace screens: … thread page with docked actions, sheets,
@@ -486,6 +487,66 @@ kept for reference; re-open an item if it should differ.
   390×844 and 360×800.
 - The prototype scripts pass `node --check` and render with no page errors
   (checked in Chromium).
-- No product source was changed on this branch: this is design + prototype, as
-  asked; therefore `pnpm typecheck` / `pnpm lint` of the app are unaffected. The
-  implementation phase (after the decisions above) is where those run.
+- The implementation (this PR) passes `tsc --noEmit` in `frontend` and in the
+  projects package, `oxlint`, `check-style-literals`, `check-api-arrays`, the
+  projects vitest suite (952 tests, including the new ClampedText/phone tests),
+  and the shell tests (9, run with the symlinked `node_modules` path allowed in
+  a temporary config); details and screenshots in §10.
+
+## 10. Implementation notes
+
+The approved layout is implemented behind `usePhoneShell`; the desktop
+(`ThreadPanel`, `Transcript`, `Composer`) keeps its existing rendering,
+including the wide info rail and the project/folder header. In the phone shell:
+
+- **Surface**: `ProjectPage`/`WorkdirPage` hide the page header and IM banner for
+  an open session; `MobileShell` hides the tab bar (and activity switcher) while
+  the URL has `thread=`/`session=`. `ThreadPanel` renders the compact bar (back,
+  title, status, ⋯), the settings icon in the composer, the checklist strip and
+  its sheet, and docks the live `PendingRequestCard` above the composer (the
+  transcript omits its copy).
+- **Transcript**: `Transcript` (`usePhoneShell`) renders a run as one neutral
+  `过程 · duration` row that opens a `Dialog` (the phone theme's bottom sheet)
+  with the per-call rows; a subagent card opens its body in a sheet; an error is
+  one line → sheet; settled requests/commands stay one line. `shownBlocks` does
+  not hide a settled request on the phone (the run row does not report it).
+  Messages get a 44 px meta footer: exact time (short form) + right-side copy
+  icon; copy reuses `messageCopyText` from #2811.
+- **Long text**: `transcript/ClampedText.tsx` (new) is used by the user bubble
+  (10 lines) and assistant replies (12); the 44 px 展开/收起 row is the block's
+  last row, with the bottom mask, per-component open state, `aria-expanded`/
+  `aria-controls`, and the full text in the DOM. The code block
+  (`components/Markdown.tsx`) is height-capped at 210 px on the phone with its
+  own 展开代码/收起代码 and a right-side copy icon; its horizontal scroll and
+  full-code copy are unchanged. The same wrapper is ready for error/command/
+  caption text (the error sheet uses it).
+- **Touch/i18n/a11y**: `DisclosureRow` rows get 44 px on coarse pointers (the
+  theme already raises MUI buttons/icon buttons/inputs); all new strings are in
+  en/zh/ru (transcript locales + `phone.*` in the project locale).
+
+Deliberate deviations from the design text:
+
+1. **A reply containing a fenced code block is not outer-clamped**; its code
+   block is capped and expanded on its own. An outer line clamp would hide the
+   code block's own controls and could clip its horizontal scroll. Prose-only
+   replies (the common long-text case) are clamped normally.
+2. **`content-visibility` is used on the folded process/error/command rows, not
+   on message blocks**: a skipped layout gives a clamp nothing to measure, so
+   the message blocks opt out. Paging is the existing `TAIL = 200` transcript
+   page; no virtualizer was added (report first, as agreed).
+3. **The ⋯ menu is a MUI `Menu`** (thread details, copy ref, task, subagents,
+   restart/resolve/archive, model/tokens and a "desktop-only" note), not a custom
+   sheet; the thread details themselves open a `Dialog`. MUI menus/items already
+   meet the phone theme's 44 px.
+4. **Keyboard** is a real `visualViewport`/`100dvh` layout in the app; the
+   headless screenshot is a 390×523 visible viewport (Chrome for Testing has no
+   OS keyboard), so it demonstrates the composer/safe-area geometry, not the
+   keyboard pixels.
+
+Screenshots: `mobile-impl-*` in `library/outputs/tb-sign/` — 390×844 and
+360×800, light/dark: `pool` (docked approval), `checklist` (folder session),
+`long` (clamped user/assistant), `code` (capped code + right copy),
+`long-expanded` and `code-expanded` (in-place 收起), `menu`; plus 390 light/dark
+sheets (`process`, `checklist-sheet`, `settings`, `subagent`, `rail`) and a
+`keyboard` visible-viewport shot. The mock's `t-long` thread is a dev fixture for
+the long-text states.

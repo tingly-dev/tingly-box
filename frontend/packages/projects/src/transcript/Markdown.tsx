@@ -1,7 +1,7 @@
 import XMarkdown, {type ComponentProps} from '@ant-design/x-markdown';
 import {Box} from '@mui/material';
 import {fontMono} from '@tingly/ui/theme/fonts';
-import type {ReactNode} from 'react';
+import {memo, type ReactNode} from 'react';
 import {Children, isValidElement} from 'react';
 import {useTranscriptHost} from './context';
 import { radius } from '@tingly/ui/theme/radius';
@@ -54,7 +54,7 @@ const config = {...breaksConfig, ...autolinkBoundaryConfig};
 
 // Markdown renders an agent's reply. Raw HTML in the output is shown as text,
 // never rendered: the reply comes from a model reading arbitrary files.
-const Markdown = ({content}: {content: string}) => (
+const Markdown = memo(({content}: {content: string}) => (
     <Box
         sx={{...conversationMarkdown, '& > .x-markdown > :last-child': {mb: 0}}}
     >
@@ -67,6 +67,6 @@ const Markdown = ({content}: {content: string}) => (
             disableDefaultStyles
         />
     </Box>
-);
+));
 
 export default Markdown;

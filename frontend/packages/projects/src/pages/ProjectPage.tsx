@@ -30,6 +30,7 @@ import { ThreadRequestsProvider, useThreadRequestsStore } from '../hooks/threadR
 import { useTranscript } from '../hooks/useTranscript';
 import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { readLocal, writeLocal } from '../utils/storage';
 import { needsUser } from '../components/project/threadStatus';
 import { changesLiveTasks } from '../components/workdir/backgroundTasks';
@@ -57,6 +58,7 @@ export default function ProjectPage() {
     const navigate = useNavigate();
     const notify = useNotify();
     const { onProjectsChanged: refresh, paths: routes, embedded, session } = useProjectsHost();
+    const phone = usePhoneShell();
     const [params, setParams] = useSearchParams();
     const threadId = params.get('thread') ?? '';
 
@@ -435,6 +437,7 @@ export default function ProjectPage() {
         <ThreadRequestsProvider value={requests}>
             <WorkspaceLayout
                 pane={pane}
+                hideHeader={phone && !!threadId}
                 headerInsetXs={embedded ? 2 : 6}
                 paneLabel={t('project.overview')}
                 paneAttention={waiting > 0}
@@ -468,7 +471,7 @@ export default function ProjectPage() {
                         </Tooltip>
                     </>
                 )}
-                notice={im && (
+                notice={phone && threadId ? undefined : im && (
                     <Box sx={{ display: { xs: 'flex', md: 'none' }, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
                         <ProjectImTags im={im} maxVisible={99} showLabel />
                     </Box>
