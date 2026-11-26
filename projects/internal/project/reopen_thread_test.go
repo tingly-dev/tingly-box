@@ -81,8 +81,9 @@ func TestReopenThreadRefusesAForgedCite(t *testing.T) {
 	assert.Equal(t, db.ThreadResolved, f.status(t, th.ID))
 }
 
-// An archived thread is the user's to manage: no tool of the coordinator finds
-// it, lists it or shows it in the thread table.
+// An archived thread is the user's to manage: naming it answers that it is
+// archived (where it is restored), no tool acts on it, and it is neither
+// listed nor shown in the thread table.
 func TestTheCoordinatorCannotSeeAnArchivedThread(t *testing.T) {
 	f := newStopFixture(t)
 	th := f.start(t, "done")
@@ -104,7 +105,7 @@ func TestTheCoordinatorCannotSeeAnArchivedThread(t *testing.T) {
 	for name, args := range calls {
 		out, isErr := f.call(t, name, args)
 		assert.True(t, isErr, name)
-		assert.Contains(t, out, "no thread", name)
+		assert.Contains(t, out, "is archived: only the user can restore it", name)
 	}
 	out, _ := f.call(t, "list_threads", map[string]any{})
 	assert.NotContains(t, out, threadName(th))

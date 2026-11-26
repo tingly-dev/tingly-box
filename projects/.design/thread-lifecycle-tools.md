@@ -142,15 +142,13 @@ reopen_thread(thread_id, cite?)
 
 重开后线程的授权保持清空、IM 绑定不迁回：这是线程关闭的既有行为（`close`），**不为它加新的记录或提示**（用户决定）。需要时用户重新批准即可。
 
-### 4.5 已归档的线程对协调者不可见
+### 4.5 已归档的线程：不可操作，回答“已归档”
 
-用户决定：归档的线程协调者不能操作，理论上也不应看到。现状：`findThread`（`coordinator.go:575`）不排除已归档的线程，`list_threads` 的描述还特意写了“包括已归档的”。改为：
+用户决定（2026-11-26）：归档的线程协调者不能操作；被问到时回答“已归档”，不说“找不到”（2026-11-26 补充）。实现：
 
-- `findThread` 跳过 `ArchivedAt != nil` 的线程，按编号或 id 都是 “no thread … in this project”，所有协调者工具（`get_thread`、`message_thread`、`stop_thread`、`resolve_thread`、`reopen_thread`、`rename_thread`）一致；
-- `list_threads` 不再返回已归档的线程，描述同步改；
-- 因此 `message_thread` 的 `ErrThreadArchived` 提示对协调者不会出现，`Threads.Reopen` 也不需要处理归档（网页上用户仍是先 Restore 再 Reopen，见 §6）。
-
-需注意：被归档的线程仍可能出现在协调者历史里的旧消息或报告中（`#N`）；工具对它统一回答“找不到”，不泄漏它被归档了。
+- `findThread` 仍能找到已归档的线程，但返回错误：“thread #3 \"…\" is archived: only the user can restore it, in Projects on the web”（`actionableThread`，`coordinator.go`）。所有协调者工具（`get_thread`、`message_thread`、`stop_thread`、`resolve_thread`、`reopen_thread`、`rename_thread`）都是这一句，协调者能告诉用户线程去哪了，而不是以为它不存在；
+- `list_threads` 和提示词里的线程表不含已归档的线程（`visibleThreads`），描述同步改；
+- 因此 `message_thread` 的 `ErrThreadArchived` 提示对协调者不会出现，`Threads.Reopen` 也不处理归档（网页上用户仍是先 Restore 再 Reopen，见 §6）。
 
 ## 5 状态切换表
 
@@ -160,7 +158,7 @@ reopen_thread(thread_id, cite?)
 |---|---|---|---|---|
 | 歇着 / waiting / failed → resolved | Resolve（单个、批量） | `resolve_thread` | 网页：无；协调者：`cite`，或系统验证交接完成（§4.3） | working / waiting 的线程需要 `cite` |
 | working → 歇着（Stop） | Stop | `stop_thread` | `cite` | 不变 |
-| resolved → 歇着 | Reopen | `reopen_thread`（新） | 无（`cite` 可选） | 已归档的线程协调者看不到 |
+| resolved → 歇着 | Reopen | `reopen_thread`（新） | 无（`cite` 可选） | 已归档的线程回答“已归档”，不能重开 |
 | resolved → 归档（释放 worktree） | Archive（单个、批量） | **不提供** | — | 有未提交改动 / 在跑时拒绝；归档后协调者看不到 |
 | 归档 → 未归档（重建 worktree） | Restore | **不提供** | — | 归档的线程协调者不可见 |
 | 删除 | Delete（仅已归档） | **不提供** | 用户确认框 | 不可撤销 |

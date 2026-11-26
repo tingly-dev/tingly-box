@@ -574,8 +574,9 @@ func threadName(t *db.Thread) string {
 // findThread finds a project's thread by its number ("#3", or "#3 a1b2c3d4"
 // and "#3 Title" as the prompt and a copied reference write it) or by its id
 // or an id prefix. Ids never start with "#", so the two cannot be confused.
-// visibleThreads drops the archived threads: the user shelved them, so the
-// coordinator neither sees nor acts on them (.design/thread-lifecycle-tools.md).
+// visibleThreads drops the archived threads from what the coordinator is shown
+// (the prompt's thread table, list_threads): the user shelved them. A thread
+// named outright is answered as archived instead of as missing (findThread).
 func visibleThreads(ts []db.Thread) []db.Thread {
 	out := make([]db.Thread, 0, len(ts))
 	for _, t := range ts {
@@ -586,13 +587,26 @@ func visibleThreads(ts []db.Thread) []db.Thread {
 	return out
 }
 
+// actionableThread answers an archived thread as archived rather than as
+// missing, so the coordinator can tell the user where it went (it is restored
+// on the web); none of its tools may work on it.
+func actionableThread(t *db.Thread) (*db.Thread, error) {
+	if t.ArchivedAt != nil {
+		name := short(t.ID)
+		if t.Seq > 0 {
+			name = fmt.Sprintf("#%d %q", t.Seq, t.Title)
+		}
+		return nil, fmt.Errorf("thread %s is archived: only the user can restore it, in Projects on the web", name)
+	}
+	return t, nil
+}
+
 func (c *Coordinator) findThread(projectID, ref string) (*db.Thread, error) {
 	ref = strings.TrimSpace(ref)
 	threads, err := c.store.ListThreads(projectID)
 	if err != nil {
 		return nil, err
 	}
-	threads = visibleThreads(threads)
 	if f := strings.Fields(ref); len(f) > 0 && strings.HasPrefix(f[0], "#") {
 		n, err := strconv.Atoi(strings.TrimPrefix(f[0], "#"))
 		if err != nil || n <= 0 {
@@ -600,14 +614,14 @@ func (c *Coordinator) findThread(projectID, ref string) (*db.Thread, error) {
 		}
 		for i := range threads {
 			if threads[i].Seq == n {
-				return &threads[i], nil
+				return actionableThread(&threads[i])
 			}
 		}
 		return nil, fmt.Errorf("no thread #%d in this project", n)
 	}
 	for i := range threads {
 		if ref != "" && strings.HasPrefix(threads[i].ID, ref) {
-			return &threads[i], nil
+			return actionableThread(&threads[i])
 		}
 	}
 	return nil, fmt.Errorf("no thread %q in this project", ref)
