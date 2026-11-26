@@ -1,6 +1,6 @@
 import { act, render } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { composeTitle, setTitleAttention, truncatePart, useDocumentTitle } from './documentTitle';
+import { describe, expect, it } from 'vitest';
+import { composeTitle, truncatePart, useDocumentTitle } from './documentTitle';
 
 const Probe = ({ parts, priority }: { parts: (string | null)[]; priority?: number }) => {
   useDocumentTitle(parts, priority);
@@ -8,11 +8,8 @@ const Probe = ({ parts, priority }: { parts: (string | null)[]; priority?: numbe
 };
 
 describe('document title', () => {
-  afterEach(() => setTitleAttention(false));
-
   it('composes focus, product and site', () => {
     expect(composeTitle(['#12 Fix', 'tb-ui'], { product: 'Tingly Box', site: 'a:1' })).toBe('#12 Fix · tb-ui · Tingly Box · a:1');
-    expect(composeTitle([], { product: 'Tingly Box', attention: true })).toBe('● Tingly Box');
   });
 
   it('truncates long parts', () => {
@@ -28,8 +25,6 @@ describe('document title', () => {
     expect(document.title.startsWith('#3 Thing · proj · ')).toBe(true);
     page.unmount();
     expect(document.title.startsWith('Credentials · ')).toBe(true);
-    act(() => setTitleAttention(true));
-    expect(document.title.startsWith('● Credentials')).toBe(true);
     shell.unmount();
   });
 });
