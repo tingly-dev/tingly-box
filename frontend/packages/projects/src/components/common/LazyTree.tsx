@@ -23,7 +23,7 @@ const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'),
  * move, Right/Left to open and close, Enter or Space to toggle or activate.
  * `load('')` lists the root.
  */
-export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpandedChange, refreshKey = 0, onActivate, renderMeta, renderActions, empty }: {
+export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpandedChange, refreshKey = 0, onActivate, renderMeta, renderActions, empty, sortItems, filter, noResults }: {
     ariaLabel: string;
     load: (dir: string) => Promise<N[]>;
     expanded: string[];
@@ -36,6 +36,12 @@ export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpa
     renderActions?: (node: N, row: { tabIndex: 0 | -1 }) => ReactNode;
     /** Shown when the root has no entries. */
     empty?: ReactNode;
+    /** Orders a folder's entries for display without reloading them. */
+    sortItems?: (items: N[]) => N[];
+    /** Keeps only the entries (and the folders leading to them) a search matches. */
+    filter?: (node: N) => boolean;
+    /** Shown when the filter leaves nothing. */
+    noResults?: ReactNode;
 }) {
     const { t } = useTranslation('projects');
     const [dirs, setDirs] = useState<Record<string, Dir<N>>>({});
@@ -89,24 +95,70 @@ export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpa
     const retry = (path: string) => fetchDir(path);
     const toggle = (path: string) => onExpandedChange(expanded.includes(path) ? expanded.filter((p) => p !== path) : [...expanded, path]);
 
+    // A folder is shown while filtering when it matches or a loaded folder
+    // below it does. Only loaded levels are known; expanding an unopened
+    // folder still loads it, and its matches appear then.
+    const dirHasMatch = useMemo(() => {
+        const memo = new Map<string, boolean>();
+        const has = (path: string): boolean => {
+            const known = memo.get(path);
+            if (known !== undefined) return known;
+            const d = dirs[path];
+            let found = false;
+            if (d?.state === 'ok') {
+                found = d.items.some((n) => (filter ? filter(n) : true) || (n.kind === 'dir' && has(n.path)));
+            }
+            memo.set(path, found);
+            return found;
+        };
+        return has;
+    }, [dirs, filter]);
+
+    // Filtering over what is loaded reveals its hits without extra requests:
+    // open the folders that already have a matching descendant.
+    useEffect(() => {
+        if (!filter) return;
+        const open = new Set(expanded);
+        let changed = false;
+        for (const path of Object.keys(dirs)) {
+            const d = dirs[path];
+            if (d?.state !== 'ok') continue;
+            for (const n of d.items) {
+                if (n.kind === 'dir' && dirHasMatch(n.path) && !open.has(n.path)) {
+                    open.add(n.path);
+                    changed = true;
+                }
+            }
+        }
+        if (changed) onExpandedChange([...open]);
+    }, [filter, dirs, expanded, dirHasMatch, onExpandedChange]);
+
     interface Row { node: N; depth: number; set: number; pos: number }
     type Status = { path: string; depth: number; kind: 'loading' | 'error' | 'empty'; error?: string };
     const flat = useMemo(() => {
         const out: (Row | Status)[] = [];
+        const visible = (n: N) => !filter || filter(n) || (n.kind === 'dir' && dirHasMatch(n.path));
         const walk = (path: string, depth: number) => {
             const d = dirs[path];
             if (!d) return;
             if (d.state === 'loading') { if (path !== '') out.push({ path, depth, kind: 'loading' }); return; }
             if (d.state === 'error') { out.push({ path, depth, kind: 'error', error: d.error }); return; }
-            if (d.items.length === 0 && path !== '') out.push({ path, depth, kind: 'empty' });
-            d.items.forEach((node, i) => {
-                out.push({ node, depth, set: d.items.length, pos: i + 1 });
+            const kept = filter ? d.items.filter(visible) : d.items;
+            const items = sortItems ? sortItems(kept) : kept;
+            if (items.length === 0 && path !== '' && !filter) out.push({ path, depth, kind: 'empty' });
+            items.forEach((node, i) => {
+                out.push({ node, depth, set: items.length, pos: i + 1 });
                 if (node.kind === 'dir' && expanded.includes(node.path)) walk(node.path, depth + 1);
             });
         };
         walk('', 1);
         return out;
-    }, [dirs, expanded]);
+    }, [dirs, expanded, filter, dirHasMatch, sortItems]);
+    const rootVisible = useMemo(() => {
+        const d = dirs[''];
+        if (!d || d.state !== 'ok') return false;
+        return d.items.some((n) => !filter || filter(n) || (n.kind === 'dir' && dirHasMatch(n.path)));
+    }, [dirs, filter, dirHasMatch]);
     const nodes = flat.filter((r): r is Row => 'node' in r);
     const current = nodes.some((r) => r.node.path === focused) ? focused : nodes[0]?.node.path ?? '';
 
@@ -145,6 +197,7 @@ export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpa
     const rootDir = dirs[''];
     if (!rootDir || rootDir.state === 'loading') return <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, color: 'text.secondary' }}><CircularProgress size={16} /><Typography variant="body2">{t('tree.loading')}</Typography></Box>;
     if (rootDir.state === 'error') return <Alert severity="error" action={<Button color="inherit" onClick={() => retry('')}>{t('tree.retry')}</Button>}>{rootDir.error}</Alert>;
+    if (filter && !rootVisible) return <>{noResults ?? empty ?? <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('tree.emptyFolder')}</Typography>}</>;
     if (rootDir.items.length === 0) return <>{empty ?? <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('tree.emptyFolder')}</Typography>}</>;
 
     const pad = (depth: number) => 0.5 + (depth - 1) * 2;

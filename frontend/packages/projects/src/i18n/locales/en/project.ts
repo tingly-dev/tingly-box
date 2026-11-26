@@ -169,6 +169,7 @@ export const project = {
         tree: 'Library files', tooLarge: 'This file is too large to preview.', notPreviewable: 'This file can’t be previewed. Download it instead.',
         previousImage: 'Previous image', nextImage: 'Next image', scratch: 'Scratch (TMPDIR)',
         sort: 'Sort files', sortTimeDesc: 'Newest first', sortTimeAsc: 'Oldest first', sortNameAsc: 'Name A–Z', sortNameDesc: 'Name Z–A',
+        search: 'Search files', noResults: 'No files match your search.',
     },
     projectSettings: {
         maxRunning: 'Threads running at once',
