@@ -23,6 +23,11 @@ import (
 //	<root>/<project>/threads/<thread>.settings.json
 type Layout struct {
 	Root string
+	// DataRoot is the instance's data directory, of which Root (the projects
+	// directory) is one child. Chats live beside projects/, under it. Empty
+	// keeps chats under Root, which is what tests and standalone OpenAPI
+	// generation use.
+	DataRoot string
 }
 
 // Dir is a project's directory.
@@ -79,9 +84,15 @@ func (l Layout) SessionSettingsFile(threadID string) string {
 	return filepath.Join(l.Root, "_sessions", "settings", threadID+".json")
 }
 
-// ChatsDir holds the read-only chats, beside the projects directories and
+// ChatsDir holds the read-only chats, beside the projects directory and
 // outside every project. See .design/chat-mode.md §4.2.
-func (l Layout) ChatsDir() string { return filepath.Join(l.Root, "chats") }
+func (l Layout) ChatsDir() string {
+	root := l.DataRoot
+	if root == "" {
+		root = l.Root
+	}
+	return filepath.Join(root, "chats")
+}
 
 // ChatDir is one chat's working directory: the agent's cwd and the root the
 // file tools are confined to.

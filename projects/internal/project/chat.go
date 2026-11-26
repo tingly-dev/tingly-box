@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -546,8 +547,14 @@ func (m *Threads) chatSandboxFor(ctx context.Context, t *db.Thread, opts *agentb
 		return nil
 	}
 	home := m.layout.ChatDir(t.ID)
+	// The host home (not the launch env's, which the chat leaves alone) is where
+	// the tools it runs with are installed: node and the Claude Code CLI.
+	hostHome := envValue(opts.Env, "HOME")
+	if u, err := user.Current(); err == nil && u.HomeDir != "" {
+		hostHome = u.HomeDir
+	}
 	ms := []sandbox.Mount{{Path: t.Cwd, Writable: true}}
-	for _, dir := range toolchainDirs(envValue(opts.Env, "HOME"), envValue(opts.Env, "PATH")) {
+	for _, dir := range toolchainDirs(hostHome, envValue(opts.Env, "PATH")) {
 		ms = append(ms, sandbox.Mount{Path: dir, Optional: true})
 	}
 	keep := append([]string{}, sandboxEnv...)

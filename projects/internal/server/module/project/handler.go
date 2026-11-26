@@ -879,8 +879,11 @@ func (h *Handler) delete(c *gin.Context) {
 }
 
 func (h *Handler) events(c *gin.Context) {
-	p, ok := h.project(c)
-	if !ok {
+	// The stream is also how a chat page hears its own thread (the hidden chat
+	// project has no project page, but its events stream is the same).
+	p, err := h.svc.Store.GetProject(c.Param("id"))
+	if err != nil {
+		apierr.Store(c, err, "project")
 		return
 	}
 	h.stream(c, p.ID)

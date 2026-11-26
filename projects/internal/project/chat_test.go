@@ -11,8 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
@@ -193,4 +195,21 @@ func TestChatExportIncludesAttachments(t *testing.T) {
 
 	err = f.threads.ExportChat(f.project.ID, &bytes.Buffer{})
 	assert.Error(t, err, "a project is not a chat")
+}
+
+func TestChatPrompterDeniesEverything(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	p, err := f.store.ChatProject(ChatProjectName)
+	require.NoError(t, err)
+	th := &db.Thread{ProjectID: p.ID, Agent: db.AgentClaudeCode, Status: db.ThreadIdle, SessionID: uuid.NewString()}
+	require.NoError(t, f.store.CreateThread(th))
+	pr := f.threads.prompter(th.ID)
+
+	approval, err := pr.OnApproval(context.Background(), agentboot.ApprovalRequestEvent{ToolName: "Bash", Input: map[string]any{"command": "ls"}})
+	require.NoError(t, err)
+	assert.False(t, approval.Approved, "a chat denies every approval without asking")
+
+	ask, err := pr.OnAsk(context.Background(), agentboot.AskRequestEvent{ToolName: "AskUserQuestion"})
+	require.NoError(t, err)
+	assert.False(t, ask.Approved, "a chat cannot ask questions")
 }
