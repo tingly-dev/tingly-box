@@ -23,9 +23,6 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/sandbox"
-	// Not shipped yet (Projects threads need network open); here to run the
-	// CLI in a microVM with TB_SANDBOX_LIVE_RUNTIME=microvm.
-	_ "github.com/tingly-dev/tingly-box/sandbox/microvm"
 )
 
 // scriptedAnthropic answers Claude Code's requests: the first turn with tools

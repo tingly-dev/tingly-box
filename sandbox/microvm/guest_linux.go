@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/tingly-dev/tingly-box/sandbox"
 	"github.com/tingly-dev/tingly-box/sandbox/netproxy"
 )
 
@@ -79,6 +80,12 @@ func guest() error {
 			return err
 		}
 	}
+	if s.Net != nil {
+		if err := setUpNet(s.Net); err != nil {
+			report(result{Error: "network: " + err.Error()})
+			return err
+		}
+	}
 	env := s.Env
 	if pl := (netproxy.Plan{Proxy: s.Proxy, Expose: s.Expose}); !pl.Empty() {
 		ports := vsockPorts(pl)
@@ -104,6 +111,15 @@ func guest() error {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdio[0], stdio[1], stdio[2]
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true,
 		Credential: &syscall.Credential{Uid: uint32(s.UID), Gid: uint32(s.GID), Groups: []uint32{}}}
+	if s.Limits != nil {
+		cg, err := limit(s.Limits)
+		if err != nil {
+			report(result{Error: "limits: " + err.Error()})
+			return err
+		}
+		defer cg.Close()
+		cmd.SysProcAttr.UseCgroupFD, cmd.SysProcAttr.CgroupFD = true, int(cg.Fd())
+	}
 	oomBefore := oomKills()
 	if err := cmd.Start(); err != nil {
 		report(result{Error: err.Error()})
@@ -134,6 +150,45 @@ func guest() error {
 	return nil
 }
 
+// limit makes the cgroup the command starts in, with r's limits; the guest's
+// memory has room for the limit and the guest's own needs.
+func limit(r *sandbox.Resources) (*os.File, error) {
+	const root, dir = "/sys/fs/cgroup", "/sys/fs/cgroup/sandbox"
+	if err := syscall.Mount("cgroup2", root, "cgroup2", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""); err != nil {
+		return nil, fmt.Errorf("mount cgroup2: %w", err)
+	}
+	write := func(name, v string) error {
+		if err := os.WriteFile(name, []byte(v), 0); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		return nil
+	}
+	if err := write(root+"/cgroup.subtree_control", "+memory +pids +cpu"); err != nil {
+		return nil, err
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return nil, err
+	}
+	if r.MemoryBytes > 0 {
+		if err := write(dir+"/memory.max", strconv.FormatInt(r.MemoryBytes, 10)); err != nil {
+			return nil, err
+		}
+		_ = write(dir+"/memory.swap.max", "0")
+	}
+	if r.Tasks > 0 {
+		if err := write(dir+"/pids.max", strconv.Itoa(r.Tasks)); err != nil {
+			return nil, err
+		}
+	}
+	if r.CPU > 0 {
+		// Thousandths of a core, in microseconds per 100ms period.
+		if err := write(dir+"/cpu.max", strconv.Itoa(max(1000, r.CPU*100))+" 100000"); err != nil {
+			return nil, err
+		}
+	}
+	return os.Open(dir)
+}
+
 // oomKills is how many processes the guest's OOM killer has killed.
 func oomKills() int {
 	b, _ := os.ReadFile("/proc/vmstat")
@@ -149,7 +204,9 @@ func oomKills() int {
 // dialHost connects to the host (CID 2) on a vsock port.
 func dialHost(port uint32) (*os.File, error) {
 	const afVsock = 40
-	fd, err := syscall.Socket(afVsock, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	// Non-blocking, then waited for: a blocking connect is interrupted by the
+	// Go runtime's signals (EINTR), and cannot be retried.
+	fd, err := syscall.Socket(afVsock, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC|syscall.SOCK_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +218,35 @@ func dialHost(port uint32) (*os.File, error) {
 		flags     uint8
 		zero      [3]uint8
 	}{family: afVsock, port: port, cid: 2}
-	if _, _, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(&sa)), unsafe.Sizeof(sa)); e != 0 {
+	fail := func(e error) (*os.File, error) {
 		_ = syscall.Close(fd)
 		return nil, fmt.Errorf("vsock port %d: %w", port, e)
+	}
+	if _, _, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(&sa)), unsafe.Sizeof(sa)); e != 0 && e != syscall.EINPROGRESS && e != syscall.EINTR {
+		return fail(e)
+	}
+	for {
+		pfd := [1]struct {
+			fd             int32
+			events, revent int16
+		}{{fd: int32(fd), events: 0x4 /* POLLOUT */}}
+		_, _, e := syscall.Syscall6(syscall.SYS_PPOLL, uintptr(unsafe.Pointer(&pfd[0])), 1, 0, 0, 0, 0)
+		if e == syscall.EINTR {
+			continue
+		}
+		if e != 0 {
+			return fail(e)
+		}
+		break
+	}
+	if soErr, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_ERROR); err != nil || soErr != 0 {
+		if err == nil {
+			err = syscall.Errno(soErr)
+		}
+		return fail(err)
+	}
+	if err := syscall.SetNonblock(fd, false); err != nil {
+		return fail(err)
 	}
 	return os.NewFile(uintptr(fd), fmt.Sprintf("vsock:%d", port)), nil
 }
@@ -180,6 +263,32 @@ func loopbackUp() error {
 	*(*uint16)(unsafe.Pointer(&ifr[16])) = syscall.IFF_UP | syscall.IFF_RUNNING
 	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), syscall.SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifr[0]))); e != 0 {
 		return e
+	}
+	return nil
+}
+
+// setUpNet brings up the card and routes through it, with the host's ip (the
+// guest sees /usr). The filter is outside the guest, in the namespace the
+// card's tap is in.
+func setUpNet(n *guestNet) error {
+	ip := ""
+	for _, p := range []string{"/usr/sbin/ip", "/usr/bin/ip", "/sbin/ip", "/bin/ip"} {
+		if _, err := os.Stat(p); err == nil {
+			ip = p
+			break
+		}
+	}
+	if ip == "" {
+		return errors.New("ip is not installed on the host")
+	}
+	for _, args := range [][]string{
+		{"link", "set", "eth0", "up"},
+		{"addr", "add", n.Addr, "dev", "eth0"},
+		{"route", "add", "default", "via", n.Gateway},
+	} {
+		if out, err := exec.Command(ip, args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("ip %s: %v: %s", strings.Join(args, " "), err, out)
+		}
 	}
 	return nil
 }
