@@ -5732,29 +5732,29 @@
         "https://cloudgpu.app/v1/models"
       ]
     },
-    "uberllm-dev": {
-      "id": "uberllm-dev",
-      "name": "UberLLM",
+    "martllm-dev": {
+      "id": "martllm-dev",
+      "name": "MartLLM",
       "status": "active",
       "valid": true,
-      "canonical_domain": "api.uberllm.dev",
-      "vendor_family": "uberllm",
+      "canonical_domain": "api.martllm.com",
+      "vendor_family": "martllm",
       "region": "global",
       "plan": "standard",
-      "website": "https://uberllm.dev",
-      "description": "UberLLM API gateway: one key for many labs' models (OpenAI + Anthropic compatible, prepaid credit)",
+      "website": "https://martllm.com",
+      "description": "MartLLM API gateway: one key for many labs' models (OpenAI + Anthropic compatible, prepaid credit)",
       "type": "reseller",
-      "api_doc": "https://uberllm.dev/llms.txt",
-      "model_doc": "https://api.uberllm.dev/v1/models",
-      "pricing_doc": "https://uberllm.dev/models",
-      "base_url_openai": "https://api.uberllm.dev/v1",
-      "base_url_anthropic": "https://api.uberllm.dev",
+      "api_doc": "https://martllm.com/llms.txt",
+      "model_doc": "https://api.martllm.com/v1/models",
+      "pricing_doc": "https://martllm.com/models",
+      "base_url_openai": "https://api.martllm.com/v1",
+      "base_url_anthropic": "https://api.martllm.com",
       "models": [],
       "supports_models_endpoint": true,
       "last_updated": "2026-11-10",
       "sources": [
-        "https://uberllm.dev/llms.txt",
-        "https://api.uberllm.dev/v1/models"
+        "https://martllm.com/llms.txt",
+        "https://api.martllm.com/v1/models"
       ]
     },
     "vercel-ai-gateway": {

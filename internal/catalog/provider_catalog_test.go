@@ -620,9 +620,9 @@ func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
 			supportsModelsEndpoint: true,
 		},
 		{
-			id:                     "uberllm-dev",
-			openAIBaseURL:          "https://api.uberllm.dev/v1",
-			anthropicBaseURL:       "https://api.uberllm.dev",
+			id:                     "martllm-dev",
+			openAIBaseURL:          "https://api.martllm.com/v1",
+			anthropicBaseURL:       "https://api.martllm.com",
 			supportsModelsEndpoint: true,
 		},
 	}
