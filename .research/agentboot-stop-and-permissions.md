@@ -210,7 +210,7 @@
 | 对照：不切模式时两个命令都各自要审批 | `mode_probe.py control` + `mode_probe_control.txt` |
 | `apply_flag_settings` 不能撤销启动规则 | `agentboot/claude/ref/live-control.md` “Settings” 一节 |
 | 台账行与“撤销要重启”提示 | `agentboot/engine/tasks_test.go`、`permission_live_test.go`（本轮追加） |
-| 暂停/归档帮助文字 | 截图 `library/outputs/agentboot-stop-and-permi/pause-archive-help-zh.png`（mock 模式、zh） |
+| 暂停/归档帮助文字 | 截图 [`../.design/images/pause-archive-help.png`](../.design/images/pause-archive-help.png)（mock 模式、zh） |
 
 ## 4 下一步（可执行）
 
