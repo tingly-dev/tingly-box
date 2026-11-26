@@ -80,8 +80,9 @@ instead of at turn start, so tightening stops the engine approving on the
 user's behalf at once. What a live change cannot do: stop a command or
 background task already running (modes gate tool calls, not processes); take
 back an allow rule the process started with (see "Settings" below, which
-applies only from the next start); and widen to `bypassPermissions`, which the
-CLI refuses unless the process was started with
+applies only from the next start, and which the engine now names in the
+transcript when a start-up rule is removed); and widen to `bypassPermissions`,
+which the CLI refuses unless the process was started with
 `--dangerously-skip-permissions` — that one falls back to the next turn's
 restart, which launches with the mode. The analysis, the measurements and the
 remaining gaps are in `.research/agentboot-stop-and-permissions.md` §2.

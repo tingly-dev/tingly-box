@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,6 +13,19 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
 )
+
+// systemLines returns the system notes recorded for id.
+func systemLines(store *memStore, id string) []string {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	var out []string
+	for _, en := range store.entries[id] {
+		if en.Kind == KindSystem {
+			out = append(out, en.Content)
+		}
+	}
+	return out
+}
 
 // A thread's permission mode can change while its turn runs (a long turn, a
 // tightened mode). The change must reach the process then, not only at the
@@ -156,6 +170,57 @@ func TestSetModeLive_UnavailableAutoFallsBack(t *testing.T) {
 	}
 	if len(f.modes) != 2 || f.modes[0] != "auto" || f.modes[1] != "acceptEdits" {
 		t.Fatalf("modes sent = %v, want [auto acceptEdits]", f.modes)
+	}
+}
+
+// Removing a rule the process started with cannot take effect before a
+// restart (apply_flag_settings only layers); the transcript says so. A rule
+// that was only pushed earlier does go away with the next push, and gets no
+// note.
+func TestApplyLive_NotesStartupRuleRemovals(t *testing.T) {
+	newCase := func(have launchState) (*Engine, *memStore) {
+		store := newMemStore()
+		e := New(Config{Store: store})
+		t.Cleanup(func() { e.Shutdown(context.Background()) })
+		e.mu.Lock()
+		e.launch["id"] = have
+		e.mu.Unlock()
+		return e, store
+	}
+	want := launchState{sig: "s", model: "m", mode: "d", live: `{"permissions":{"allow":["Bash(b)"]}}`}
+
+	// Bash(a) was in the start-up file and is gone from the settings.
+	startup := `{"permissions":{"allow":["Bash(a)","Bash(b)"]}}`
+	have := launchState{sig: "s", model: "m", mode: "d", live: startup, startup: startup}
+	e, store := newCase(have)
+	if !e.applyLive("id", &fakeLive{}, have, want) {
+		t.Fatal("applyLive failed")
+	}
+	notes := systemLines(store, "id")
+	if len(notes) != 1 || !strings.Contains(notes[0], "Bash(a)") || strings.Contains(notes[0], "Bash(b)") || !strings.Contains(notes[0], "restart") {
+		t.Fatalf("notes = %v, want one naming Bash(a) and a restart", notes)
+	}
+
+	// Bash(a) was only pushed (not in the start-up file): removing it is live.
+	startup = `{"permissions":{"allow":["Bash(b)"]}}`
+	pushed := `{"permissions":{"allow":["Bash(a)","Bash(b)"]}}`
+	have = launchState{sig: "s", model: "m", mode: "d", live: pushed, startup: startup}
+	e, store = newCase(have)
+	if !e.applyLive("id", &fakeLive{}, have, want) {
+		t.Fatal("applyLive failed")
+	}
+	if notes := systemLines(store, "id"); len(notes) != 0 {
+		t.Fatalf("a pushed-only rule removal was noted: %v", notes)
+	}
+
+	// A rule that was never in the process at all says nothing either.
+	have = launchState{sig: "s", model: "m", mode: "d", live: startup, startup: startup}
+	e, store = newCase(have)
+	if !e.applyLive("id", &fakeLive{}, have, want) {
+		t.Fatal("applyLive failed")
+	}
+	if notes := systemLines(store, "id"); len(notes) != 0 {
+		t.Fatalf("an unchanged rule set was noted: %v", notes)
 	}
 }
 

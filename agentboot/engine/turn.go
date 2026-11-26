@@ -230,7 +230,8 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		return errCanceledBeforeLaunch, true
 	}
 	sig := launchSignature(opts)
-	want := launchState{sig: sig, model: opts.Model, mode: opts.PermissionMode, live: liveSettings(opts)}
+	live := liveSettings(opts)
+	want := launchState{sig: sig, model: opts.Model, mode: opts.PermissionMode, live: live, startup: live}
 	persistentSession, found := e.pool.Acquire(sessionID)
 	res, conducted := e.residentFor(sessionID)
 	if found && (!conducted || res.c.Session() != persistentSession) {
@@ -359,7 +360,8 @@ func (e *Engine) recoverInterruptedTurn(ctx context.Context, sessionID, projectP
 	recOpts := opts
 	recOpts.Resume = true
 	recOpts.Env = append(append([]string(nil), opts.Env...), claude.EnvResumeInterruptedTurn+"=1")
-	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode, live: liveSettings(recOpts)}
+	recLive := liveSettings(recOpts)
+	recWant := launchState{sig: launchSignature(recOpts), model: opts.Model, mode: opts.PermissionMode, live: recLive, startup: recLive}
 	return e.openPersistentTurn(ctx, sessionID, projectPath, "", recOpts, recWant, prompter)
 }
 
@@ -480,6 +482,10 @@ type launchState struct {
 	// live is the permission rules of the settings file (liveSettings) the
 	// process has been given: read at its start, then pushed by applyLive.
 	live string
+	// startup is live as the process started with it. apply_flag_settings
+	// layers over the start-up settings, so a rule here that live no longer
+	// has stays in effect until the process restarts (noteStartupRuleRemovals).
+	startup string
 	// refused is the mode and model ("mode\x00model") Claude Code said it
 	// cannot run, whose fallback mode the process is in meanwhile. It is
 	// asked for again only when the model changes.
@@ -509,11 +515,13 @@ func (e *Engine) applyLive(sessionID string, res liveController, have, want laun
 	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
 	defer cancel()
 	if have.live != want.live {
-		if err := res.ApplySettings(ctx, liveDelta(have.live, want.live)); err != nil {
+		old := have.live
+		if err := res.ApplySettings(ctx, liveDelta(old, want.live)); err != nil {
 			logrus.WithError(err).WithField("session_id", sessionID).Warn("engine: permission rules not applied to the running process; they take effect when it next starts")
 		} else {
 			have.live = want.live
 			e.setLaunch(sessionID, have)
+			e.noteStartupRuleRemovals(sessionID, have.startup, old, want.live)
 		}
 	}
 	if have.model != want.model {
@@ -682,12 +690,64 @@ func (e *Engine) refreshLive(ctx context.Context, id string, ctl liveController,
 	}
 	ctx, cancel := context.WithTimeout(ctx, liveControlTimeout)
 	defer cancel()
-	if err := ctl.ApplySettings(ctx, liveDelta(have.live, want)); err != nil {
+	old := have.live
+	if err := ctl.ApplySettings(ctx, liveDelta(old, want)); err != nil {
 		return err
 	}
 	have.live = want
 	e.setLaunch(id, have)
+	e.noteStartupRuleRemovals(id, have.startup, old, want)
 	return nil
+}
+
+// noteStartupRuleRemovals says in the transcript when a rule the process
+// started with has been removed from the settings: Claude Code cannot take
+// back a start-up rule before a restart, so the change waits for the process
+// to start again (a pushed rule is only layered, and does go away).
+func (e *Engine) noteStartupRuleRemovals(id, startup, have, want string) {
+	gone := startupRuleRemovals(startup, have, want)
+	if len(gone) == 0 {
+		return
+	}
+	e.appendSystem(id, "permission rules removed: "+strings.Join(gone, ", ")+" — they were in the settings when this process started, so Claude Code keeps them until it restarts")
+}
+
+// startupRuleRemovals lists the rules in a process's start-up settings that
+// have and want still differ on (want no longer has them). Both are
+// liveSettings documents; only permission lists of strings count.
+func startupRuleRemovals(startup, have, want string) []string {
+	started, before, after := rulesOf(startup), rulesOf(have), rulesOf(want)
+	var gone []string
+	for r := range started {
+		if before[r] && !after[r] {
+			gone = append(gone, r)
+		}
+	}
+	sort.Strings(gone)
+	return gone
+}
+
+// rulesOf reads a liveSettings document's permission lists as "category rule"
+// strings ("allow Bash(go test *)"), for the categories whose value is a list
+// of strings.
+func rulesOf(doc string) map[string]bool {
+	out := map[string]bool{}
+	var d struct {
+		Permissions map[string]json.RawMessage `json:"permissions"`
+	}
+	if json.Unmarshal([]byte(doc), &d) != nil {
+		return out
+	}
+	for cat, raw := range d.Permissions {
+		var items []string
+		if json.Unmarshal(raw, &items) != nil {
+			continue
+		}
+		for _, r := range items {
+			out[cat+" "+r] = true
+		}
+	}
+	return out
 }
 
 // liveDelta is the settings to send to take a process from have to want

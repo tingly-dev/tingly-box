@@ -57,7 +57,7 @@ export const session: Dict<typeof sessionEn> = {
         agentType: '类型', used: '已用', usage: '{{tools}} 次工具 · {{tokens}} token', agentPrompt: '任务要求', agentNow: '当前状态',
         agentRecent: '最近步骤', agentLatest: '最新回复', agentReport: '报告',
     },
-    composer: { settings: '会话设置', placeholder: '输入消息…', send: '发送（Enter）', sendShort: '发送', stop: '停止', stopTurn: '停止当前轮次', attach: '添加附件', pastedText: '粘贴的文本 · {{count}} 行', removeAttachment: '移除 {{name}}', attachFailed: '附件上传失败', keys: 'Enter 发送 · Shift+Enter 换行',
+    composer: { settings: '会话设置', placeholder: '输入消息…', send: '发送（Enter）', sendShort: '发送', stop: '停止', stopTurn: '停止当前轮次（后台任务继续运行）', attach: '添加附件', pastedText: '粘贴的文本 · {{count}} 行', removeAttachment: '移除 {{name}}', attachFailed: '附件上传失败', keys: 'Enter 发送 · Shift+Enter 换行',
         sendOptions: '发送方式', insert: '插入当前轮次（Enter）', sendNextTurn: '本轮结束后发送（Enter）',
         sendInsert: '立即插入', sendInsertHint: 'Claude 会在下一步读到，不会中断（Enter）', sendInsertUnavailable: '此智能体只在轮次之间读取消息',
         sendNextTurnLabel: '本轮结束后发送', sendNextTurnHint: '等 Claude 做完再发（Alt+Enter）',

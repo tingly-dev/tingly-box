@@ -1,6 +1,6 @@
 # agentboot 会话停止 / 恢复，以及 workspace 权限的实时生效
 
-> 状态：分析（2026-11-26）。A（停止）只给方案，不改代码；B（权限）的“改完不生效”已定位到两个根因，其中**线程级权限在运行中回合不生效**已做最小修复并有测试（§2.5），**项目级权限只在新线程生效**属于产品决策（§2.6）。
+> 状态：分析（2026-11-26）。A（停止）以方案为主，但**A3 任务台账**已实现；B（权限）的“改完不生效”已定位到两个根因，其中**线程级权限在运行中回合不生效**、**规则撤销的可见性**已做最小修复并有测试；**项目级权限只在新线程生效**属于产品决策（§2.6）。
 > 验证：Claude Code 2.1.259，离线脚本化 Anthropic mock + 隔离 HOME（`.research/agentboot-stop/stop_probe.py`、`mode_probe.py` 及各自的 `.txt` 运行记录）；Go 单测 `agentboot/engine/permission_live_test.go`。
 > 相关：[`.design/agentboot-live-control.md`](../.design/agentboot-live-control.md)（注入、模型/模式的在线控制）、[`.design/claude-code-session.md`](../.design/claude-code-session.md)（常驻进程、resume）、[`projects/.design/thread-lifecycle.md`](../projects/.design/thread-lifecycle.md)（线程状态机）、[`projects/.design/background-tasks.md`](../projects/.design/background-tasks.md)（后台任务）、[`projects/.design/thread-permissions.md`](../projects/.design/thread-permissions.md)（`request_permission` 与 GitHub 闸门）。
 
@@ -100,13 +100,13 @@
 |---|---|---|---|---|---|
 | **A1 优雅收尾的会话停止**（推荐） | 关进程前：`Interrupt` → 等回合结果（有上限）→ 对每个运行中的后台任务 `StopTask` → 等 `task_notification` → `Close`。用于 Restart/Archive/Handoff/暂停/退出。 | 对话、后台任务输出（文件）保留；前台工具仍丢 | 是（`--resume`） | 中：`Threads.endProcess`/`ReleaseProject` 增加一段有界等待；要处理“任务不响应 stop”的超时 | 不解决“进程必须关”的场景本身，只让收尾干净、可解释 |
 | **A2 保留而非停止（detach / 托管常驻）** | Resolve/Archive 时不 `Evict`：进程留在 pool，用 `Hold` 保护，线程记录“后台运行中”；Reopen 时重新挂上 Conductor | **后台任务继续跑** | 是 | 高：无主进程的寿命/泄漏、与终端 `--resume` 的会话文件冲突、退出应用仍需全关、UI 要能看管 | 仅对“用户主动关线程但想让它跑完”有意义；需要显式开关，不能默认 |
-| **A3 任务台账 + 重开提示**（推荐，和 A1 一起） | 关进程前把运行中的任务（id、描述、输出文件、最后输出）写成一条 `task` 台账事件；重开后显示“这些任务随进程结束” | 不保留工作，只保留**事实** | 可查看，不可续 | 低：一处快照 + 前端一行 | 不能替代 A1（没有收尾），但保证“丢得明白” |
+| **A3 任务台账 + 重开提示**（推荐，和 A1 一起；**已实现** `agentboot/engine/tasks.go` `clearTasks`/`taskLedgerNote`） | 关进程时把当时运行中的任务（id、类型、描述）写成一条 system 事件，并附原有的空 `background_tasks_changed`；重开后能看到“这些任务随进程结束、已写入的输出仍在磁盘” | 不保留工作，只保留**事实** | 可查看，不可续 | 低：一处快照 + 前端一行 | 不能替代 A1（没有收尾），但保证“丢得明白” |
 | **A4 检查点 / 周期持久化** | 周期性把 transcript、运行任务清单落盘，崩溃/被杀后可恢复 | 与现有 `--resume` 基本相同 | 是 | 低（已有）；增量很小 | 现有 CLI 会话文件已经是“检查点”；重复造轮子收益低，除非要支持跨机器 |
 | **A5 后台任务与会话解耦** | 后台命令跑在独立进程/沙箱里，可重连 | 后台任务**不丢** | 是 | 很高：改变 Claude Code 的后台任务模型，结果回灌、权限、输出都要重做 | 与产品语义冲突（后台任务的目的是把结果喂回同一会话），不建议 |
 
-推荐组合：**A1 + A3**（所有会话级关闭都先优雅收尾并留台账），**A2 作为显式选项**只给“关线程但让它跑完”。A5 不做；A4 已经由 CLI 提供。
+推荐组合：**A1 + A3**（所有会话级关闭都先优雅收尾并留台账），**A2 作为显式选项**只给“关线程但让它跑完”。A5 不做；A4 已经由 CLI 提供。A3 已实现（见上表）：任何进程结束（Restart/Resolve/Archive/暂停/退出/空闲回收/崩溃）时，若有后台任务仍在跑，对话里会留下那一行。
 
-实现代价排序：A3（~半天） < A1（~1-2 天，含测试） < A2（~3-5 天，含进程寿命/冲突处理） < A5（不建议）。
+实现代价排序：A3（~半天，已完成） < A1（~1-2 天，含测试） < A2（~3-5 天，含进程寿命/冲突处理） < A5（不建议）。
 
 ## 2 问题 B：workspace permission 为什么改了不生效
 
@@ -173,12 +173,16 @@
 - `agentboot/engine/engine.go:306` `Engine.SetPermissionMode(id, mode) (bool, error)`：有常驻进程时立即 `set_permission_mode`，成功才更新 `e.launch[id].mode`；进程拒绝则返回错误且**不记住**（下一轮 `applyLive` 重试）；`auto` 不可用时与轮间路径一致地落到 `acceptEdits` 并写系统说明（`:325` `setModeLive`）。
 - `agentboot/engine/engine.go:514` `prompterFor` + `agentboot/engine/prompter.go:105`：`autoApprovePrompter` 改为**每次批准时**读取当前模式（有 host 的 `PermissionMode` 函数就用它，否则用回合启动模式）。收紧后本回合的后续审批不再被引擎自动放行。
 - `projects/internal/project/sessions.go:174/204`：保存后调用引擎在线下发；被拒绝时记一条 system 事件“the running process did not take the new permission mode; it applies from the next turn: …”。
+- **规则收紧的可见性**（后补）：`launchState.startup` 记住进程启动时的规则；`applyLive`/`refreshLive` 成功下发后，如果被移除的规则**启动时就在**设置里，写一条 system 事件“permission rules removed: … — they were in the settings when this process started, so Claude Code keeps them until it restarts”（`turn.go` `noteStartupRuleRemovals`/`startupRuleRemovals`）。只移除“之前推上去的”规则不会有这条，因为那种撤销是即时的。
+- **文案**：暂停/归档项目的帮助文字补上“后台任务也随进程结束”（en/zh/ru）；composer 的停止按钮提示改为“停止当前轮次（后台任务继续运行）”。
 
-测试（`agentboot/engine/permission_live_test.go`）：
+测试（`agentboot/engine/permission_live_test.go`、`tasks_test.go`）：
 
 - 模式在**回合进行中**下发：进程收到 `set_permission_mode plan`，且不重启；下一轮不再重复下发。
 - 拒绝时**不**记住，下一次仍会尝试；`auto` 不可用落到 `acceptEdits`。
 - 收紧后本回合的下一次审批**不再自动批准**（`AwaitingInput` 变为真，等用户回答）。
+- 移除启动时就在的 allow 规则会写一条“重启后生效”事件；移除只推过的规则不写。
+- 进程带着后台任务结束时，台账行列出任务描述与 id（`TestClearTasks_KeepsALedgerOfWhatTheProcessTookWithIt`）。
 
 安全影响（如实）：
 
@@ -205,11 +209,13 @@
 | 放宽到 `bypassPermissions` 被 CLI 拒绝（未以 `--dangerously-skip-permissions` 启动） | `mode_probe.py widen` + `mode_probe_widen.txt` |
 | 对照：不切模式时两个命令都各自要审批 | `mode_probe.py control` + `mode_probe_control.txt` |
 | `apply_flag_settings` 不能撤销启动规则 | `agentboot/claude/ref/live-control.md` “Settings” 一节 |
+| 台账行与“撤销要重启”提示 | `agentboot/engine/tasks_test.go`、`permission_live_test.go`（本轮追加） |
+| 暂停/归档帮助文字 | 截图 `library/outputs/agentboot-stop-and-permi/pause-archive-help-zh.png`（mock 模式、zh） |
 
 ## 4 下一步（可执行）
 
-1. **A3 任务台账**：`Threads.endProcess` / `ReleaseProject` 关进程前，把 `engine.BackgroundTasks(session)` 写成一条 transcript 事件（含输出文件路径），重开后可见。
-2. **A1 优雅收尾**：同样的入口，先 `Interrupt` 并等回合结果（有界），再对运行中任务 `StopTask` 并等 `task_notification`，最后 `Close`；超时保留现有行为。
+1. ~~**A3 任务台账**~~：**已实现**（`agentboot/engine/tasks.go` `clearTasks`/`taskLedgerNote`，进程结束时若还有后台任务就写一行，含描述与 id）。
+2. **A1 优雅收尾**：`Threads.endProcess` / `ReleaseProject` 等入口，先 `Interrupt` 并等回合结果（有界），再对运行中任务 `StopTask` 并等 `task_notification`，最后 `Close`；超时保留现有行为。
 3. **A2 决策**：是否为 Resolve/Archive 提供“保持后台运行”（进程留在 pool + `Hold`，UI 显示“后台运行中”）。
 4. **B1 决策 + 实现**：按 §2.6 选定项目级语义；若选 (c)，把 `applyPermissionMode` 复用成批量下发。
-5. **可见性与文案**：`applyLive` 检测到 allow 规则集合变小时写一条“撤销将在重启后生效”的 system 事件；composer 的提示 `session.nextTurn`（en/zh/ru：`frontend/packages/projects/src/i18n/locales/*/session.ts`）现在对“权限”不再准确（它说“启动设置下一次轮次生效”），应改为“模型/推理强度下一轮生效、权限立即”。顺带补一个前台 subagent 的 interrupt/模式探针（§1.2、§2.4 的 UNKNOWN）。
+5. 剩余可见性/文案：~~allow 规则撤销的 system 事件~~（已实现）；~~暂停/归档帮助文字、停止按钮提示~~（已实现）；仍待办的是 composer 的 `session.nextTurn` 提示（en/zh/ru）现在对“权限”不准确（它说“启动设置下一次轮次生效”），应改为“模型/推理强度下一轮生效、权限立即”，并补一个前台 subagent 的 interrupt/模式探针（§1.2、§2.4 的 UNKNOWN）。

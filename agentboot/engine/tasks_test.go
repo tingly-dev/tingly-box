@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 
@@ -85,5 +86,45 @@ func TestClearTasks_SaysTheSetIsEmptyWhenTasksDiedWithTheProcess(t *testing.T) {
 	e.clearTasks("s1")
 	if len(store.events) != 0 {
 		t.Fatalf("clearTasks of an empty set appended %+v", store.events)
+	}
+}
+
+// The transcript keeps a line naming what the closed process ended with, so a
+// thread opened afterwards still shows which background tasks were lost and
+// that their output may still be on disk.
+func TestClearTasks_KeepsALedgerOfWhatTheProcessTookWithIt(t *testing.T) {
+	ledger := func(t *testing.T, store *liveStore, id string) string {
+		t.Helper()
+		var line string
+		for _, en := range store.entries[id] {
+			if en.Kind == KindSystem {
+				line = en.Content
+			}
+		}
+		return line
+	}
+
+	store := &liveStore{memStore: newMemStore()}
+	e := New(Config{Store: store})
+	store.e = e
+	e.record("s1", newConverter(), tasksChangedMessage(
+		map[string]any{"task_id": "b1", "task_type": "local_bash", "description": "pnpm test"},
+		map[string]any{"task_id": "a1", "task_type": "local_agent", "description": "review"},
+	))
+	e.clearTasks("s1")
+	line := ledger(t, store, "s1")
+	for _, want := range []string{"2 background tasks", "pnpm test (b1)", "review (a1)", "still on disk"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("ledger = %q, want it to contain %q", line, want)
+		}
+	}
+
+	// One task reads in the singular; a task with no description falls back
+	// to its type.
+	e.record("s2", newConverter(), tasksChangedMessage(map[string]any{"task_id": "c1", "task_type": "local_bash"}))
+	e.clearTasks("s2")
+	line = ledger(t, store, "s2")
+	if !strings.HasPrefix(line, "A background task was still running") || !strings.Contains(line, "local_bash (c1)") {
+		t.Fatalf("single-task ledger = %q", line)
 	}
 }
