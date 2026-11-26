@@ -1,7 +1,8 @@
 # Mobile session (thread) layout
 
-> Status: **proposal, awaiting a decision** (2026-11-26). This document designs the
-> phone layout of a Projects session/thread transcript; it does not implement it.
+> Status: **design approved** (LGTM, 2026-11-26). This is the agreed phone
+> session design (option A with B's per-call rows in the process sheet); the
+> product code is not changed yet. Implementation scope and cost are in §7.
 > The prototype is in `.design/mobile-prototype/` (`app4.js` + `session.css`; open
 > `index.html?s=work,session&variant=A|B&theme=dark&w=390&h=844&frame=0`).
 > Screenshots: `library/outputs/tb-sign/mobile-session-{current,option}-*.png`
@@ -446,7 +447,11 @@ CSS/layout-only work is the bar, checklist, composer layout, safe area and touch
 targets; component work is the concise run line, the sheets, the message meta
 row and the memoization.
 
-## 8. Decision points (need the user)
+## 8. Decision points
+
+**Approved** with the recommended answers (LGTM, 2026-11-26): option A with B's
+per-call rows inside the process sheet, plus the refinements above. The list is
+kept for reference; re-open an item if it should differ.
 
 1. **Default density on a phone:** conversation-first (A) or structure-kept (B)?
    (Recommend A, with B one tap deep.)
