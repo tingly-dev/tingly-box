@@ -1,6 +1,6 @@
 # Team usage 右侧栏（用量最高的服务商 / 账户）评估
 
-> 评估 + 原型截图，供用户决定；本轮未改生产代码，原型改动已全部回退。
+> 评估 + 原型截图，供用户决定。**方案 B 已在该分支实现（commit 6b57e5bd3，前端改动，可 `git revert`）；A/C/D 仍只是原型截图，未落地。**
 > 截图在 project library：`.../library/outputs/tb-sign/`（下称 `<shots>/`）。
 > 截图环境：mock 模式（`USE_MOCK=true vite --mode mock`）、隔离 HOME、`?mockData=populated`、中文、1440×1000 @2x、By Provider 视图（与用户截图一致）。
 
@@ -110,7 +110,8 @@ Team usage 页 = `/dashboard/users`（nav「团队用量 / Team usage」）。
 - `team-rail-current-narrow.png` — 1024px 窄屏：排名卡整块堆到表下方，成为全宽重复块。
 - `team-rail-empty-state.png` — 无用量（newcomer）：右侧变成很高的空白卡。
 - `team-rail-option-unified.png` — A。
-- `team-rail-option-inline.png` — B（占比列）。
+- `team-rail-option-inline.png` — B（占比列，原型截图）。
+- `team-rail-option-b-after.png` / `-after-narrow.png` / `-after-empty.png` — **B 的真实实现截图**（宽屏 / 1024 窄屏 / 无用量空态）。
 - `team-rail-option-removed.png` — C。
 - `team-rail-option-top-only.png` — D。
 - `dashboard-rail-current.png` — 对照：Dashboard「响应性能」右卡，另一种卡片风格（说明「风格好几种」）。
