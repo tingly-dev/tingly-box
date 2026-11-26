@@ -39,6 +39,12 @@ all of them (right status, body kept in the message). Sources of
    (`Upstream error: 401 Unauthorized: invalid api key`) instead of the SDK's
    bare `OpenAI API error: 401 Unauthorized`. Transport/internal errors keep
    their raw text.
+5. **The Codex client reports an in-stream content-policy block as an upstream
+   400 (#2417).** `codexEventDecoder` (`internal/client/codex_stream_errors.go`)
+   turns the backend's in-stream `error` event into the `*openai.Error` that an
+   HTTP 400 with the same body produces, so status mapping, client message and
+   server log treat it as an upstream 400. Unlike `stringErrorTransport`, it
+   rewrites no bytes. Details: `.design/codex.md` §6.
 
 ## Tests
 
@@ -55,4 +61,6 @@ all of them (right status, body kept in the message). Sources of
 
 `detail` / `message` / plain-text bodies keep only status + status text on the
 OpenAI SDK (no decode error). Mid-stream SSE `error` events and the Google
-(genai) client are untouched.
+(genai) client are untouched, except content-policy blocks from a Codex OAuth
+upstream (decision 5). The same block relayed by another Responses upstream
+goes through the generic OpenAI client and is not recognized.

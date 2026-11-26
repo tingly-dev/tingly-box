@@ -109,7 +109,9 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		return nil, err
 	}
 
-	resp.Header.Set("Content-Type", "text/event-stream")
+	// The parameter selects codexEventDecoder, which reports an in-stream
+	// content-policy block as a 400 (codex_stream_errors.go).
+	resp.Header.Set("Content-Type", codexSSEContentType)
 	logrus.WithContext(req.Context()).Debugf("[Codex] Must use stream: %s", resp.Status)
 
 	return resp, nil
