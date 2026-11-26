@@ -66,6 +66,11 @@ const useFakeAxis = <T,>(rows: T[], getKey: (row: T) => string) => {
         selected: rows.find((row) => getKey(row) === selectedKey),
         detail: [],
         detailLoading: false,
+        // Same denominator the real hook exposes: tokens across every row.
+        rosterTotal: rows.reduce((sum, row) => {
+            const r = row as unknown as { total_input_tokens?: number; total_output_tokens?: number; cache_read_tokens?: number };
+            return sum + (r.total_input_tokens || 0) + (r.total_output_tokens || 0) + (r.cache_read_tokens || 0);
+        }, 0),
     } as unknown as RosterAxisState<UserUsageRow, AggregatedStat>;
     return { axis };
 };

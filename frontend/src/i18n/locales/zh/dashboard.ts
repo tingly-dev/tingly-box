@@ -70,6 +70,7 @@ export default {
       "topModels": "用量最高的模型",
       "topProviders": "用量最高的服务商",
       "others": "其他",
+      "share": "占比",
       "noUsageHintShort": "试试更长的时间范围。",
       "noUsersHint": "换一个搜索词或时间范围试试。"
     },
