@@ -1768,6 +1768,8 @@ export interface components {
             branch: string;
             /** @description Field dirty */
             dirty: boolean;
+            /** @description Field empty */
+            empty: boolean;
             /** @description Field error */
             error: string;
             /**
@@ -1789,6 +1791,8 @@ export interface components {
             branch?: string;
             /** @description Field dirty */
             dirty?: boolean;
+            /** @description Field empty */
+            empty?: boolean;
             /** @description Field error */
             error?: string;
             /** @description Field ok */

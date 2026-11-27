@@ -3895,6 +3895,10 @@
             "type": "boolean",
             "description": "Field dirty"
           },
+          "empty": {
+            "type": "boolean",
+            "description": "Field empty"
+          },
           "error": {
             "type": "string",
             "description": "Field error"
@@ -3923,6 +3927,7 @@
           "kind",
           "branch",
           "dirty",
+          "empty",
           "error"
         ]
       },
@@ -3948,6 +3953,10 @@
           "dirty": {
             "type": "boolean",
             "description": "Field dirty"
+          },
+          "empty": {
+            "type": "boolean",
+            "description": "Field empty"
           },
           "error": {
             "type": "string",

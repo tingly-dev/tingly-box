@@ -128,8 +128,9 @@ func TestDirectoryInspectionAliasesAndInvalidGit(t *testing.T) {
 	require.Error(t, err)
 	emptyGit := t.TempDir()
 	run(t, emptyGit, "git", "init")
-	_, err = InspectDirectory(context.Background(), emptyGit)
-	require.ErrorContains(t, err, "no commits")
+	empty, err := InspectDirectory(context.Background(), emptyGit)
+	require.NoError(t, err)
+	assert.True(t, empty.Empty, "a repository with no commits is still a usable directory")
 	_, err = InspectDirectory(context.Background(), filepath.Join(dir, "missing"))
 	require.Error(t, err)
 }
