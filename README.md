@@ -290,8 +290,6 @@ print(response)
 <details>
 <summary><strong>Using OAuth Providers</strong></summary>
 
-For Claude Code Enterprise, see [enterprise authentication and troubleshooting](./docs/user-manual.md#claude-code-enterprise).
-
 You can also add OAuth providers (like Claude Code) and use your existing quota in any OpenAI-compatible tool:
 
 ```bash
