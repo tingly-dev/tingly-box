@@ -15,7 +15,7 @@ import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
 import { ArrowBack, ChevronRight, Close, MoreVert, RailHide, RailShow, Refresh, Robot, Settings, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
-import { formatBytes, formatTokens } from '../../utils/format';
+import { formatBytes } from '../../utils/format';
 import { ComposerStrip } from './ComposerStrip';
 import { AutoAnswerSelect } from './AutoAnswerSelect';
 import { ThreadInfoRail } from './ThreadInfoRail';
@@ -481,6 +481,16 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     {!phone && actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                        {/* The three groups read as what ends the thread, what
+                            reads it, and what finally deals with it; the
+                            irreversible action is last. */}
+                        {/* Finishing is the menu's first offer, apart from the
+                            buttons used all the time: a stray click cannot
+                            resolve or reopen it. */}
+                        {!thread.archived_at && (thread.status !== 'resolved'
+                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
+                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
+                        {!thread.archived_at && <Divider />}
                         {phone && <MenuItem onClick={() => { setMenu(null); setDetailsOpen(true); }}>{t('rail.title')}</MenuItem>}
                         {thread.seq > 0 && <MenuItem onClick={() => { setMenu(null); void copyRef(); }}>{t('thread.copyRef')}</MenuItem>}
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
@@ -489,15 +499,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {/* The panel opens where the menu was, under the More button. */}
                         {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
+                        <Divider />
+                        {canRestart && <MenuItem disabled={acting} onClick={offerRestart}>{t('session.restart')}</MenuItem>}
                         {session && !thread.archived_at && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
-                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot resolve it. */}
-                        <Divider />
-                        {canRestart && <MenuItem disabled={acting} onClick={offerRestart}>{t('session.restart')}</MenuItem>}
-                        {!thread.archived_at && (thread.status !== 'resolved'
-                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
-                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
                         {!thread.archived_at && !session && (
                             <MenuItem disabled={acting} onClick={() => openCleanup('archive')}>{t('thread.archive')}</MenuItem>
                         )}
@@ -508,14 +514,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </>
                         ) : session && (
                             <MenuItem disabled={acting} onClick={() => guarded('archive')}>{t('session.archive')}</MenuItem>
-                        )}
-                        {/* Run details, for when they matter: kept off the header. */}
-                        {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
-                        {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
-                            <Box sx={{ px: 2, py: 0.75, fontSize: fontSizes.sm, color: 'text.secondary' }}>
-                                {thread.model && <Box sx={{ ...mono }}>{thread.model}</Box>}
-                                {(thread.input_tokens > 0 || thread.output_tokens > 0) && <Box>{formatTokens(thread.input_tokens)} in / {formatTokens(thread.output_tokens)} out</Box>}
-                            </Box>
                         )}
                         {phone && <Box sx={{ px: 2, py: 1, fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('phone.desktopNote')}</Box>}
                     </Menu>
