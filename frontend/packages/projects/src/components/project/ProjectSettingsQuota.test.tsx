@@ -26,7 +26,7 @@ const input = (name: string) => screen.getByRole('textbox', { name: `projectSett
 
 it('leaves the limits empty and off on the host, with nothing suggested', async () => {
     open(project);
-    await screen.findByText('projectSettings.quota.hostHelp');
+    await screen.findByRole('button', { name: 'projectSettings.quota.hostHelp' });
     for (const f of ['memory', 'processes', 'cpu']) {
         expect(input(f).value).toBe('');
         expect(input(f)).toBeDisabled();
@@ -35,7 +35,7 @@ it('leaves the limits empty and off on the host, with nothing suggested', async 
 
 it('saves limits in the server units and checks the same minimums', async () => {
     open({ ...project, thread_sandbox: 'bwrap' });
-    await screen.findByText('projectSettings.quota.help');
+    await screen.findByRole('button', { name: 'projectSettings.quota.help' });
     fireEvent.change(input('memory'), { target: { value: '256' } });
     expect(screen.getByText('projectSettings.quota.memoryMin')).toBeTruthy();
     expect(save()).toBeDisabled();
@@ -56,7 +56,7 @@ it('saves limits in the server units and checks the same minimums', async () => 
 
 it('shows stored limits and clears one by emptying it', async () => {
     open({ ...project, thread_sandbox: 'bwrap', thread_memory_bytes: 2 * 1024 ** 3, thread_tasks: 128, thread_cpu: 500 });
-    await screen.findByText('projectSettings.quota.help');
+    await screen.findByRole('button', { name: 'projectSettings.quota.help' });
     expect(input('memory').value).toBe('2');
     expect(input('cpu').value).toBe('0.5');
     fireEvent.change(input('processes'), { target: { value: '' } });
@@ -66,15 +66,27 @@ it('shows stored limits and clears one by emptying it', async () => {
     })));
 });
 
+it('puts the sandbox and its limits in two cards, details behind info icons', async () => {
+    open({ ...project, thread_sandbox: 'bwrap' });
+    await screen.findByRole('button', { name: 'projectSettings.quota.help' });
+    // The Runtime tab uses the same cards as Basic, sandbox first.
+    expect(screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))).toEqual([
+        'projectSettings.sandbox', 'projectSettings.quotaTitle',
+    ]);
+    expect(screen.getByRole('button', { name: 'projectSettings.sandboxHelp' })).toBeTruthy();
+    expect(screen.queryByText('projectSettings.sandboxHelp')).not.toBeInTheDocument();
+    expect(screen.queryByText('projectSettings.quota.help')).not.toBeInTheDocument();
+});
+
 it('offers a way to switch to a sandbox in place when limits are disabled', async () => {
     open(project);
-    await screen.findByText('projectSettings.quota.hostHelp');
+    await screen.findByRole('button', { name: 'projectSettings.quota.hostHelp' });
     expect(screen.getByRole('button', { name: 'projectSettings.switchToSandbox' })).toBeTruthy();
 });
 
 it('saves the runtime tab alone, without the Basic tab fields', async () => {
     open({ ...project, thread_sandbox: 'bwrap' });
-    await screen.findByText('projectSettings.quota.help');
+    await screen.findByRole('button', { name: 'projectSettings.quota.help' });
     fireEvent.change(input('processes'), { target: { value: '200' } });
     fireEvent.click(save());
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', expect.objectContaining({

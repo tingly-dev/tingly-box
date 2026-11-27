@@ -45,6 +45,52 @@ const AXES = ['storage', 'network', 'exec', 'credentials', 'resources'] as const
 
 const sameGroups = (a: readonly string[], b: readonly string[]) => [...a].sort().join() === [...b].sort().join();
 
+// One control height and one numeric width for the whole dialog, so inputs in
+// 基本 and 运行 line up instead of sizing to their value.
+const CONTROL_HEIGHT = 40;
+const NUMERIC_WIDTH = 200;
+
+// The quiet pickers the host renders (profile, model) become the same
+// outlined, fixed-height controls as every other field. A long value is
+// ellipsised by the picker's own no-wrap label, so the control never resizes.
+const pickerStackSx = {
+    display: 'flex', flexDirection: 'column', gap: 1, width: '100%', minWidth: 0,
+    '& > .MuiInputBase-root': {
+        width: '100%', minWidth: 0, height: CONTROL_HEIGHT, boxSizing: 'border-box',
+        border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.5, color: 'text.primary',
+    },
+    '& .MuiSelect-select': { minWidth: 0, overflow: 'hidden', px: '0 !important', py: '0 !important', display: 'flex', alignItems: 'center' },
+    '& .MuiSelect-icon': { right: 0 },
+    '& .MuiTypography-root': { overflow: 'hidden', textOverflow: 'ellipsis', fontSize: fontSizes.base },
+} as const;
+
+// A container for a quiet control (the effort button) at the shared height.
+const controlSx = {
+    display: 'flex', alignItems: 'center', width: '100%', minWidth: 0,
+    height: CONTROL_HEIGHT, boxSizing: 'border-box',
+    border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.5,
+    '& > .MuiButton-root': { width: '100%', height: '100%', px: 0, justifyContent: 'space-between', color: 'text.primary', fontSize: fontSizes.base },
+} as const;
+
+// The dialog's one form grid: two equal columns from `sm` up, one below it.
+function FormGrid({ children }: { children: ReactNode }) {
+    return (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 2, rowGap: 2, alignItems: 'start' }}>
+            {children}
+        </Box>
+    );
+}
+
+/** A field spanning both grid columns. */
+function Span({ children }: { children: ReactNode }) {
+    return <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>{children}</Box>;
+}
+
+function Control({ children }: { children: ReactNode }) {
+    return <Box sx={controlSx}>{children}</Box>;
+}
+
+
 // The runtime threads run in: the ones this server ships, from
 // /projects/runtime. Its level on each axis is shown under it, so what a
 // choice means is spelled out, whatever the runtime.
@@ -53,9 +99,10 @@ function SandboxField({ value, onChange, runtimes, inputRef }: { value: string; 
     const name = (s: SandboxRuntime) => t(`projectSettings.sandboxes.${s.name}`, { defaultValue: s.name });
     const current = runtimes.find((s) => s.name === value);
     return (
-        <TextField select label={t('projectSettings.sandbox')} value={value} onChange={(e) => onChange(e.target.value)} inputRef={inputRef}
+        <TextField select value={value} onChange={(e) => onChange(e.target.value)} inputRef={inputRef} size="small" fullWidth
             helperText={current && !current.available ? `${t('projectSettings.sandboxUnavailable')}: ${current.reason}` : undefined}
-            error={!!current && !current.available}>
+            error={!!current && !current.available}
+            slotProps={{ select: { inputProps: { 'aria-label': t('projectSettings.sandbox') } } }}>
             {runtimes.map((s) => (
                 <MenuItem key={s.name} value={s.name} disabled={!s.available && s.name !== value}>
                     <Box>
@@ -97,8 +144,8 @@ function ModelField({ label, value, onChange }: { label: string; value: string; 
             value={value}
             onInputChange={(_, v) => onChange(v)}
             renderInput={(params) => (
-                <TextField {...params} placeholder={t('projectSettings.modelDefault')}
-                    slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': label, style: { ...mono, fontSize: fontSizes.base } } }} />
+                <TextField {...params} size="small" placeholder={t('projectSettings.modelDefault')}
+                    slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': label, title: value || undefined, style: { ...mono, fontSize: fontSizes.base } } }} />
             )}
         />
     );
@@ -166,47 +213,43 @@ function QuotaFields({ value, onChange, enabled, onEnableSandbox }: { value: Quo
     const err = quotaErrors(value);
     const set = (patch: Partial<Quota>) => onChange({ ...value, ...patch });
     return (
-        <Box role="group" aria-label={t('projectSettings.sandbox')}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-                <TextField label={t('projectSettings.quota.memory')} value={value.memory} onChange={(e) => set({ memory: e.target.value })} disabled={!enabled}
-                    error={err.memory} helperText={err.memory ? t('projectSettings.quota.memoryMin') : undefined} sx={{ flex: 1.4, width: '100%' }}
-                    slotProps={{
-                        htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.memory') },
-                        input: {
-                            endAdornment: (
-                                <TextField select variant="standard" value={value.unit} onChange={(e) => set({ unit: e.target.value as MemoryUnit })} disabled={!enabled}
-                                    sx={{ minWidth: 64 }} slotProps={{ input: { disableUnderline: true } }}>
-                                    <MenuItem value="MiB">MiB</MenuItem>
-                                    <MenuItem value="GiB">GiB</MenuItem>
-                                </TextField>
-                            ),
-                        },
-                    }} />
-                <TextField label={t('projectSettings.quota.processes')} value={value.tasks} onChange={(e) => set({ tasks: e.target.value })} disabled={!enabled}
-                    error={err.tasks} helperText={err.tasks ? t('projectSettings.quota.processesMin') : undefined} sx={{ flex: 1, width: '100%' }}
-                    slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.quota.processes') } }} />
-                <TextField label={t('projectSettings.quota.cpu')} value={value.cores} onChange={(e) => set({ cores: e.target.value })} disabled={!enabled}
-                    error={err.cores} helperText={err.cores ? t('projectSettings.quota.cpuMin') : undefined} sx={{ flex: 1, width: '100%' }}
-                    slotProps={{ htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.cpu') } }} />
-            </Stack>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">{enabled ? t('projectSettings.quota.help') : t('projectSettings.quota.hostHelp')}</Typography>
-                {!enabled && onEnableSandbox && <Button size="small" onClick={onEnableSandbox}>{t('projectSettings.switchToSandbox')}</Button>}
-            </Box>
+        <Box role="group" aria-label={t('projectSettings.quotaTitle')}>
+            <FormGrid>
+                <Box sx={{ width: NUMERIC_WIDTH, maxWidth: '100%' }}>
+                    <Field label={t('projectSettings.quota.memory')}>
+                        <TextField value={value.memory} onChange={(e) => set({ memory: e.target.value })} disabled={!enabled} size="small" fullWidth
+                            error={err.memory} helperText={err.memory ? t('projectSettings.quota.memoryMin') : undefined}
+                            slotProps={{
+                                htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.memory') },
+                                input: {
+                                    endAdornment: (
+                                        <TextField select variant="standard" value={value.unit} onChange={(e) => set({ unit: e.target.value as MemoryUnit })} disabled={!enabled}
+                                            sx={{ minWidth: 64 }} slotProps={{ input: { disableUnderline: true } }}>
+                                            <MenuItem value="MiB">MiB</MenuItem>
+                                            <MenuItem value="GiB">GiB</MenuItem>
+                                        </TextField>
+                                    ),
+                                },
+                            }} />
+                    </Field>
+                </Box>
+                <Box sx={{ width: NUMERIC_WIDTH, maxWidth: '100%' }}>
+                    <Field label={t('projectSettings.quota.processes')}>
+                        <TextField value={value.tasks} onChange={(e) => set({ tasks: e.target.value })} disabled={!enabled} size="small" fullWidth
+                            error={err.tasks} helperText={err.tasks ? t('projectSettings.quota.processesMin') : undefined}
+                            slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.quota.processes') } }} />
+                    </Field>
+                </Box>
+                <Box sx={{ width: NUMERIC_WIDTH, maxWidth: '100%' }}>
+                    <Field label={t('projectSettings.quota.cpu')}>
+                        <TextField value={value.cores} onChange={(e) => set({ cores: e.target.value })} disabled={!enabled} size="small" fullWidth
+                            error={err.cores} helperText={err.cores ? t('projectSettings.quota.cpuMin') : undefined}
+                            slotProps={{ htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.cpu') } }} />
+                    </Field>
+                </Box>
+            </FormGrid>
+            {!enabled && onEnableSandbox && <Box sx={{ mt: 1 }}><Button size="small" onClick={onEnableSandbox}>{t('projectSettings.switchToSandbox')}</Button></Box>}
         </Box>
-    );
-}
-
-function Section({ title, help, action, children }: { title: ReactNode; help?: ReactNode; action?: ReactNode; children: ReactNode }) {
-    return (
-        <Stack spacing={1.25}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontWeight: 600, color: 'text.primary', flex: 1 }}>{title}</Typography>
-                {action}
-            </Box>
-            {help && <Typography variant="body2" color="text.secondary">{help}</Typography>}
-            {children}
-        </Stack>
     );
 }
 
@@ -236,15 +279,13 @@ function TabPage({ children, footer }: { children: ReactNode; footer: ReactNode 
 function ModelEffort({ label, hint, value, onChange, effort, onEffort, launch }: { label: string; hint: string; value: string; onChange: (v: string) => void; effort: Effort; onEffort: (v: Effort) => void; launch?: ReactNode }) {
     const { t } = useTranslation('projects');
     return (
-        <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+        <Stack spacing={2} sx={{ minWidth: 0 }}>
             <Field label={label} hint={hint}>
-                {launch ?? <ModelField label={label} value={value} onChange={onChange} />}
+                {launch ? <Stack sx={pickerStackSx} title={value || undefined}>{launch}</Stack> : <ModelField label={label} value={value} onChange={onChange} />}
             </Field>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="body2" color="text.secondary">{t('projectSettings.effort')}</Typography>
-                <Hint text={t('projectSettings.effortHelp')} />
-                <EffortPicker value={effort} onChange={(v) => onEffort(v as Effort)} />
-            </Box>
+            <Field label={t('projectSettings.effort')} hint={t('projectSettings.effortHelp')}>
+                <Control><EffortPicker value={effort} onChange={(v) => onEffort(v as Effort)} /></Control>
+            </Field>
         </Stack>
     );
 }
@@ -325,20 +366,24 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
     return (
         <TabPage footer={<SaveBar dirty={dirty} canSave={canSave} onSave={save} onDiscard={discard} />}>
             <Stack spacing={2}>
-                <Stack spacing={2}>
-                    <Field label={t('project.name')}>
-                        <TextField value={name} onChange={(e) => setName(e.target.value)} fullWidth
-                            slotProps={{ htmlInput: { 'aria-label': t('project.name') } }} />
-                    </Field>
-                    <Field label={t('project.goal')} hint={t('project.goalHelp')}>
-                        <TextField value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} fullWidth
-                            slotProps={{ htmlInput: { 'aria-label': t('project.goal') } }} />
-                    </Field>
-                </Stack>
+                <FormGrid>
+                    <Span>
+                        <Field label={t('project.name')}>
+                            <TextField value={name} onChange={(e) => setName(e.target.value)} size="small" fullWidth
+                                slotProps={{ htmlInput: { 'aria-label': t('project.name') } }} />
+                        </Field>
+                    </Span>
+                    <Span>
+                        <Field label={t('project.goal')} hint={t('project.goalHelp')}>
+                            <TextField value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} size="small" fullWidth
+                                slotProps={{ htmlInput: { 'aria-label': t('project.goal') } }} />
+                        </Field>
+                    </Span>
+                </FormGrid>
 
                 <Card title={t('projectSettings.threadDefaults')} hint={t('projectSettings.threadDefaultsHelp')}>
                     <Field label={t('projectSettings.permissionMode')} hint={t(`projectSettings.mode.${mode}Help`)}>
-                        <TextField select value={mode} onChange={(e) => setMode(e.target.value as Mode)}
+                        <TextField select value={mode} onChange={(e) => setMode(e.target.value as Mode)} size="small"
                             slotProps={{ select: { inputProps: { 'aria-label': t('projectSettings.permissionMode') } } }}>
                             {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
                                 <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
@@ -346,21 +391,21 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
                         </TextField>
                     </Field>
                     {mode === 'bypassPermissions' && <Alert severity="warning">{t('projectSettings.bypassWarning')}</Alert>}
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
+                    <FormGrid>
                         <ModelEffort label={t('projectSettings.coordinatorModel')} hint={t('projectSettings.coordinatorModelHelp')}
                             value={coord} onChange={setCoord} effort={coordEffort} onEffort={setCoordEffort}
                             launch={launch({ profile: coordProfile, model: coord }, (next) => { setCoordProfile(next.profile); setCoord(next.model); })} />
                         <ModelEffort label={t('projectSettings.threadModel')} hint={t('projectSettings.threadModelHelp')}
                             value={threadModel} onChange={setThreadModel} effort={threadEffort} onEffort={setThreadEffort}
                             launch={launch({ profile: threadProfile, model: threadModel }, (next) => { setThreadProfile(next.profile); setThreadModel(next.model); })} />
-                    </Stack>
-                    <Box sx={{ maxWidth: 280 }}>
-                        <Field label={t('projectSettings.maxRunning')} hint={t('projectSettings.maxRunningHelp')}>
-                            <TextField value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid} fullWidth
-                                helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : undefined}
-                                slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
-                        </Field>
-                    </Box>
+                        <Box sx={{ width: NUMERIC_WIDTH, maxWidth: '100%' }}>
+                            <Field label={t('projectSettings.maxRunning')} hint={t('projectSettings.maxRunningHelp')}>
+                                <TextField value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid} size="small" fullWidth
+                                    helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : undefined}
+                                    slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
+                            </Field>
+                        </Box>
+                    </FormGrid>
                 </Card>
 
                 <Card title={t('projectSettings.workingDir')} hint={t('projectSettings.reposHelp')}>
@@ -454,8 +499,8 @@ function Runtime({ project, patch, runtime, runtimeError, onDirtyChange }: {
 
     return (
         <TabPage footer={<SaveBar dirty={dirty} canSave={!quotaInvalid} onSave={save} onDiscard={discard} />}>
-            <Stack spacing={2.5}>
-                <Section title={t('projectSettings.sandbox')} help={t('projectSettings.sandboxHelp')}>
+            <Stack spacing={2}>
+                <Card title={t('projectSettings.sandbox')} hint={t('projectSettings.sandboxHelp')}>
                     {runtime ? (runtimes.length > 0 ? (
                         <SandboxField value={sandbox} onChange={setSandbox} runtimes={runtimes} inputRef={selectRef} />
                     ) : (
@@ -464,12 +509,11 @@ function Runtime({ project, patch, runtime, runtimeError, onDirtyChange }: {
                         <Typography variant="body2" color="text.secondary">{runtimeError ? t('projectSettings.runtimeLoadFailed') : t('projectSettings.runtimeLoading')}</Typography>
                     )}
                     <SandboxAxes current={current} limited={limited} sandbox={sandbox} />
-                </Section>
-                <Divider />
-                <Section title={t('projectSettings.quotaTitle')}>
+                </Card>
+                <Card title={t('projectSettings.quotaTitle')} hint={sandbox !== 'host' ? t('projectSettings.quota.help') : t('projectSettings.quota.hostHelp')}>
                     <QuotaFields value={quota} onChange={setQuota} enabled={sandbox !== 'host'}
                         onEnableSandbox={runtimes.length > 0 ? () => { selectRef.current?.focus(); selectRef.current?.scrollIntoView({ block: 'center' }); } : undefined} />
-                </Section>
+                </Card>
             </Stack>
         </TabPage>
     );
