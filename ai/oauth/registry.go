@@ -19,14 +19,15 @@ func DefaultRegistry() *Registry {
 		DisplayName:        "Anthropic Claude Code",
 		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
 		ClientSecret:       "",                                     // No secret required for public client
-		AuthURL:            "https://claude.ai/oauth/authorize",
+		AuthURL:            "https://claude.com/cai/oauth/authorize",
 		TokenURL:           "https://platform." + "cl" + "aude.com/v1/oauth/token",
-		RedirectURL:        "",                                         // Dynamic: set to server.BaseURL + "/callback"
-		Scopes:             []string{"user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"},
+		RedirectURL:        "", // Dynamic: set to server.BaseURL + "/callback"
+		Scopes:             []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
 		ConsoleURL:         "https://platform.claude.com/",
+		StateEncoding:      StateEncodingBase64URL32,
 		Hook:               &AnthropicHook{},
 		CallbackPorts:      []int{54545}, // Anthropic CLI standard port (preferred but not required)
 	})

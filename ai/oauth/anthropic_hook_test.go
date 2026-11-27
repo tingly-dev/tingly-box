@@ -2,10 +2,14 @@ package oauth
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"github.com/tingly-dev/tingly-box/ai"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -32,24 +36,32 @@ func TestAnthropicHook_BeforeToken(t *testing.T) {
 	if got := header.Get("Content-Type"); got != "application/json" {
 		t.Errorf("expected Content-Type=application/json, got %q", got)
 	}
-	if got := header.Get("Origin"); got != "https://claude.ai" {
-		t.Errorf("expected Origin=https://claude.ai, got %q", got)
+	if got := header.Get("Accept"); got != "application/json, text/plain, */*" {
+		t.Errorf("unexpected Accept %q", got)
 	}
-	if header.Get("User-Agent") == "" {
-		t.Error("expected non-empty User-Agent")
+	if got := header.Get("User-Agent"); got != "axios/1.15.2" {
+		t.Errorf("unexpected OAuth User-Agent %q", got)
+	}
+	for _, key := range []string{"Origin", "Referer", "Accept-Language"} {
+		if got := header.Get(key); got != "" {
+			t.Errorf("unexpected browser header %s=%q", key, got)
+		}
 	}
 }
 
 func TestAnthropicHook_AfterToken_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/account" {
+		if r.URL.Path != "/api/oauth/profile" {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Header.Get("User-Agent") != "axios/1.15.2" || r.Header.Get("Cache-Control") != "no-cache" {
+			t.Error("unexpected profile request headers")
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
 			t.Errorf("expected Bearer auth, got %q", got)
 		}
-		_, _ = io.WriteString(w, `{"uuid":"acct-123","email_address":"user@example.com"}`)
+		_, _ = io.WriteString(w, `{"account":{"uuid":"acct-123","email":"user@example.com"},"organization":{"uuid":"org-123","name":"Test Org"}}`)
 	}))
 	defer srv.Close()
 
@@ -63,6 +75,9 @@ func TestAnthropicHook_AfterToken_Success(t *testing.T) {
 	meta, err := hook.AfterToken(context.Background(), "test-token", httpClient)
 	if err != nil {
 		t.Fatalf("AfterToken returned error: %v", err)
+	}
+	if meta["organization_id"] != "org-123" || meta["organization_name"] != "Test Org" {
+		t.Errorf("unexpected organization metadata %v", meta)
 	}
 	if meta["email"] != "user@example.com" {
 		t.Errorf("expected email=user@example.com, got %v", meta["email"])
@@ -120,9 +135,8 @@ func TestAnthropicHook_AfterToken_MalformedJSON(t *testing.T) {
 func TestAnthropicHook_AfterToken_ExtraFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, _ := json.Marshal(map[string]any{
-			"uuid":          "acct-456",
-			"email_address": "other@example.com",
-			"unrelated":     "field",
+			"account":   map[string]any{"uuid": "acct-456", "email": "other@example.com"},
+			"unrelated": "field",
 		})
 		_, _ = w.Write(payload)
 	}))
@@ -141,5 +155,93 @@ func TestAnthropicHook_AfterToken_ExtraFields(t *testing.T) {
 	}
 	if meta["account_id"] != "acct-456" {
 		t.Errorf("expected account_id=acct-456, got %v", meta["account_id"])
+	}
+}
+
+func TestClaudeAuthorizationURL(t *testing.T) {
+	config := DefaultConfig()
+	config.BaseURL = "http://localhost:54545"
+	manager := NewManager(WithConfig(config))
+	authURL, state, err := manager.GetAuthURL("user", ai.IssuerClaudeCode, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme != "https" || u.Host != "claude.com" || u.Path != "/cai/oauth/authorize" {
+		t.Fatalf("unexpected authorization endpoint %s", u)
+	}
+	rawState, err := base64.RawURLEncoding.DecodeString(state)
+	if err != nil || len(rawState) != 32 || len(state) != 43 {
+		t.Fatalf("unexpected state format, length %d", len(state))
+	}
+	stored, err := manager.GetStateData(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := u.Query()
+	want := map[string]string{
+		"code":                  "true",
+		"response_type":         "code",
+		"client_id":             "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+		"redirect_uri":          "http://localhost:54545/callback",
+		"state":                 state,
+		"scope":                 "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload",
+		"code_challenge_method": "S256",
+		"code_challenge":        manager.generateCodeChallenge(stored.CodeVerifier),
+	}
+	for key, value := range want {
+		if query.Get(key) != value {
+			t.Errorf("%s = %q, want %q", key, query.Get(key), value)
+		}
+	}
+	if stored.RedirectURI != query.Get("redirect_uri") {
+		t.Fatal("stored callback differs from authorization URL")
+	}
+}
+
+func TestAnthropicProfilePlans(t *testing.T) {
+	for orgType, plan := range map[string]string{
+		"claude_max": "max", "claude_pro": "pro",
+		"claude_team": "team", "claude_enterprise": "enterprise", "claude_future": "",
+	} {
+		t.Run(orgType, func(t *testing.T) {
+			body, err := json.Marshal(map[string]any{
+				"account":      map[string]string{"uuid": "account"},
+				"organization": map[string]string{"organization_type": orgType, "rate_limit_tier": "test-tier"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := &http.Client{Transport: tokenResponseTransport(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+			})}
+			meta, err := (&AnthropicHook{}).AfterToken(context.Background(), "token", client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan == "" {
+				if _, exists := meta["subscription_type"]; exists {
+					t.Error("unknown organization type must not infer a plan")
+				}
+			} else if meta["subscription_type"] != plan {
+				t.Errorf("subscription_type = %v, want %s", meta["subscription_type"], plan)
+			}
+			if meta["rate_limit_tier"] != "test-tier" || meta["account_id"] != "account" {
+				t.Errorf("unexpected profile metadata %v", meta)
+			}
+		})
+	}
+}
+
+func TestAnthropicEmptyProfile(t *testing.T) {
+	client := &http.Client{Transport: tokenResponseTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"account":{},"organization":{}}`))}, nil
+	})}
+	meta, err := (&AnthropicHook{}).AfterToken(context.Background(), "token", client)
+	if err != nil || meta != nil {
+		t.Fatalf("want nil metadata, got %v, %v", meta, err)
 	}
 }
