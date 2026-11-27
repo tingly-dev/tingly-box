@@ -31,6 +31,8 @@ rationale behind actions, payloads, capabilities, and restate.
 
 - `core/` internals → [`core/README.md`](core/README.md)
 - platform registry & "add a new platform" → [`platform/README.md`](platform/README.md)
+- ID kinds (what `Recipient.ID` holds, what a send can address, what is not a
+  receiver) → [`platform/README.md` § ID kinds and send targets](platform/README.md#id-kinds-and-send-targets)
 - markdown rendering → [`markdown/README.md`](markdown/README.md)
 
 ## Supported platforms
