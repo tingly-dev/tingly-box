@@ -50,14 +50,17 @@ func TestAnthropicHook_BeforeToken(t *testing.T) {
 
 func TestAnthropicHook_AfterToken_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/account" {
+		if r.URL.Path != "/api/oauth/profile" {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Header.Get("User-Agent") != "axios/1.15.2" || r.Header.Get("Cache-Control") != "no-cache" {
+			t.Error("unexpected profile request headers")
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
 			t.Errorf("expected Bearer auth, got %q", got)
 		}
-		_, _ = io.WriteString(w, `{"uuid":"acct-123","email_address":"user@example.com"}`)
+		_, _ = io.WriteString(w, `{"account":{"uuid":"acct-123","email":"user@example.com"},"organization":{"uuid":"org-123","name":"Test Org"}}`)
 	}))
 	defer srv.Close()
 
@@ -71,6 +74,9 @@ func TestAnthropicHook_AfterToken_Success(t *testing.T) {
 	meta, err := hook.AfterToken(context.Background(), "test-token", httpClient)
 	if err != nil {
 		t.Fatalf("AfterToken returned error: %v", err)
+	}
+	if meta["organization_id"] != "org-123" || meta["organization_name"] != "Test Org" {
+		t.Errorf("unexpected organization metadata %v", meta)
 	}
 	if meta["email"] != "user@example.com" {
 		t.Errorf("expected email=user@example.com, got %v", meta["email"])
@@ -128,9 +134,8 @@ func TestAnthropicHook_AfterToken_MalformedJSON(t *testing.T) {
 func TestAnthropicHook_AfterToken_ExtraFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload, _ := json.Marshal(map[string]any{
-			"uuid":          "acct-456",
-			"email_address": "other@example.com",
-			"unrelated":     "field",
+			"account":   map[string]any{"uuid": "acct-456", "email": "other@example.com"},
+			"unrelated": "field",
 		})
 		_, _ = w.Write(payload)
 	}))

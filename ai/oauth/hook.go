@@ -92,18 +92,16 @@ func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) 
 }
 
 func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
-	type accountResponse struct {
-		UUID         string `json:"uuid"`
-		EmailAddress string `json:"email_address"`
-	}
-
-	// Try to get account info from Anthropic account endpoint
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/v1/account", nil)
+	// Profile metadata is best-effort and must not prevent a successful login.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/api/oauth/profile", nil)
 	if err != nil {
 		return nil, nil
 	}
+	if err := h.BeforeToken(nil, req.Header); err != nil {
+		return nil, nil
+	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Cache-Control", "no-cache")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -115,17 +113,29 @@ func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, http
 		return nil, nil
 	}
 
-	var account accountResponse
-	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
+	var profile struct {
+		Account struct {
+			UUID  string `json:"uuid"`
+			Email string `json:"email"`
+		} `json:"account"`
+		Organization AnthropicOrganization `json:"organization"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil, nil
 	}
 
 	metadata := make(map[string]any)
-	if account.EmailAddress != "" {
-		metadata["email"] = account.EmailAddress
+	if profile.Account.Email != "" {
+		metadata["email"] = profile.Account.Email
 	}
-	if account.UUID != "" {
-		metadata["account_id"] = account.UUID
+	if profile.Account.UUID != "" {
+		metadata["account_id"] = profile.Account.UUID
+	}
+	if profile.Organization.UUID != "" {
+		metadata["organization_id"] = profile.Organization.UUID
+	}
+	if profile.Organization.Name != "" {
+		metadata["organization_name"] = profile.Organization.Name
 	}
 
 	return metadata, nil
