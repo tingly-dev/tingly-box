@@ -691,8 +691,15 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 	}
 
 	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
-	// Public clients omit client_secret when none is configured.
-	if issuer != ai.IssuerCodex && config.ClientSecret != "" {
+	switch issuer {
+	case ai.IssuerCodex:
+		// Codex never sends client_secret.
+	case ai.IssuerClaudeCode, ai.IssuerAnthropic:
+		// Only Anthropic/Claude omit an unconfigured client_secret.
+		if config.ClientSecret != "" {
+			params["client_secret"] = config.ClientSecret
+		}
+	default:
 		params["client_secret"] = config.ClientSecret
 	}
 

@@ -84,3 +84,40 @@ func TestClaudeRefreshRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRefreshClientSecretByIssuer(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		issuer      ai.Issuer
+		secret      string
+		wantPresent bool
+	}{
+		{"claude empty", ai.IssuerClaudeCode, "", false},
+		{"claude configured", ai.IssuerClaudeCode, "secret", true},
+		{"anthropic empty", ai.IssuerAnthropic, "", false},
+		{"anthropic configured", ai.IssuerAnthropic, "secret", true},
+		{"other empty", ai.IssuerMock, "", true},
+		{"other configured", ai.IssuerMock, "secret", true},
+		{"codex empty", ai.IssuerCodex, "", false},
+		{"codex configured", ai.IssuerCodex, "secret", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry()
+			registry.Register(&ProviderConfig{Type: tc.issuer, ClientID: "test", ClientSecret: tc.secret, TokenURL: "https://example.test/token", TokenRequestFormat: TokenRequestFormatJSON})
+			opts := &Options{HTTPClient: &http.Client{Transport: tokenResponseTransport(func(r *http.Request) (*http.Response, error) {
+				var body map[string]string
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				secret, present := body["client_secret"]
+				if present != tc.wantPresent || (present && secret != tc.secret) {
+					t.Errorf("client_secret = %q, present %v, want %q, present %v", secret, present, tc.secret, tc.wantPresent)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"access_token":"access"}`))}, nil
+			})}}
+			if _, err := NewManager(WithRegistry(registry)).refreshToken(context.Background(), tc.issuer, "refresh", opts); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
