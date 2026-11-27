@@ -81,8 +81,13 @@ CGO_CPPFLAGS="${CGO_CPPFLAGS:-} -include \"$PWD/build/darwin/vz_namespace.h\"" \
   go build -tags production,private_mac_apis ./gui/wails3
 ```
 
-The macOS PR check links the GUI and verifies both distinct delegate classes
-in the resulting binary with `nm`.
+The macOS PR check runs the same `task darwin:package ARCH=arm64` path as the
+release (with placeholder frontend assets), verifies both delegate classes
+with `nm`, checks the Mach-O deployment target against the bundle's macOS 12
+minimum, rejects non-system dylib paths, and verifies the signature before
+and after the release ZIP/unzip round trip. This checks packaging and linking
+on the current runner; it does not establish runtime compatibility on every
+older macOS version or prove VM boot behavior.
 
 ## Naming
 
