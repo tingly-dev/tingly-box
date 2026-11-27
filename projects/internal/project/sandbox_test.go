@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -46,6 +47,9 @@ func mountOf(s *process.Sandbox, path string) (sandbox.Mount, bool) {
 }
 
 func TestSandboxedThreadGetsItsWorkAndNothingElseWritable(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("bwrap is only shipped on Linux")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
@@ -122,7 +126,7 @@ func TestASandboxNotInTheBuildFailsTheTurn(t *testing.T) {
 	require.Error(t, err, "never run on the host instead")
 	assert.False(t, ValidSandbox("firecracker"))
 	assert.True(t, ValidSandbox(""))
-	assert.True(t, ValidSandbox("bwrap"))
+	assert.Equal(t, runtime.GOOS == "linux", ValidSandbox("bwrap"))
 	assert.True(t, ValidSandbox(sandbox.HostName))
 }
 

@@ -27,6 +27,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  platform-build:
+    name: Build CLI and GUI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Prepare frontend placeholders for linking
+        shell: bash
+        run: |
+          mkdir -p internal/web/dist projects/web/dist
+          echo '<html></html>' > internal/web/dist/index.html
+          echo '<html></html>' > projects/web/dist/index.html
+      - name: Build CLI
+        shell: bash
+        run: go build -o "$RUNNER_TEMP/tb-cli" ./cli/tingly-box
+      - name: Build GUI with native dependencies
+        shell: bash
+        working-directory: gui/wails3
+        run: go build -tags production,private_mac_apis -o "$RUNNER_TEMP/tb-gui" .
+      - name: Verify platform sandbox registration and rejection
+        run: go test ./projects/internal/project -run '^Test(SandboxRuntimesMatchPlatform|WindowsSandboxUnavailable)$' -count=1
+
   tingly-integration:
     name: Tingly IM and Projects harness
     runs-on: ubuntu-latest
