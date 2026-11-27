@@ -691,8 +691,8 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 	}
 
 	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
-	// codex DO NOT require client_secret
-	if issuer != ai.IssuerCodex {
+	// Public clients omit client_secret when none is configured.
+	if issuer != ai.IssuerCodex && config.ClientSecret != "" {
 		params["client_secret"] = config.ClientSecret
 	}
 

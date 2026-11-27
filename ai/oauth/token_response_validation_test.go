@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -56,5 +57,30 @@ func TestExchangeRateLimited(t *testing.T) {
 				t.Fatalf("calls = %d, error = %v, want one request and %q", calls, err, want)
 			}
 		})
+	}
+}
+
+func TestClaudeRefreshRequest(t *testing.T) {
+	opts := &Options{HTTPClient: &http.Client{Transport: tokenResponseTransport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.String() != "https://platform.claude.com/v1/oauth/token" {
+			t.Errorf("unexpected refresh URL %s", r.URL)
+		}
+		if r.Header.Get("User-Agent") != "axios/1.15.2" {
+			t.Error("unexpected refresh User-Agent")
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := body["client_secret"]; exists {
+			t.Error("public client refresh must omit client_secret")
+		}
+		if body["grant_type"] != "refresh_token" || body["refresh_token"] != "test-refresh" || body["client_id"] != "9d1c250a-e61b-44d9-88ed-5944d1962f5e" {
+			t.Error("unexpected refresh parameters")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"access_token":"test-access","expires_in":3600}`))}, nil
+	})}}
+	if _, err := NewManager().refreshToken(context.Background(), ai.IssuerClaudeCode, "test-refresh", opts); err != nil {
+		t.Fatal(err)
 	}
 }
