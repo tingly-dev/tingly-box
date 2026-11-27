@@ -186,6 +186,7 @@ export const project: Dict<typeof projectEn> = {
         threadDefaults: '线程默认',
         threadDefaultsHelp: '新线程启动时复制这些值；已有线程保持各自的值。',
         effort: '思考强度',
+        effortHelp: '模型回答前思考的程度；越高越慢、消耗 token 越多。',
         coordinatorModel: '协调者模型', coordinatorModelHelp: '负责项目对话：路由与更新。留空使用连接的默认模型。',
         threadModel: '线程默认模型', threadModelHelp: '新线程创建时复制此值（Claude Code --model），已有线程保持各自的模型不受影响。留空使用宿主默认模型。',
         modelDefault: '连接默认',

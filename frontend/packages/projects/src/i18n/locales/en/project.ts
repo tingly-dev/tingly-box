@@ -183,6 +183,7 @@ export const project = {
         threadDefaults: 'Thread defaults',
         threadDefaultsHelp: 'Copied to each new thread when it starts; threads already started keep their own values.',
         effort: 'Thinking effort',
+        effortHelp: 'How much the model reasons before answering. Higher is slower and uses more tokens.',
         coordinatorModel: 'Coordinator model', coordinatorModelHelp: 'Runs the project conversation: routing, updates. Empty uses the connection default.',
         threadModel: 'Default thread model', threadModelHelp: 'Copied to each new thread when it starts (Claude Code --model); threads already started keep their own. Empty uses the host default.',
         modelDefault: 'Connection default',

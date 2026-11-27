@@ -74,7 +74,7 @@ export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onP
         <Box>
             {value.map((r, i) => (
                 <Box key={r.root} sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: radius.row }}>
-                    <Typography sx={{ ...mono, fontSize: fontSizes.base, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
+                    <Typography sx={{ ...mono, fontSize: fontSizes.base, flex: 1, flexBasis: { xs: '100%', sm: 'auto' }, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
                         {r.root}
                     </Typography>
                     {r.kind === 'git' && <Tooltip title={t('repo.baseHint')}>

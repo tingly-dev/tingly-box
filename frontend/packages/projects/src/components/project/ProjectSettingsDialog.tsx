@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
     Alert, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack, Switch,
-    Tab, TableHead, TableRow, Tabs, TextField, Typography,
+    Tab, TableHead, TableRow, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog, EmptyState } from '@tingly/ui';
 import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type SandboxRuntime, type Usage } from '../../client';
 import { TextEditDialog } from '../TextEditDialog';
 import { EffortPicker } from '../EffortPicker';
-import { Add, Close, Delete, Description, Duplicate } from '../icons';
+import { Add, Close, Delete, Description, Duplicate, Info } from '../icons';
 import { ForkProjectDialog } from './ForkProjectDialog';
 import { useModels } from '../../hooks/useModels';
 import { useNotify } from '../../hooks/useNotify';
@@ -87,7 +87,7 @@ function SandboxAxes({ current, limited, sandbox }: { current?: SandboxRuntime; 
     );
 }
 
-function ModelField({ label, value, onChange, help }: { label: string; value: string; onChange: (v: string) => void; help: string }) {
+function ModelField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
     const { models } = useModels('projects');
     const { t } = useTranslation('projects');
     return (
@@ -97,20 +97,62 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
             value={value}
             onInputChange={(_, v) => onChange(v)}
             renderInput={(params) => (
-                <TextField {...params} label={label} placeholder={t('projectSettings.modelDefault')} helperText={help}
-                    slotProps={{ ...params.slotProps, inputLabel: { shrink: true }, htmlInput: { ...params.slotProps?.htmlInput, style: { ...mono, fontSize: fontSizes.base } } }} />
+                <TextField {...params} placeholder={t('projectSettings.modelDefault')}
+                    slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': label, style: { ...mono, fontSize: fontSizes.base } } }} />
             )}
         />
     );
 }
 
+// The detail behind an info icon. It reads on hover and on keyboard focus,
+// and its accessible name is the detail itself, so a screen reader gets the
+// full explanation without the icon having visible text.
+function Hint({ text }: { text: string }) {
+    return (
+        <Tooltip title={text} arrow enterTouchDelay={0}>
+            <IconButton size="small" aria-label={text}
+                sx={{ p: 0.25, color: 'text.disabled', '&:hover, &:focus-visible': { color: 'text.secondary' } }}>
+                <Info sx={{ fontSize: fontSizes.title }} />
+            </IconButton>
+        </Tooltip>
+    );
+}
+
+/** A label row (short label + optional info icon) above its control. */
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+    return (
+        <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 24 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>{label}</Typography>
+                {hint && <Hint text={hint} />}
+            </Box>
+            {children}
+        </Stack>
+    );
+}
+
+/** One settings block: a titled card, its explanation behind an info icon. */
+function Card({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
+    return (
+        <Box component="section" aria-label={title}
+            sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, minHeight: 48, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography sx={{ fontWeight: 600, color: 'text.primary', flex: 1, minWidth: 0 }}>{title}</Typography>
+                {hint && <Hint text={hint} />}
+                {action}
+            </Box>
+            <Stack spacing={2} sx={{ p: 2 }}>{children}</Stack>
+        </Box>
+    );
+}
+
 /** One settings action: what it does on the left, its button on the right. */
-function ActionRow({ title, help, action }: { title: string; help: string; action: ReactNode }) {
+function ActionRow({ title, hint, action }: { title: string; hint: string; action: ReactNode }) {
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
-                <Typography variant="body2" color="text.secondary">{help}</Typography>
+                <Hint text={hint} />
             </Box>
             {action}
         </Box>
@@ -162,7 +204,7 @@ function Section({ title, help, action, children }: { title: ReactNode; help?: R
                 <Typography sx={{ fontWeight: 600, color: 'text.primary', flex: 1 }}>{title}</Typography>
                 {action}
             </Box>
-            {help && <Typography variant="body2" color="text.secondary" sx={{ mt: '-0.5rem' }}>{help}</Typography>}
+            {help && <Typography variant="body2" color="text.secondary">{help}</Typography>}
             {children}
         </Stack>
     );
@@ -191,19 +233,16 @@ function TabPage({ children, footer }: { children: ReactNode; footer: ReactNode 
     );
 }
 
-function ModelEffort({ label, help, value, onChange, effort, onEffort, launch }: { label: string; help: string; value: string; onChange: (v: string) => void; effort: Effort; onEffort: (v: Effort) => void; launch?: ReactNode }) {
+function ModelEffort({ label, hint, value, onChange, effort, onEffort, launch }: { label: string; hint: string; value: string; onChange: (v: string) => void; effort: Effort; onEffort: (v: Effort) => void; launch?: ReactNode }) {
     const { t } = useTranslation('projects');
     return (
-        <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
-            {launch ? (
-                <Stack spacing={0.25}>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    {launch}
-                    <Typography variant="caption" color="text.secondary">{help}</Typography>
-                </Stack>
-            ) : <ModelField label={label} value={value} onChange={onChange} help={help} />}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="caption" color="text.secondary">{t('projectSettings.effort')}</Typography>
+        <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+            <Field label={label} hint={hint}>
+                {launch ?? <ModelField label={label} value={value} onChange={onChange} />}
+            </Field>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="body2" color="text.secondary">{t('projectSettings.effort')}</Typography>
+                <Hint text={t('projectSettings.effortHelp')} />
                 <EffortPicker value={effort} onChange={(v) => onEffort(v as Effort)} />
             </Box>
         </Stack>
@@ -285,33 +324,50 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
 
     return (
         <TabPage footer={<SaveBar dirty={dirty} canSave={canSave} onSave={save} onDiscard={discard} />}>
-            <Stack spacing={2.5}>
-                <TextField label={t('project.name')} value={name} onChange={(e) => setName(e.target.value)} fullWidth />
-                <TextField label={t('project.goal')} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} helperText={t('project.goalHelp')} fullWidth />
-                <Divider />
+            <Stack spacing={2}>
+                <Stack spacing={2}>
+                    <Field label={t('project.name')}>
+                        <TextField value={name} onChange={(e) => setName(e.target.value)} fullWidth
+                            slotProps={{ htmlInput: { 'aria-label': t('project.name') } }} />
+                    </Field>
+                    <Field label={t('project.goal')} hint={t('project.goalHelp')}>
+                        <TextField value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} fullWidth
+                            slotProps={{ htmlInput: { 'aria-label': t('project.goal') } }} />
+                    </Field>
+                </Stack>
 
-                <Section title={t('projectSettings.threadDefaults')} help={t('projectSettings.threadDefaultsHelp')}>
-                    <TextField select label={t('projectSettings.permissionMode')} value={mode} onChange={(e) => setMode(e.target.value as Mode)} helperText={t(`projectSettings.mode.${mode}Help`)}>
-                        {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
-                            <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
-                        ))}
-                    </TextField>
+                <Card title={t('projectSettings.threadDefaults')} hint={t('projectSettings.threadDefaultsHelp')}>
+                    <Field label={t('projectSettings.permissionMode')} hint={t(`projectSettings.mode.${mode}Help`)}>
+                        <TextField select value={mode} onChange={(e) => setMode(e.target.value as Mode)}
+                            slotProps={{ select: { inputProps: { 'aria-label': t('projectSettings.permissionMode') } } }}>
+                            {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
+                                <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Field>
                     {mode === 'bypassPermissions' && <Alert severity="warning">{t('projectSettings.bypassWarning')}</Alert>}
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
-                        <ModelEffort label={t('projectSettings.coordinatorModel')} help={t('projectSettings.coordinatorModelHelp')}
+                        <ModelEffort label={t('projectSettings.coordinatorModel')} hint={t('projectSettings.coordinatorModelHelp')}
                             value={coord} onChange={setCoord} effort={coordEffort} onEffort={setCoordEffort}
                             launch={launch({ profile: coordProfile, model: coord }, (next) => { setCoordProfile(next.profile); setCoord(next.model); })} />
-                        <ModelEffort label={t('projectSettings.threadModel')} help={t('projectSettings.threadModelHelp')}
+                        <ModelEffort label={t('projectSettings.threadModel')} hint={t('projectSettings.threadModelHelp')}
                             value={threadModel} onChange={setThreadModel} effort={threadEffort} onEffort={setThreadEffort}
                             launch={launch({ profile: threadProfile, model: threadModel }, (next) => { setThreadProfile(next.profile); setThreadModel(next.model); })} />
                     </Stack>
-                    <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
-                        helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
-                        slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} sx={{ maxWidth: 280 }} />
-                </Section>
-                <Divider />
+                    <Box sx={{ maxWidth: 280 }}>
+                        <Field label={t('projectSettings.maxRunning')} hint={t('projectSettings.maxRunningHelp')}>
+                            <TextField value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid} fullWidth
+                                helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : undefined}
+                                slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
+                        </Field>
+                    </Box>
+                </Card>
 
-                <Section title={t('projectSettings.githubAuto')}
+                <Card title={t('projectSettings.workingDir')} hint={t('projectSettings.reposHelp')}>
+                    <RepoField value={repos} onChange={setRepos} primary={primary} onPrimaryChange={setPrimary} />
+                </Card>
+
+                <Card title={t('projectSettings.githubAuto')} hint={t('projectSettings.githubAutoFoot')}
                     action={<Typography variant="caption" color="text.secondary">{t('projectSettings.githubPresetCount', { on: github.length, total: GITHUB_GROUPS.length })}</Typography>}>
                     <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                         {GITHUB_PRESETS.map((p) => {
@@ -322,26 +378,19 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
                     </Stack>
                     <Stack spacing={1.5}>
                         {GITHUB_GROUPS.map((g) => (
-                            <Box key={g} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Box key={g} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
                                     <Typography sx={{ color: 'text.primary' }}>{t(`projectSettings.githubGroups.${g}`)}</Typography>
-                                    <Typography variant="body2" color="text.secondary">{t(`projectSettings.githubGroups.${g}Help`)}</Typography>
+                                    <Hint text={t(`projectSettings.githubGroups.${g}Help`)} />
                                 </Box>
                                 <Switch checked={github.includes(g)} onChange={(_, on) => setGithub(GITHUB_GROUPS.filter((x) => (x === g ? on : github.includes(x))))}
                                     slotProps={{ input: { 'aria-label': t(`projectSettings.githubGroups.${g}`) } }} />
                             </Box>
                         ))}
                     </Stack>
-                    <Typography variant="caption" color="text.secondary">{t('projectSettings.githubAutoFoot')}</Typography>
-                </Section>
-                <Divider />
+                </Card>
 
-                <Section title={t('projectSettings.workingDir')} help={t('projectSettings.reposHelp')}>
-                    <RepoField value={repos} onChange={setRepos} primary={primary} onPrimaryChange={setPrimary} />
-                </Section>
-                <Divider />
-
-                <Section title={t('projectSettings.runtimeDiagnostics')} help={t('projectSettings.runtimeDiagnosticsHelp')}>
+                <Card title={t('projectSettings.runtimeDiagnostics')} hint={t('projectSettings.runtimeDiagnosticsHelp')}>
                     {runtime ? runtime.cli_path ? (
                         <Typography variant="body2" color="text.secondary">
                             {t('projectSettings.runtimeCli')} <Box component="span" sx={{ ...mono, color: 'text.primary' }}>{runtime.cli_path}</Box>
@@ -358,25 +407,20 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
                                 : t('projectSettings.runtimeOwnLogin')}
                         </Typography>
                     )}
-                </Section>
-                <Divider />
+                </Card>
 
-                <Section title={t('projectSettings.projectManagement')} help={t('projectSettings.projectManagementHelp')}>
-                    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        <ActionRow title={project.paused ? t('projectSettings.resume') : t('projectSettings.pause')} help={t('projectSettings.pauseHelp')}
+                <Card title={t('projectSettings.projectManagement')} hint={t('projectSettings.projectManagementHelp')}>
+                    <Stack spacing={1.5} divider={<Divider />}>
+                        <ActionRow title={project.paused ? t('projectSettings.resume') : t('projectSettings.pause')} hint={t('projectSettings.pauseHelp')}
                             action={<Button variant="outlined" onClick={() => void patch({ paused: !project.paused })}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Button>} />
-                        <Divider />
-                        <ActionRow title={project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')} help={t('projectSettings.archiveHelp')}
+                        <ActionRow title={project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')} hint={t('projectSettings.archiveHelp')}
                             action={<Button variant="outlined" color="error" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>} />
                         {project.type !== 'folder' && (
-                            <>
-                                <Divider />
-                                <ActionRow title={t('projectSettings.fork')} help={t('projectSettings.forkHelp')}
-                                    action={<Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>} />
-                            </>
+                            <ActionRow title={t('projectSettings.fork')} hint={t('projectSettings.forkHelp')}
+                                action={<Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>} />
                         )}
-                    </Box>
-                </Section>
+                    </Stack>
+                </Card>
             </Stack>
         </TabPage>
     );

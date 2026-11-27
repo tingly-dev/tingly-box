@@ -24,7 +24,9 @@ const save = () => screen.getByRole('button', { name: 'common.save' });
 it('shows the stored limit as a plain number, 4 for a new project', () => {
     const field = open();
     expect(field.value).toBe('4');
-    expect(screen.getByText('projectSettings.maxRunningHelp')).toBeTruthy();
+    // The explanation lives behind an info icon, not in a paragraph.
+    expect(screen.getByRole('button', { name: 'projectSettings.maxRunningHelp' })).toBeTruthy();
+    expect(screen.queryByText('projectSettings.maxRunningHelp')).not.toBeInTheDocument();
     expect(save()).toBeDisabled();
 });
 
@@ -131,6 +133,45 @@ it('has four tabs in daily-first order: Basic, Runtime, Memory, Usage', () => {
     expect(screen.getAllByRole('tab').map((el) => el.textContent)).toEqual([
         'projectSettings.tabBasic', 'projectSettings.tabRuntime', 'projectSettings.tabMemory', 'projectSettings.tabUsage',
     ]);
+});
+
+it('makes GitHub approval its own card, below the working directory', () => {
+    open();
+    // Each block is a labelled card, in the causal order: directories before GitHub.
+    expect(screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))).toEqual([
+        'projectSettings.threadDefaults',
+        'projectSettings.workingDir',
+        'projectSettings.githubAuto',
+        'projectSettings.runtimeDiagnostics',
+        'projectSettings.projectManagement',
+    ]);
+});
+
+it('puts each thread-default detail behind a labelled info icon', () => {
+    open();
+    for (const name of [
+        'projectSettings.mode.autoHelp', 'projectSettings.coordinatorModelHelp',
+        'projectSettings.threadModelHelp', 'projectSettings.maxRunningHelp',
+    ]) {
+        expect(screen.getByRole('button', { name }), name).toBeTruthy();
+    }
+    expect(screen.getAllByRole('button', { name: 'projectSettings.effortHelp' })).toHaveLength(2);
+    // The external label still names the control it belongs to.
+    expect(screen.getByRole('combobox', { name: 'projectSettings.permissionMode' })).toBeTruthy();
+    // The card's own explanation is an info icon too, not a paragraph.
+    expect(screen.getByRole('button', { name: 'projectSettings.threadDefaultsHelp' })).toBeTruthy();
+    expect(screen.queryByText('projectSettings.threadDefaultsHelp')).not.toBeInTheDocument();
+});
+
+it('exposes a thread-default detail on a focusable, labelled info icon', async () => {
+    open();
+    const hint = screen.getByRole('button', { name: 'projectSettings.maxRunningHelp' });
+    // Reachable with Tab, and its name is the explanation a screen reader reads.
+    expect(hint.tabIndex).toBe(0);
+    hint.focus();
+    expect(document.activeElement).toBe(hint);
+    fireEvent.mouseOver(hint);
+    expect(await screen.findByRole('tooltip', {}, { timeout: 3000 })).toHaveTextContent('projectSettings.maxRunningHelp');
 });
 
 it('does not silently discard unsaved edits when switching tabs', async () => {
