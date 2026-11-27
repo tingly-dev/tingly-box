@@ -1,21 +1,23 @@
-package agentboot
+package claude
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
 func TestWireContentPlainPrompt(t *testing.T) {
 	// No blocks: the content stays the plain string, as before.
-	assert.Equal(t, "hi", WireContent("hi", nil))
-	assert.Equal(t, "", WireContent("", nil))
+	assert.Equal(t, "hi", wireContent("hi", nil))
+	assert.Equal(t, "", wireContent("", nil))
 }
 
 func TestWireContentPromptThenImages(t *testing.T) {
-	wire := WireContent("look", []ContentBlock{
-		ImageContent("image/png", "AAAA"),
+	wire := wireContent("look", []agentboot.ContentBlock{
+		agentboot.ImageContent("image/png", "AAAA"),
 	})
 	blocks, ok := wire.([]any)
 	require.True(t, ok)
@@ -30,7 +32,7 @@ func TestWireContentPromptThenImages(t *testing.T) {
 }
 
 func TestWireContentTextBlockIsNotDuplicated(t *testing.T) {
-	wire := WireContent("look", []ContentBlock{TextContent("look")}).([]any)
+	wire := wireContent("look", []agentboot.ContentBlock{agentboot.TextContent("look")}).([]any)
 	require.Len(t, wire, 1)
 	assert.Equal(t, map[string]any{"type": "text", "text": "look"}, wire[0])
 }

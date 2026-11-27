@@ -69,7 +69,7 @@ func (b *StreamPromptBuilder) AddUserContent(prompt string, content []agentboot.
 		"type": SDKUserMessage,
 		"message": map[string]interface{}{
 			"role":    "user",
-			"content": agentboot.WireContent(prompt, content),
+			"content": wireContent(prompt, content),
 		},
 	}
 	return b.Add(msg)

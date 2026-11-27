@@ -120,7 +120,7 @@ func (t *Transport) EncodeUserContent(prompt string, content []agentboot.Content
 		"type": SDKUserMessage,
 		"message": map[string]any{
 			"role":    "user",
-			"content": agentboot.WireContent(prompt, content),
+			"content": wireContent(prompt, content),
 		},
 	}
 }
