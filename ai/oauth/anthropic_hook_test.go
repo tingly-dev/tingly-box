@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -198,5 +199,49 @@ func TestClaudeAuthorizationURL(t *testing.T) {
 	}
 	if stored.RedirectURI != query.Get("redirect_uri") {
 		t.Fatal("stored callback differs from authorization URL")
+	}
+}
+
+func TestAnthropicProfilePlans(t *testing.T) {
+	for orgType, plan := range map[string]string{
+		"claude_max": "max", "claude_pro": "pro",
+		"claude_team": "team", "claude_enterprise": "enterprise", "claude_future": "",
+	} {
+		t.Run(orgType, func(t *testing.T) {
+			body, err := json.Marshal(map[string]any{
+				"account":      map[string]string{"uuid": "account"},
+				"organization": map[string]string{"organization_type": orgType, "rate_limit_tier": "test-tier"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := &http.Client{Transport: tokenResponseTransport(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+			})}
+			meta, err := (&AnthropicHook{}).AfterToken(context.Background(), "token", client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan == "" {
+				if _, exists := meta["subscription_type"]; exists {
+					t.Error("unknown organization type must not infer a plan")
+				}
+			} else if meta["subscription_type"] != plan {
+				t.Errorf("subscription_type = %v, want %s", meta["subscription_type"], plan)
+			}
+			if meta["rate_limit_tier"] != "test-tier" || meta["account_id"] != "account" {
+				t.Errorf("unexpected profile metadata %v", meta)
+			}
+		})
+	}
+}
+
+func TestAnthropicEmptyProfile(t *testing.T) {
+	client := &http.Client{Transport: tokenResponseTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"account":{},"organization":{}}`))}, nil
+	})}
+	meta, err := (&AnthropicHook{}).AfterToken(context.Background(), "token", client)
+	if err != nil || meta != nil {
+		t.Fatalf("want nil metadata, got %v, %v", meta, err)
 	}
 }

@@ -91,6 +91,14 @@ func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) 
 	return nil
 }
 
+// Plan names derived from organization_type, following PR #2685.
+var anthropicSubscriptionTypes = map[string]string{
+	"claude_max":        "max",
+	"claude_pro":        "pro",
+	"claude_team":       "team",
+	"claude_enterprise": "enterprise",
+}
+
 func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
 	// Profile metadata is best-effort and must not prevent a successful login.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/api/oauth/profile", nil)
@@ -118,7 +126,11 @@ func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, http
 			UUID  string `json:"uuid"`
 			Email string `json:"email"`
 		} `json:"account"`
-		Organization AnthropicOrganization `json:"organization"`
+		Organization struct {
+			AnthropicOrganization
+			OrganizationType string `json:"organization_type"`
+			RateLimitTier    string `json:"rate_limit_tier"`
+		} `json:"organization"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil, nil
@@ -138,6 +150,15 @@ func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, http
 		metadata["organization_name"] = profile.Organization.Name
 	}
 
+	if plan, ok := anthropicSubscriptionTypes[profile.Organization.OrganizationType]; ok {
+		metadata["subscription_type"] = plan
+	}
+	if profile.Organization.RateLimitTier != "" {
+		metadata["rate_limit_tier"] = profile.Organization.RateLimitTier
+	}
+	if len(metadata) == 0 {
+		return nil, nil
+	}
 	return metadata, nil
 }
 
