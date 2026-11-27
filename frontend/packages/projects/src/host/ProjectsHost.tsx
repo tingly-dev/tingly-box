@@ -20,6 +20,10 @@ export interface ProjectsHost {
         project: (id: string) => string;
         /** A working folder, optionally scoped to a path and an open session (the page reads `path`, `session`, `new` and `add` from its query). */
         folder: (path?: string) => string;
+        /** The read-only chats list. Without it the Chats entry points are hidden. */
+        chats?: string;
+        /** One read-only chat. */
+        chat?: (id: string) => string;
         /** The IM settings view. Only with `im`. */
         im?: string;
     };

@@ -23,6 +23,11 @@ import (
 //	<root>/<project>/threads/<thread>.settings.json
 type Layout struct {
 	Root string
+	// DataRoot is the instance's data directory, of which Root (the projects
+	// directory) is one child. Chats live beside projects/, under it. Empty
+	// keeps chats under Root, which is what tests and standalone OpenAPI
+	// generation use.
+	DataRoot string
 }
 
 // Dir is a project's directory.
@@ -77,6 +82,53 @@ func (l Layout) SettingsFile(projectID, threadID string) string {
 // SessionSettingsFile is the Claude Code settings file a folder session runs with.
 func (l Layout) SessionSettingsFile(threadID string) string {
 	return filepath.Join(l.Root, "_sessions", "settings", threadID+".json")
+}
+
+// ChatsDir holds the read-only chats, beside the projects directory and
+// outside every project. See .design/chat-mode.md §4.2.
+func (l Layout) ChatsDir() string {
+	root := l.DataRoot
+	if root == "" {
+		root = l.Root
+	}
+	return filepath.Join(root, "chats")
+}
+
+// ChatDir is one chat's working directory: the agent's cwd and the root the
+// file tools are confined to.
+func (l Layout) ChatDir(threadID string) string { return filepath.Join(l.ChatsDir(), threadID) }
+
+// ChatAttachmentsDir holds a chat's attachments, inside its working directory
+// so the read-only tools can read them.
+func (l Layout) ChatAttachmentsDir(threadID string) string {
+	return filepath.Join(l.ChatDir(threadID), "attachments")
+}
+
+// ChatConfigDir is the chat's CLAUDE_CONFIG_DIR: its transcripts and Claude
+// Code state, deleted with the chat.
+func (l Layout) ChatConfigDir(threadID string) string {
+	return filepath.Join(l.ChatDir(threadID), ".claude")
+}
+
+// ChatTmpDir is the chat's TMPDIR.
+func (l Layout) ChatTmpDir(threadID string) string {
+	return filepath.Join(l.ChatDir(threadID), ".tmp")
+}
+
+// ChatExportsDir holds temporary exports of a chat.
+func (l Layout) ChatExportsDir(threadID string) string {
+	return filepath.Join(l.ChatDir(threadID), "exports")
+}
+
+// EnsureChat creates a chat's directories (0700): the working directory,
+// attachments, its Claude config and temp.
+func (l Layout) EnsureChat(threadID string) error {
+	for _, d := range []string{l.ChatDir(threadID), l.ChatAttachmentsDir(threadID), l.ChatConfigDir(threadID), l.ChatTmpDir(threadID), l.ChatExportsDir(threadID)} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Ensure creates a project's directories.

@@ -9,6 +9,8 @@ export { default as ProjectsPage } from './pages/ProjectsPage';
 export { default as ProjectPage } from './pages/ProjectPage';
 export { default as WorkdirPage } from './pages/WorkdirPage';
 export { default as WorkspaceHomePage } from './pages/WorkspaceHomePage';
+export { default as WorkspaceChatsPage } from './pages/WorkspaceChatsPage';
+export { default as ChatSessionPage } from './pages/ChatSessionPage';
 export { default as ImSettingsPage } from './pages/ImSettingsPage';
 // The browser-notification engine's strings and routes, from the host surface.
 export { NotificationsBridge } from './notifications/NotificationsBridge';

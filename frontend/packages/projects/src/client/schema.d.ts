@@ -4,6 +4,98 @@
  */
 
 export interface paths {
+    "/api/v1/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The read-only chats, most recently updated first, and whether they run sandboxed here
+         * @description The read-only chats, most recently updated first, and whether they run sandboxed here
+         */
+        get: operations["apiV1ChatsGet"];
+        put?: never;
+        /**
+         * Start a chat with its first message: JSON {content,title,model} or multipart (content,title,model, files "files")
+         * @description Start a chat with its first message: JSON {content,title,model} or multipart (content,title,model, files "files")
+         */
+        post: operations["apiV1ChatsPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One chat and whether chats run sandboxed here
+         * @description One chat and whether chats run sandboxed here
+         */
+        get: operations["apiV1ChatsIdGet"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a chat for good: stops it, removes its rows and its folder (transcripts, attachments, exports)
+         * @description Delete a chat for good: stops it, removes its rows and its folder (transcripts, attachments, exports)
+         */
+        delete: operations["apiV1ChatsIdDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a chat attachment by its path
+         * @description Download a chat attachment by its path
+         */
+        get: operations["apiV1ChatsIdAttachmentsGet"];
+        put?: never;
+        /**
+         * Upload text or image files for a chat message (multipart field "files"); other types are refused
+         * @description Upload text or image files for a chat message (multipart field "files"); other types are refused
+         */
+        post: operations["apiV1ChatsIdAttachmentsPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a chat as a zip: chat.json (thread and events) and every attachment, not the transcript
+         * @description Export a chat as a zip: chat.json (thread and events) and every attachment, not the transcript
+         */
+        get: operations["apiV1ChatsIdExportGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/conversations": {
         parameters: {
             query?: never;
@@ -1513,6 +1605,21 @@ export interface components {
             /** @description Field verbose */
             verbose: boolean;
         };
+        ChatAttachmentsResponse: {
+            /** @description Field attachments */
+            attachments: components["schemas"]["Attachment"][];
+        };
+        ChatListResponse: {
+            /** @description Field chats */
+            chats: components["schemas"]["Thread"][];
+            /** @description Field sandboxed */
+            sandboxed: boolean;
+        };
+        ChatResponse: {
+            /** @description Field sandboxed */
+            sandboxed: boolean;
+            thread: components["schemas"]["Thread"];
+        };
         ChooseRequest: {
             /** @description Field custom */
             custom?: string;
@@ -1997,6 +2104,14 @@ export interface components {
             error?: string;
             /** @description Field models */
             models: components["schemas"]["Model"][];
+        };
+        NewChatRequest: {
+            /** @description Field content */
+            content: string;
+            /** @description Field model */
+            model?: string;
+            /** @description Field title */
+            title?: string;
         };
         OKResponse: {
             /** @description Field ok */
@@ -2893,6 +3008,169 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    apiV1ChatsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatListResponse"];
+                };
+            };
+        };
+    };
+    apiV1ChatsPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ChatsIdGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
+                };
+            };
+        };
+    };
+    apiV1ChatsIdDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    apiV1ChatsIdAttachmentsGet: {
+        parameters: {
+            query?: {
+                /** @description The attachment path returned by the upload */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    apiV1ChatsIdAttachmentsPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAttachmentsResponse"];
+                };
+            };
+        };
+    };
+    apiV1ChatsIdExportGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     apiV1ConversationsGet: {
         parameters: {
             query?: {

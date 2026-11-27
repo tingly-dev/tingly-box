@@ -6,6 +6,8 @@ import { Layout } from '../layout/Layout';
 const HomePage = lazy(() => import('../pages/HomePage'));
 const ChatPage = lazy(() => import('../pages/ChatPage'));
 const ChatsPage = lazy(() => import('../pages/ChatsPage'));
+const WorkspaceChatsPage = lazy(() => import('../pages/WorkspaceChatsPage'));
+const ChatSessionPage = lazy(() => import('../pages/ChatSessionPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProjectPage = lazy(() => import('../pages/ProjectPage'));
 const WorkdirPage = lazy(() => import('../pages/WorkdirPage'));
@@ -20,6 +22,8 @@ export const appRoutes: RouteObject[] = [
             { path: '/chat', element: <HomePage /> },
             { path: '/chat/:id', element: <ChatPage /> },
             { path: '/chats', element: <ChatsPage /> },
+            { path: '/workspace/chats', element: <WorkspaceChatsPage /> },
+            { path: '/workspace/chats/:threadId', element: <ChatSessionPage /> },
             { path: '/project/:id', element: <ProjectPage /> },
             { path: '/folder', element: <WorkdirPage /> },
             { path: '/settings', element: <SettingsPage /> },

@@ -108,8 +108,10 @@ func New(opts Options) (*App, error) {
 		return nil, errors.New("projects: Options.Host is required")
 	}
 	dbPath, root := ":memory:", os.TempDir()
+	var dataDir string
 	if opts.DataDir != "" {
-		dataDir, err := filepath.Abs(opts.DataDir)
+		var err error
+		dataDir, err = filepath.Abs(opts.DataDir)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +122,7 @@ func New(opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	deps := server.Deps{Store: store, Layout: project.Layout{Root: root}, Sessions: opts.Sessions}
+	deps := server.Deps{Store: store, Layout: project.Layout{Root: root, DataRoot: dataDir}, Sessions: opts.Sessions}
 	if opts.Agents != nil {
 		deps.Agents = &project.Agents{Service: opts.Agents}
 	}

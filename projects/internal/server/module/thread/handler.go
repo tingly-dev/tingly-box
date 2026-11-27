@@ -545,9 +545,17 @@ func (h *Handler) send(c *gin.Context) {
 	}
 	var atts []rt.Attachment
 	if len(req.Attachments) > 0 {
-		owner, err := h.owner(cur)
-		if err == nil {
-			atts, err = h.svc.Layout.ResolveAttachments(owner, req.Attachments)
+		var err error
+		if h.svc.Threads.IsChat(cur.ProjectID) {
+			atts, err = h.svc.Layout.ResolveChatAttachments(cur.ID, req.Attachments)
+		} else {
+			owner, oerr := h.owner(cur)
+			if oerr == nil {
+				atts, err = h.svc.Layout.ResolveAttachments(owner, req.Attachments)
+			}
+			if oerr != nil {
+				err = oerr
+			}
 		}
 		if err != nil {
 			apierr.BadRequest(c, err.Error())

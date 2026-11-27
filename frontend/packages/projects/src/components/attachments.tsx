@@ -27,11 +27,13 @@ export const formatSize = (n: number): string => (n >= 1 << 20 ? `${(n / (1 << 2
 export interface AttachOwner {
     projectId?: string;
     threadId?: string;
+    /** A read-only chat: its files live in the chat's own folder, not a project library. */
+    chatId?: string;
     /** The folder project whose next thread the files are for. */
     draftFolderId?: string;
 }
 
-const base = (o: AttachOwner) => (o.threadId ? `/api/v1/threads/${o.threadId}` : `/api/v1/projects/${o.projectId ?? o.draftFolderId ?? ''}`);
+const base = (o: AttachOwner) => (o.chatId ? `/api/v1/chats/${o.chatId}` : o.threadId ? `/api/v1/threads/${o.threadId}` : `/api/v1/projects/${o.projectId ?? o.draftFolderId ?? ''}`);
 
 /** Stores files for a message and returns what to send with it. */
 export async function uploadAttachments(owner: AttachOwner, files: File[]): Promise<Attachment[]> {
@@ -96,10 +98,12 @@ function AttachmentChip({ srcOf, item, caption, onOpen }: { srcOf: (path: string
 }
 
 /** Where an owner's stored files are read from. */
-const useSrcOf = ({ threadId, projectId, draftFolderId }: AttachOwner) => useCallback((path: string) => (threadId
+const useSrcOf = ({ threadId, projectId, chatId, draftFolderId }: AttachOwner) => useCallback((path: string) => (chatId
+    ? `/api/v1/chats/${chatId}/attachments?path=${encodeURIComponent(path)}`
+    : threadId
     ? `/api/v1/threads/${threadId}/attachments/file?path=${encodeURIComponent(path)}`
     : `/api/v1/projects/${projectId ?? draftFolderId ?? ''}/library/file?path=${encodeURIComponent(path)}`),
-    [threadId, projectId, draftFolderId]);
+    [threadId, projectId, chatId, draftFolderId]);
 
 /** The previewed file, and the images its next and previous step to; closed when `file` is null. */
 function PreviewDialog({ srcOf, files, file, onOpen, onClose }: { srcOf: (path: string) => string; files: Attachment[]; file: PreviewFile | null; onOpen: (file: PreviewFile) => void; onClose: () => void }) {

@@ -104,7 +104,7 @@ func runServe(cfg config.Config, sessions project.SessionConfig) error {
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(ctx, server.Deps{Store: store, Layout: project.Layout{Root: cfg.ProjectsDir()}, Sessions: sessions}),
+		Handler:           server.New(ctx, server.Deps{Store: store, Layout: project.Layout{Root: cfg.ProjectsDir(), DataRoot: cfg.DataDir}, Sessions: sessions}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	ln, err := net.Listen("tcp", addr)

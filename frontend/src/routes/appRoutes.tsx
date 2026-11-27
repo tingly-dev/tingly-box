@@ -198,6 +198,8 @@ export const appRoutes = (
             {/* Projects — a coordinator running Claude Code threads; its own
                 rail item (useActivityItems). */}
             <Route path="/workspace" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="home" /></ExperimentalFeatureGate>} />
+            <Route path="/workspace/chats" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="chats" /></ExperimentalFeatureGate>} />
+            <Route path="/workspace/chats/:threadId" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="chat" /></ExperimentalFeatureGate>} />
             <Route path="/projects" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="list" /></ExperimentalFeatureGate>} />
             <Route path="/projects/folder" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="folder" /></ExperimentalFeatureGate>} />
             <Route path="/projects/im" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="im" /></ExperimentalFeatureGate>} />

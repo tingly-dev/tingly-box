@@ -5,6 +5,7 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectList } from '../hooks/useProjectList';
+import { useChatList } from '../hooks/useChatList';
 import { Add, ChatBubble, Folder, Pause, Stack, Star } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { NavTree } from './NavTree';
@@ -60,6 +61,8 @@ export interface ProjectsSidebarProps {
     showProjects?: boolean;
     /** List the working folders (default false): the saved ones and any folder with a session, with what waits there. */
     showWorkdirs?: boolean;
+    /** List the read-only chats (default false; needs host paths.chats). */
+    showChats?: boolean;
     /** Host sections, rendered after Projects. */
     sections?: ProjectsSidebarSection[];
     /** Show the IM entry at the bottom when the host has IM (default true). */
@@ -180,7 +183,7 @@ export const IM_SIDEBAR_ANCHOR_ID = 'projects-sidebar-im';
  * whatever sections the host adds. It knows nothing about the host; Tingly Box
  * passes its working folders in as a section.
  */
-export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, imRows = [], sections = EMPTY_SECTIONS, onNavigate }: ProjectsSidebarProps) {
+export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showChats = false, showIm = true, imRows = [], sections = EMPTY_SECTIONS, onNavigate }: ProjectsSidebarProps) {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();
@@ -192,6 +195,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     const { projects, folders } = useProjectList(showProjects || showWorkdirs, (ev) => {
         if (ev.type === 'thread') setRevisions((r) => ({ ...r, [ev.project_id]: (r[ev.project_id] ?? 0) + 1 }));
     }, () => setReconnect((n) => n + 1));
+    const { list: chatList } = useChatList(showChats && !!paths.chats);
     const [params] = useSearchParams();
     const scope = location.pathname === paths.folder().split('?')[0] ? params.get('path') ?? '' : undefined;
 
@@ -201,8 +205,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
         running: p.threads.working > 0,
     });
 
-    const projectSection: ProjectsSidebarSection | null = showProjects ? {
-        key: 'projects',
+    const projectSection: ProjectsSidebarSection | null = showProjects ? {        key: 'projects',
         title: t('nav.projects'),
         to: paths.list,
         action: {
@@ -224,6 +227,30 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             ...state(p),
         })),
         empty: projects ? t('sidebar.noProjects') : undefined,
+    } : null;
+
+    // Read-only chats: a short list of the most recent, above the projects.
+    const chatSection: ProjectsSidebarSection | null = showChats && paths.chats && paths.chat ? {
+        key: 'chats',
+        title: t('nav.chats'),
+        to: paths.chats,
+        action: {
+            label: t('nav.newChat'),
+            onClick: () => {
+                navigate(paths.chats!);
+                onNavigate?.();
+            },
+        },
+        rows: (chatList?.chats ?? []).slice(0, 5).map((c) => ({
+            key: c.id,
+            label: c.title || t('readonlyChats.untitled'),
+            title: c.title || t('readonlyChats.untitled'),
+            icon: <ChatBubble />,
+            to: paths.chat!(c.id),
+            selected: location.pathname === paths.chat!(c.id),
+            running: c.status === 'working',
+        })),
+        empty: chatList ? t('readonlyChats.emptyShort') : undefined,
     } : null;
 
     const workdirSection: ProjectsSidebarSection | null = showWorkdirs ? {
@@ -261,7 +288,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
     return (
         <Box component="nav" aria-label={t('nav.projects')} sx={{ py: 1, minHeight: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ flex: 1 }}>
-                {[...(projectSection ? [projectSection] : []), ...(workdirSection ? [workdirSection] : []), ...sections].map((s, i) => (
+                {[...(chatSection ? [chatSection] : []), ...(projectSection ? [projectSection] : []), ...(workdirSection ? [workdirSection] : []), ...sections].map((s, i) => (
                     <Box key={s.key}>
                         {i > 0 && <Divider sx={{ mx: 2, my: 1 }} />}
                         <SectionView section={s} onNavigate={onNavigate} />

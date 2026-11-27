@@ -60,6 +60,8 @@ interface Props {
     projectId: string;
     /** The thread is a working folder's: no branch, review or merge, and it can be handed off to a terminal. */
     folder?: boolean;
+    /** The thread is a read-only chat: its uploads live in the chat's folder, and it is never handed off, resolved or archived. */
+    chat?: boolean;
     threadId: string;
     thread?: Thread;
     events: ThreadEvent[] | null;
@@ -115,7 +117,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
 
 const EMPTY_TASKS: BackgroundTask[] = [];
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = EMPTY_TASKS, onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
+export function ThreadPanel({ projectId, folder = false, chat = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = EMPTY_TASKS, onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { copy: copyRef } = useCopyThreadRef(thread ?? { seq: 0, title: '' });
@@ -177,8 +179,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const stick = useRef(true);
     const [awayFromBottom, setAwayFromBottom] = useState(false);
     // A folder thread has no branch to review or merge; its uploads are its own.
-    const session = folder;
-    const owner = useMemo<AttachOwner>(() => (session ? { threadId } : { projectId }), [session, projectId, threadId]);
+    // A chat has neither, and its uploads live in the chat's folder.
+    const session = folder || chat;
+    const owner = useMemo<AttachOwner>(() => (chat ? { chatId: threadId } : session ? { threadId } : { projectId }), [chat, session, projectId, threadId]);
     const Attachments = useMemo(() => ({ items, align, captions }: { items: Attachment[]; align?: 'flex-start' | 'flex-end'; captions?: Record<string, string> }) => <AttachmentChips owner={owner} items={items} align={align} captions={captions} />, [owner]);
     const ops = useMemo(() => threadOps(threadId), [threadId]);
     const composer = useRef<ThreadComposerHandle>(null);
@@ -467,19 +470,19 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {/* The panel opens where the menu was, under the More button. */}
                         {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
-                        {session && !thread.archived_at && thread.status !== 'resolved' && (
+                        {session && !chat && !thread.archived_at && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
                         {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot resolve it. */}
                         <Divider />
                         {canRestart && <MenuItem disabled={acting} onClick={offerRestart}>{t('session.restart')}</MenuItem>}
-                        {!thread.archived_at && (thread.status !== 'resolved'
+                        {!chat && !thread.archived_at && (thread.status !== 'resolved'
                             ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
                             : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
-                        {!thread.archived_at && !session && (
+                        {!chat && !thread.archived_at && !session && (
                             <MenuItem disabled={acting} onClick={() => openCleanup('archive')}>{t('thread.archive')}</MenuItem>
                         )}
-                        {thread.archived_at ? (
+                        {chat ? null : thread.archived_at ? (
                             <>
                                 <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.restoreSession).then((ok) => { if (ok) onRefresh?.(); }); }}>{session ? t('session.restore') : t('thread.restore')}</MenuItem>
                                 <MenuItem disabled={acting} onClick={() => openCleanup('delete')} sx={{ color: 'error.main' }}>{t('thread.delete')}</MenuItem>
@@ -632,7 +635,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                                 </ControlTooltip>
                             )}
                             {/* Beside the permission mode, outside the next-turn hint: a question already waiting is re-timed at once. */}
-                            {thread.status !== 'resolved' && (
+                            {thread.status !== 'resolved' && !chat && (
                                 <AutoAnswerSelect thread={thread} folder={session} disabled={acting}
                                     onChange={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
                             )}

@@ -6,6 +6,229 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/api/v1/chats": {
+      "get": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "The read-only chats, most recently updated first, and whether they run sandboxed here",
+        "description": "The read-only chats, most recently updated first, and whether they run sandboxed here",
+        "operationId": "apiV1ChatsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "Start a chat with its first message: JSON {content,title,model} or multipart (content,title,model, files \"files\")",
+        "description": "Start a chat with its first message: JSON {content,title,model} or multipart (content,title,model, files \"files\")",
+        "operationId": "apiV1ChatsPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{id}": {
+      "get": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "One chat and whether chats run sandboxed here",
+        "description": "One chat and whether chats run sandboxed here",
+        "operationId": "apiV1ChatsIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "Delete a chat for good: stops it, removes its rows and its folder (transcripts, attachments, exports)",
+        "description": "Delete a chat for good: stops it, removes its rows and its folder (transcripts, attachments, exports)",
+        "operationId": "apiV1ChatsIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{id}/attachments": {
+      "get": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "Download a chat attachment by its path",
+        "description": "Download a chat attachment by its path",
+        "operationId": "apiV1ChatsIdAttachmentsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "The attachment path returned by the upload",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "Upload text or image files for a chat message (multipart field \"files\"); other types are refused",
+        "description": "Upload text or image files for a chat message (multipart field \"files\"); other types are refused",
+        "operationId": "apiV1ChatsIdAttachmentsPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAttachmentsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{id}/export": {
+      "get": {
+        "tags": [
+          "chats"
+        ],
+        "summary": "Export a chat as a zip: chat.json (thread and events) and every attachment, not the transcript",
+        "description": "Export a chat as a zip: chat.json (thread and events) and every attachment, not the transcript",
+        "operationId": "apiV1ChatsIdExportGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/conversations": {
       "get": {
         "tags": [
@@ -3344,6 +3567,57 @@
           "updated_at"
         ]
       },
+      "ChatAttachmentsResponse": {
+        "type": "object",
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "description": "Field attachments",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
+          }
+        },
+        "required": [
+          "attachments"
+        ]
+      },
+      "ChatListResponse": {
+        "type": "object",
+        "properties": {
+          "chats": {
+            "type": "array",
+            "description": "Field chats",
+            "items": {
+              "$ref": "#/components/schemas/Thread"
+            }
+          },
+          "sandboxed": {
+            "type": "boolean",
+            "description": "Field sandboxed"
+          }
+        },
+        "required": [
+          "chats",
+          "sandboxed"
+        ]
+      },
+      "ChatResponse": {
+        "type": "object",
+        "properties": {
+          "sandboxed": {
+            "type": "boolean",
+            "description": "Field sandboxed"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/Thread"
+          }
+        },
+        "required": [
+          "thread",
+          "sandboxed"
+        ]
+      },
       "ChooseRequest": {
         "type": "object",
         "properties": {
@@ -4406,6 +4680,26 @@
         },
         "required": [
           "models"
+        ]
+      },
+      "NewChatRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Field content"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "OKResponse": {
@@ -6219,6 +6513,10 @@
     }
   },
   "tags": [
+    {
+      "name": "chats",
+      "description": "Operations related to chats"
+    },
     {
       "name": "conversations",
       "description": "Operations related to conversations"
