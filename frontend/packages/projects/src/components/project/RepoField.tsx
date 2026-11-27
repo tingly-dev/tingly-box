@@ -11,6 +11,8 @@ export interface RepoEntry {
     root: string;
     branch: string;
     dirty?: boolean;
+    /** A Git repository with no commits yet: shared mode only, for now. */
+    empty?: boolean;
     kind: 'git' | 'directory';
     workspace_mode: 'shared' | 'worktree';
 }
@@ -53,7 +55,10 @@ export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onP
                 return;
             }
             if (!value.some((v) => v.root === r.root)) {
-                onChange([...value, { root: r.root, branch: r.branch ?? '', kind: r.kind, workspace_mode: r.kind === 'directory' ? 'shared' : 'worktree', dirty: r.dirty }]);
+                // A repository with no commits cannot branch a worktree yet, so
+                // it starts shared; the mode can be switched after a commit.
+                const mode = r.kind === 'directory' || r.empty ? 'shared' : 'worktree';
+                onChange([...value, { root: r.root, branch: r.branch ?? '', kind: r.kind, workspace_mode: mode, dirty: r.dirty, empty: r.empty }]);
                 if (!value.length) onPrimaryChange?.(r.root);
             }
             setPath('');
@@ -78,6 +83,11 @@ export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onP
                     {r.dirty && (
                         <Tooltip title={t('repo.dirtyHint')}>
                             <Warning sx={{ fontSize: 16 }} color="warning" />
+                        </Tooltip>
+                    )}
+                    {r.empty && (
+                        <Tooltip title={t('repo.emptyHint')}>
+                            <Chip size="small" variant="outlined" color="warning" label={t('repo.noCommits')} sx={{ fontSize: fontSizes.sm }} />
                         </Tooltip>
                     )}
                     <Select size="small" value={r.workspace_mode} disabled={r.kind !== 'git'} inputProps={{ 'aria-label': `${t('repo.mode')} ${r.root}` }} onChange={(e) => onChange(value.map((v, j) => j === i ? { ...v, workspace_mode: e.target.value as RepoEntry['workspace_mode'] } : v))}>

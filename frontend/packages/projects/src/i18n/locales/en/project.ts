@@ -24,6 +24,7 @@ export const project = {
         placeholder: '/path/to/directory', add: 'Add', invalid: 'Cannot inspect directory',
         mode: 'Workspace mode', primary: 'Primary', makePrimary: 'Make primary', primaryModeHelp: 'Only the primary directory ({{path}}) is affected. Other directories keep their settings.',
         baseHint: 'Threads branch from this branch', dirtyHint: 'This checkout has uncommitted changes; threads are unaffected, but merging needs a clean checkout.',
+        noCommits: 'No commits yet', emptyHint: 'This repository has no commits yet, so threads share this checkout. Worktree mode needs an initial commit; make one, then switch the mode.',
     },
     messageDetail: {
         label: 'Message detail', detailed: 'Detailed', concise: 'Concise',
@@ -75,6 +76,7 @@ export const project = {
         bulkFailedSuffix: ' · {{count}} refused',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved', archived: 'Archived' },
     },
+    phone: { settings: 'Session settings', messagePlaceholder: 'Message this thread…', sessionPlaceholder: 'Message this session…', checklist: 'Progress', desktopNote: 'Full trace and diffs are on the desktop.', expandCode: 'Show full code', collapseCode: 'Collapse code', copyFailed: 'Could not copy' },
     thread: {
         status: { waiting: 'Waiting on you', ready: 'Ready for review', working: 'Working', queued: 'Queued', idle: 'Idle', resolved: 'Resolved', failed: 'Failed' },
         commits_one: '{{count}} commit', commits_other: '{{count}} commits',
@@ -169,6 +171,7 @@ export const project = {
         tree: 'Library files', tooLarge: 'This file is too large to preview.', notPreviewable: 'This file can’t be previewed. Download it instead.',
         previousImage: 'Previous image', nextImage: 'Next image', scratch: 'Scratch (TMPDIR)',
         sort: 'Sort files', sortTimeDesc: 'Newest first', sortTimeAsc: 'Oldest first', sortNameAsc: 'Name A–Z', sortNameDesc: 'Name Z–A',
+        search: 'Search files', noResults: 'No files match your search.',
     },
     projectSettings: {
         maxRunning: 'Threads running at once',
@@ -189,7 +192,7 @@ export const project = {
             hostHelp: 'Limits need a sandbox: pick one above. Empty means no limit.',
             memoryMin: 'At least 512 MiB', processesMin: 'At least 64', cpuMin: 'At least 0.1',
         },
-        sandboxes: { host: 'This machine (no isolation)', bwrap: 'Sandbox (bubblewrap)', microvm: 'Virtual machine (microVM)' },
+        sandboxes: { host: 'This machine (no isolation)', bwrap: 'Sandbox (bubblewrap)', microvm: 'Virtual machine (microVM)', macvm: 'Virtual machine (macOS)', seatbelt: 'Sandbox (macOS Seatbelt)' },
         axes: { storage: 'Files', network: 'Network', exec: 'Processes', credentials: 'Secrets', resources: 'Resources' },
         levels: {
             storage: { host: 'everything you can read', confined: 'only its directory, repository, Library and memory' },

@@ -1,6 +1,6 @@
 //go:build linux
 
-package microvm
+package vmguest
 
 import (
 	"bufio"
@@ -23,7 +23,7 @@ import (
 // As the guest's init, this binary runs the command and powers off; it runs
 // before anything else of the binary would.
 func init() {
-	if os.Getpid() != 1 || os.Getenv(guestEnv) != "1" {
+	if os.Getpid() != 1 || os.Getenv(Env) != "1" {
 		return
 	}
 	if err := guest(); err != nil {
@@ -58,40 +58,44 @@ func guest() error {
 		return fmt.Errorf("loopback: %w", err)
 	}
 
-	ctl, err := dialHost(portControl)
+	ctl, err := dialHost(PortControl)
 	if err != nil {
 		return fmt.Errorf("control: %w", err)
 	}
 	defer ctl.Close()
-	report := func(r result) { _ = json.NewEncoder(ctl).Encode(r) }
+	report := func(r Result) { _ = json.NewEncoder(ctl).Encode(r) }
 	line, err := bufio.NewReader(ctl).ReadBytes('\n')
 	if err != nil {
 		return fmt.Errorf("read the command: %w", err)
 	}
-	var s spec
+	var s Spec
 	if err := json.Unmarshal(line, &s); err != nil || len(s.Args) == 0 {
-		report(result{Error: "bad command from the host"})
+		report(Result{Error: "bad command from the host"})
 		return errors.New("bad command")
 	}
 	var stdio [3]*os.File
-	for i, port := range []int{portStdin, portStdout, portStderr} {
+	for i, port := range []int{PortStdin, PortStdout, PortStderr} {
 		if stdio[i], err = dialHost(uint32(port)); err != nil {
-			report(result{Error: "stdio: " + err.Error()})
+			report(Result{Error: "stdio: " + err.Error()})
 			return err
 		}
 	}
+	if err := buildView(&s); err != nil {
+		report(Result{Error: "storage: " + err.Error()})
+		return err
+	}
 	if s.Net != nil {
 		if err := setUpNet(s.Net); err != nil {
-			report(result{Error: "network: " + err.Error()})
+			report(Result{Error: "network: " + err.Error()})
 			return err
 		}
 	}
 	env := s.Env
 	if pl := (netproxy.Plan{Proxy: s.Proxy, Expose: s.Expose}); !pl.Empty() {
-		ports := vsockPorts(pl)
+		ports := Ports(pl)
 		dial := func(name string) (io.ReadWriteCloser, error) { return dialHost(uint32(ports[name])) }
 		if env, err = netproxy.ServeBridge(pl, dial, env); err != nil {
-			report(result{Error: "network bridge: " + err.Error()})
+			report(Result{Error: "network bridge: " + err.Error()})
 			return err
 		}
 	}
@@ -103,8 +107,11 @@ func guest() error {
 	}
 	// Inherited by the command and all it starts: setuid gives nothing.
 	if _, _, e := syscall.RawSyscall6(syscall.SYS_PRCTL, 38 /* PR_SET_NO_NEW_PRIVS */, 1, 0, 0, 0, 0); e != 0 {
-		report(result{Error: "no_new_privs: " + e.Error()})
+		report(Result{Error: "no_new_privs: " + e.Error()})
 		return e
+	}
+	if s.Foreign {
+		s.Args[0] = foreignCommand(s.Args[0], readHead)
 	}
 	cmd := exec.Command(s.Args[0], s.Args[1:]...)
 	cmd.Env, cmd.Dir = env, s.Dir
@@ -114,7 +121,7 @@ func guest() error {
 	if s.Limits != nil {
 		cg, err := limit(s.Limits)
 		if err != nil {
-			report(result{Error: "limits: " + err.Error()})
+			report(Result{Error: "limits: " + err.Error()})
 			return err
 		}
 		defer cg.Close()
@@ -122,7 +129,7 @@ func guest() error {
 	}
 	oomBefore := oomKills()
 	if err := cmd.Start(); err != nil {
-		report(result{Error: err.Error()})
+		report(Result{Error: err.Error()})
 		return err
 	}
 	for _, f := range stdio {
@@ -135,17 +142,17 @@ func guest() error {
 	var exit *exec.ExitError
 	switch {
 	case err == nil && !oom:
-		report(result{})
+		report(Result{})
 	case errors.As(err, &exit):
 		if ws, ok := exit.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-			report(result{Signal: int(ws.Signal()), OOM: oom})
+			report(Result{Signal: int(ws.Signal()), OOM: oom})
 		} else {
-			report(result{Exit: exit.ExitCode(), OOM: oom})
+			report(Result{Exit: exit.ExitCode(), OOM: oom})
 		}
 	case err == nil:
-		report(result{OOM: true})
+		report(Result{OOM: true})
 	default:
-		report(result{Error: err.Error()})
+		report(Result{Error: err.Error()})
 	}
 	return nil
 }
@@ -270,7 +277,7 @@ func loopbackUp() error {
 // setUpNet brings up the card and routes through it, with the host's ip (the
 // guest sees /usr). The filter is outside the guest, in the namespace the
 // card's tap is in.
-func setUpNet(n *guestNet) error {
+func setUpNet(n *Net) error {
 	ip := ""
 	for _, p := range []string{"/usr/sbin/ip", "/usr/bin/ip", "/sbin/ip", "/bin/ip"} {
 		if _, err := os.Stat(p); err == nil {

@@ -24,7 +24,7 @@ const isWorkspacePath = (path: string) => path === '/workspace' || path === '/pr
 /** The phone's frame: the page above, three tabs below. Pages without a phone version render as they are, in one column. */
 export default function MobileShell({ children }: LayoutProps) {
     const { t } = useTranslation();
-    const { pathname } = useLocation();
+    const { pathname, search } = useLocation();
     const { enableProjects } = useFeatureFlags();
     const items = useActivityItems();
 
@@ -41,12 +41,15 @@ export default function MobileShell({ children }: LayoutProps) {
     // The desktop secondary sidebar has no room on a phone: an activity with several pages gets a switcher bar instead.
     const activity = pathname === '/more' ? undefined : items.find((item) => item.key === resolveActiveActivity(items, pathname, saved));
     const subPages = subPageGroups(activity, pathname);
+    // A phone session is a pushed screen: the composer owns the bottom edge,
+    // so the tab bar (and the activity switcher) step aside until Back.
+    const inSession = pathname.startsWith('/projects/') && (new URLSearchParams(search).has('thread') || new URLSearchParams(search).has('session'));
 
     return (
         <PhoneShellContext.Provider value>
             <GlobalStyles styles={phoneShellStyles} />
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', bgcolor: 'background.default' }}>
-                {activity && hasSubPages(subPages) && <SubPageSwitcher title={activity.label} groups={subPages} />}
+                {!inSession && activity && hasSubPages(subPages) && <SubPageSwitcher title={activity.label} groups={subPages} />}
                 <Box
                     component="main"
                     sx={isWorkspacePath(pathname)
@@ -55,7 +58,7 @@ export default function MobileShell({ children }: LayoutProps) {
                 >
                     {children ?? <Outlet />}
                 </Box>
-                <MobileTabBar tabs={tabs} active={active} />
+                {!inSession && <MobileTabBar tabs={tabs} active={active} />}
             </Box>
         </PhoneShellContext.Provider>
     );

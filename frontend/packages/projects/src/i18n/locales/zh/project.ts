@@ -27,6 +27,7 @@ export const project: Dict<typeof projectEn> = {
         placeholder: '/path/to/directory', add: '添加', invalid: '无法检查目录',
         mode: '工作目录模式', primary: '主目录', makePrimary: '设为主目录', primaryModeHelp: '仅影响主目录（{{path}}），其他目录保持各自设置。',
         baseHint: '线程从这个分支切出', dirtyHint: '该工作区有未提交的改动；不影响线程，但合并需要干净的工作区。',
+        noCommits: '尚无提交', emptyHint: '该仓库还没有任何提交，线程会直接使用此目录（共享模式）。Worktree 模式需要先有一次初始提交；提交后可以切换模式。',
     },
     messageDetail: {
         label: '消息详细度', detailed: '详细', concise: '简洁',
@@ -78,6 +79,7 @@ export const project: Dict<typeof projectEn> = {
         bulkFailedSuffix: ' · {{count}} 个被拒绝',
         group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决', archived: '已归档' },
     },
+    phone: { settings: '会话设置', messagePlaceholder: '给这个线程发消息…', sessionPlaceholder: '给这个会话发消息…', checklist: '进度', desktopNote: '完整轨迹、diff 请在电脑上查看。', expandCode: '展开代码', collapseCode: '收起代码', copyFailed: '无法复制' },
     thread: {
         status: { waiting: '等你处理', ready: '可以 review', working: '进行中', queued: '排队中', idle: '空闲', resolved: '已解决', failed: '失败' },
         commits_one: '{{count}} 个提交', commits_other: '{{count}} 个提交',
@@ -172,6 +174,7 @@ export const project: Dict<typeof projectEn> = {
         tree: '资料库文件', tooLarge: '文件太大，无法预览。', notPreviewable: '无法预览此文件，请下载查看。',
         previousImage: '上一张', nextImage: '下一张', scratch: '线程临时文件',
         sort: '文件排序', sortTimeDesc: '最新优先', sortTimeAsc: '最早优先', sortNameAsc: '名称 A–Z', sortNameDesc: '名称 Z–A',
+        search: '搜索文件', noResults: '没有匹配的文件。',
     },
     projectSettings: {
         maxRunning: '同时运行的线程数',
@@ -192,7 +195,7 @@ export const project: Dict<typeof projectEn> = {
             hostHelp: '限额需要沙箱：请先在上面选择。留空表示不限。',
             memoryMin: '至少 512 MiB', processesMin: '至少 64', cpuMin: '至少 0.1',
         },
-        sandboxes: { host: '本机（不隔离）', bwrap: '沙箱（bubblewrap）', microvm: '虚拟机（microVM）' },
+        sandboxes: { host: '本机（不隔离）', bwrap: '沙箱（bubblewrap）', microvm: '虚拟机（microVM）', macvm: '虚拟机（macOS）', seatbelt: '沙箱（macOS Seatbelt）' },
         axes: { storage: '文件', network: '网络', exec: '进程', credentials: '凭据', resources: '资源' },
         levels: {
             storage: { host: '你能读的都能读', confined: '只有自己的目录、仓库、资料库和记忆' },

@@ -48,12 +48,17 @@ describe('useCopyFeedback', () => {
         expect(result.current.copied).toBe(false);
     });
 
-    it('does not flag copied or call onCopied when the clipboard write is refused', async () => {
+    it('flags failed and calls onFailed — not onCopied — when the clipboard write is refused', async () => {
         writeText.mockRejectedValue(new Error('denied'));
         const onCopied = vi.fn();
-        const { result } = renderHook(() => useCopyFeedback());
-        await act(async () => { await result.current.copy('x', onCopied); });
+        const onFailed = vi.fn();
+        const { result } = renderHook(() => useCopyFeedback(1000));
+        await act(async () => { await result.current.copy('x', onCopied, onFailed); });
         expect(result.current.copied).toBe(false);
+        expect(result.current.failed).toBe(true);
         expect(onCopied).not.toHaveBeenCalled();
+        expect(onFailed).toHaveBeenCalledOnce();
+        act(() => { vi.advanceTimersByTime(1000); });
+        expect(result.current.failed).toBe(false);
     });
 });

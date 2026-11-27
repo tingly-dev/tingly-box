@@ -99,6 +99,8 @@ export interface RosterAxis<T extends MetricRow, D> {
     selected: T | undefined;
     detail: D[];
     detailLoading: boolean;
+    /** Grand total tokens across the whole axis roster — the share % denominator. */
+    rosterTotal: number;
 }
 
 // Drives one roster axis (account / model / provider / ...) end to end:
@@ -154,6 +156,14 @@ export function useRosterAxis<T extends MetricRow, D, R>({
         [visibleRows, page, rowsPerPage],
     );
 
+    // Grand total across the whole axis roster (every row, not just the page
+    // or the current search filter) — each row's share % is its tokens over
+    // this. Matches the share the removed Top list computed.
+    const rosterTotal = useMemo(
+        () => roster.reduce((sum, row) => sum + getTotalTokens(row), 0),
+        [roster],
+    );
+
     // Filtering/sorting/range can shrink the result set below the current page.
     useEffect(() => {
         setPage(0);
@@ -205,6 +215,7 @@ export function useRosterAxis<T extends MetricRow, D, R>({
         detail,
         detailLoading: detailLoading
             || (enabled && !(detailFor && detailFor.selected === selected && detailFor.range === range && detailFor.loadDetail === loadDetail)),
+        rosterTotal,
     };
 }
 
@@ -220,6 +231,7 @@ export function RosterBreakdownTable<D extends MetricRow>({
     noUsageLabel,
     noUsageHint,
     usageMetricLabels,
+    shareLabel,
 }: {
     items: D[];
     rowKey: (item: D) => string;
@@ -228,8 +240,10 @@ export function RosterBreakdownTable<D extends MetricRow>({
     noUsageLabel: string;
     noUsageHint?: string;
     usageMetricLabels: UsageMetricLabels;
+    shareLabel: string;
 }) {
     const showCacheWrite = hasCacheWrites(items);
+    const shareTotal = items.reduce((sum, item) => sum + getTotalTokens(item), 0);
     if (items.length === 0) {
         return (
             <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: radius.card }}>
@@ -259,6 +273,7 @@ export function RosterBreakdownTable<D extends MetricRow>({
                             showTotal
                             showCacheWrite={showCacheWrite}
                         />
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{shareLabel}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -280,6 +295,9 @@ export function RosterBreakdownTable<D extends MetricRow>({
                                 showTotal
                                 showCacheWrite={showCacheWrite}
                             />
+                            <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                {shareTotal > 0 ? `${((getTotalTokens(item) / shareTotal) * 100).toFixed(1)}%` : '—'}
+                            </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

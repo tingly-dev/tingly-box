@@ -213,6 +213,11 @@ type Info struct {
 	Isolation Isolation `json:"isolation"`
 	// Supports lists, per axis, the levels the runtime can give.
 	Supports map[Axis][]Level `json:"supports"`
+	// System is where the sandbox's system directories come from: empty for
+	// the host's own; otherwise the guest OS of the runtime's image, whose
+	// directories replace the host's, and in which host executables do not
+	// run (.design/sandbox-macvm.md §4.2).
+	System string `json:"system,omitempty"`
 }
 
 // Runtime is one way of isolating a process. It gives each axis the level

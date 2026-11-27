@@ -1,37 +1,27 @@
-import { useCallback, useRef, useState } from 'react';
-import { Box, Button, IconButton, LinearProgress, MenuItem, Select, Tooltip, Typography } from '@mui/material';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Box, Button, IconButton, InputAdornment, LinearProgress, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { api, apiFetch, unwrap, type LibraryEntry, type LibraryTree } from '../../client';
-import { Delete, Download, UploadFile } from '../icons';
+import { Delete, Download, Search, UploadFile } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { LazyTree } from '../common/LazyTree';
 import { LibraryPreview, previewKind, saveFile, type PreviewFile } from './LibraryPreview';
+import { displayName, LIBRARY_SORTS, matchesQuery, sortLibraryEntries, type LibrarySort } from './libraryEntries';
 
 const mono = { fontFamily: fontMono } as const;
 
 type Node = LibraryEntry & { kind: 'dir' | 'file' };
 
-/** An upload is stored as uploads/<12 hex id>-<name>; it is saved under the name it was given. */
-export const downloadName = (path: string): string => {
-    const base = path.split('/').pop() || path;
-    return /^uploads\/[0-9a-f]{12}-[^/]+$/.test(path) ? base.slice(13) : base;
-};
-
 const toPreview = (n: Node): PreviewFile => ({ path: n.path, name: n.name, size: n.size });
-
-/** How the files of every open folder are ordered: by modified time or name, each way. */
-export type LibrarySort = 'time-desc' | 'time-asc' | 'name-asc' | 'name-desc';
-
-const SORTS: LibrarySort[] = ['time-desc', 'time-asc', 'name-asc', 'name-desc'];
 
 /** A browser remembers the last order picked; time, newest first, is the default. */
 const readSort = (): LibrarySort => {
     const saved = readLocal('library.sort');
-    return SORTS.includes(saved as LibrarySort) ? (saved as LibrarySort) : 'time-desc';
+    return LIBRARY_SORTS.includes(saved as LibrarySort) ? (saved as LibrarySort) : 'time-desc';
 };
 
 /** The folders left open in a project's library, kept in this browser. */
@@ -66,6 +56,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     const [uploading, setUploading] = useState(false);
     const [tick, setTick] = useState(0);
     const [sort, setSort] = useState<LibrarySort>(readSort);
+    const [query, setQuery] = useState('');
     const [expanded, setExpanded] = useExpanded(projectId);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
     // The images of the previewed file's folder, in the order the tree lists them.
@@ -73,20 +64,28 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     const listed = useRef(new Map<string, Node[]>());
 
     const load = useCallback(async (path: string): Promise<Node[]> => {
-        const [by, order] = sort.split('-');
-        const res = await apiFetch(`/api/v1/projects/${projectId}/library/tree?path=${encodeURIComponent(path)}&sort=${by}&order=${order}`);
+        const res = await apiFetch(`/api/v1/projects/${projectId}/library/tree?path=${encodeURIComponent(path)}`);
         if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
         const tree = (await res.json()) as LibraryTree;
         if (path === '') setDir(tree.dir);
-        listed.current.set(path, tree.entries as Node[]);
-        return tree.entries as Node[];
-    }, [projectId, sort]);
+        // The API returns stored names; an upload's stored id is smoothed out
+        // for display here in the browser.
+        const entries = (tree.entries as Node[]).map((n) => n.kind === 'file' ? { ...n, name: displayName(n.path) } : n);
+        listed.current.set(path, entries);
+        return entries;
+    }, [projectId]);
 
-    // The order is a browser convenience; changing it reloads the open folders.
+    // Ordering is a browser preference and happens over what is loaded, so
+    // changing it neither reloads nor re-requests anything.
+    const sortItems = useCallback((items: Node[]) => sortLibraryEntries(items, sort), [sort]);
+    const filter = useMemo(() => {
+        const q = query.trim();
+        return q ? (n: Node) => matchesQuery(n.name, q) : undefined;
+    }, [query]);
+
     const changeSort = (next: LibrarySort) => {
         writeLocal('library.sort', next);
         setSort(next);
-        setTick((x) => x + 1);
     };
 
     const upload = async (list: FileList) => {
@@ -109,15 +108,28 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     // authentication applies to downloads too, and a refusal (a folder over
     // the zip limits, say) is shown as the server's own message.
     const save = (url: string, filename: string) => saveFile(url, filename, (m) => notify(m, 'error'));
-    // A row already shows the server's display name (an upload without its
-    // stored id); the path-only callers still derive it from the path.
-    const download = (path: string, name?: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, name ?? downloadName(path));
+    // A row already shows the readable name; path-only callers derive it.
+    const download = (path: string, name?: string) => save(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`, name ?? displayName(path));
     const downloadZip = (n: Node) => save(`/api/v1/projects/${projectId}/library/archive?path=${encodeURIComponent(n.path)}`, `${n.name}.zip`);
 
     return (
         <Box sx={{ p: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{t('library.intro')}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <TextField
+                    size="small"
+                    variant="standard"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={t('library.search')}
+                    slotProps={{
+                        htmlInput: { 'aria-label': t('library.search') },
+                        input: { startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> },
+                    }}
+                    sx={{ flex: 1, minWidth: 0 }}
+                />
                 <Select
                     size="small"
                     variant="standard"
@@ -152,6 +164,8 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 expanded={expanded}
                 onExpandedChange={setExpanded}
                 refreshKey={refreshKey + tick}
+                sortItems={sortItems}
+                filter={filter}
                 onActivate={(n) => {
                     const kind = previewKind(n.name);
                     if (!kind) return;
@@ -160,6 +174,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                     setPreview(toPreview(n));
                 }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
+                noResults={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.noResults')}</Typography>}
                 renderMeta={(n) => {
                     // Scratch (a thread's TMPDIR under .tmp/) is labelled, but only down
                     // to the thread folder: everything below it is scratch anyway, and

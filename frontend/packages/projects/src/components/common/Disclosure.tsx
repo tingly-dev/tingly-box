@@ -61,8 +61,8 @@ export function DisclosureRow({ open, onToggle, variant = 'header', chevron = tr
                     color: color ?? 'text.secondary',
                     cursor: toggleable ? 'pointer' : 'default',
                     ...(variant === 'header'
-                        ? { px: 1.5, py: 0.75 }
-                        : { py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row }),
+                        ? { px: 1.5, py: 0.75, '@media (pointer: coarse)': { minHeight: 44 } }
+                        : { py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row, '@media (pointer: coarse)': { minHeight: 44 } }),
                     ...(toggleable && {
                         '&:hover': { bgcolor: 'action.hover', color: hoverColor ?? 'text.primary' },
                         '&:focus-visible': { boxShadow: (t: Theme) => `inset 0 0 0 2px ${t.palette.primary.main}` },

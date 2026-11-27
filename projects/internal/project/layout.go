@@ -329,8 +329,6 @@ var (
 
 // LibraryEntry is one file or folder directly inside a library directory.
 type LibraryEntry struct {
-	// Name is what to show: an upload's original name (the stored id in front
-	// is dropped), a scratch folder's thread title, the stored name otherwise.
 	Name string `json:"name"`
 	// Path is relative to the library root, with forward slashes.
 	Path string `json:"path"`

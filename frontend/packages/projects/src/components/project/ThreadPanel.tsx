@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert, Box, Button, Collapse, Divider, IconButton, Menu, MenuItem,
+    Alert, Box, Button, ButtonBase, Collapse, Dialog, DialogContent, DialogTitle, Divider, IconButton, Menu, MenuItem,
     Popover, Skeleton, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type Attachment, type BackgroundTask, type CleanupReport, type Subagent, type Thread, type ThreadEvent } from '../../client';
-import { blockAttachments, buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
+import { blockAttachments, buildTranscript, todoGroups, ChecklistCard, PendingRequestCard, SubagentFocus, Trajectory, Transcript, TranscriptHostProvider, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
 import { ControlTooltip } from '../ControlTooltip';
 import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
@@ -13,7 +13,7 @@ import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, AttachmentGallery, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
+import { ArrowBack, ChevronRight, Close, MoreVert, RailHide, RailShow, Refresh, Robot, Settings, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes } from '../../utils/format';
 import { ComposerStrip } from './ComposerStrip';
@@ -32,6 +32,7 @@ import { readLocal, writeLocal } from '../../utils/storage';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { ImSourceBadge } from '../im/ImSourceBadge';
 import { GitHubEventNote, coordinatorEventOf } from './GitHubEventNote';
@@ -118,6 +119,9 @@ const EMPTY_TASKS: BackgroundTask[] = [];
 export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = EMPTY_TASKS, onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
+    const phone = usePhoneShell();
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [checklistOpen, setChecklistOpen] = useState(false);
     const { copy: copyRef } = useCopyThreadRef(thread ?? { seq: 0, title: '' });
     // Where the rail does not fit beside the conversation (a thread in a narrow pane), the Details button swaps the conversation for the same cards in place.
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -126,7 +130,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // The info rail sits beside the conversation when the panel is wide enough; the user can hide it.
     const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(RAIL_MIN_PANEL, !!thread);
     const rail = wide && railOn;
-    const sheet = detailsOpen && !wide;
+    const sheet = detailsOpen && !wide && !phone;
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.
     const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
@@ -235,6 +239,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     }, [blocks, events, progressHistory, running, threadId]);
 
     const currentGroup = groups.at(-1);
+    const pendingBlock = blocks.find((b) => b.type === 'request' && b.message.request_id === pendingRequestId);
 
     const focusCallLoaded = !!focused && !!events?.some((e) => !e.parent && e.kind === 'tool_use' && e.request_id === focused);
     useEffect(() => {
@@ -421,6 +426,22 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const responseRecovery = canRestart && (
         <Button size="small" color="inherit" disabled={acting} onClick={offerRestart}>{t('session.restart')}</Button>
     );
+    const railNode = (
+        <ThreadInfoRail
+            sheet
+            thread={thread}
+            folder={session}
+            tasks={tasks}
+            onChanged={() => onRefresh?.()}
+            onReveal={(call) => { setDetailsOpen(false); void openInChat({ call }); }}
+            subagents={subagents}
+            onOpenAgent={(agent) => { setDetailsOpen(false); openAgent(agent); }}
+            onShowAgent={(agent) => { setDetailsOpen(false); void openInChat({ call: agent.call }, agent.event_id); }}
+            extra={railExtra}
+            configuredModel={configuredModel}
+            permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
+        />
+    );
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
@@ -428,7 +449,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    {!hideTitle && (backLabel
+                    {!hideTitle && (backLabel && !phone
                         ? <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={onBack} aria-label={t('thread.backTo', { place: backLabel })}
                             sx={{ color: 'text.secondary', flexShrink: 0, minWidth: 0, maxWidth: 140, px: 0.75, '& .MuiButton-icon': { mr: 0.5 } }}>
                             <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{backLabel}</Box>
@@ -436,9 +457,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         : <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>)}
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
-                        : <><ThreadRefButton thread={thread} /><ThreadTitle title={thread.title} onSave={saveTitle} /></>}
+                        : <>{!phone && <ThreadRefButton thread={thread} />}<ThreadTitle title={thread.title} onSave={saveTitle} /></>}
                     {/* While work runs in the background it names itself. */}
-                    {liveTasks.length > 0 && !rail && (
+                    {!phone && liveTasks.length > 0 && !rail && (
                         <Tooltip title={t('session.backgroundTasks')}>
                             <Button size="small" variant="outlined" color="inherit" startIcon={<Stream sx={{ fontSize: '16px !important' }} />} onClick={(e) => setTasksAnchor(e.currentTarget)}
                                 sx={{ borderRadius: radius.pill, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -447,7 +468,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         </Tooltip>
                     )}
                     {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards take the conversation's place until it is pressed again. */}
-                    {thread && (
+                    {thread && !phone && (
                         <Tooltip title={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}>
                             <IconButton size="small" onClick={() => (wide ? toggleRail() : setDetailsOpen((open) => !open))}
                                 aria-expanded={wide ? railOn : sheet}
@@ -457,7 +478,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </IconButton>
                         </Tooltip>
                     )}
-                    {actions}
+                    {!phone && actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                         {/* The three groups read as what ends the thread, what
@@ -470,10 +491,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
                             : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
                         {!thread.archived_at && <Divider />}
+                        {phone && <MenuItem onClick={() => { setMenu(null); setDetailsOpen(true); }}>{t('rail.title')}</MenuItem>}
                         {thread.seq > 0 && <MenuItem onClick={() => { setMenu(null); void copyRef(); }}>{t('thread.copyRef')}</MenuItem>}
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
-                        <MenuItem onClick={() => { setMenu(null); setFocus(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
-                        {view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
+                        {!phone && <MenuItem onClick={() => { setMenu(null); setFocus(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>}
+                        {!phone && view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
                         {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
@@ -493,27 +515,36 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         ) : session && (
                             <MenuItem disabled={acting} onClick={() => guarded('archive')}>{t('session.archive')}</MenuItem>
                         )}
+                        {phone && <Box sx={{ px: 2, py: 1, fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('phone.desktopNote')}</Box>}
                     </Menu>
                 </Box>
                 <Box sx={{ pl: hideTitle ? 0.5 : 4.5 }}>
-                    <MetaLine items={[
-                        <ThreadState status={thread.status} queued={thread.queued} />,
-                        <Box component="span" title={t('threadSettings.lastModel')} sx={{ ...mono, overflowWrap: 'anywhere' }}>
-                            {t('threadSettings.lastModel')}: {observedModel || t('threadSettings.modelUnknown')}
-                        </Box>,
-                        // The folder and branch are the details rail's.
-                        !thread.branch && !session && t('thread.noRepo'),
-                        // The work, as badges whose details hover out (the
-                        // rail's Changes card carries them in full).
-                        <ThreadBadges thread={thread} tasks={false} work />,
-                        thread.uncommitted && (
-                            <Tooltip title={t('thread.uncommitted')}>
-                                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
-                                    <Warning sx={{ fontSize: 14, display: 'block' }} />
-                                </Box>
-                            </Tooltip>
-                        ),
-                    ]} />
+                    {phone ? (
+                        <MetaLine items={[
+                            <ThreadState status={thread.status} queued={thread.queued} />,
+                            thread.seq > 0 && <Box component="span">#{thread.seq}</Box>,
+                            liveTasks.length > 0 && <Box component="span">{t('session.tasksRunning', { count: liveTasks.length })}</Box>,
+                        ]} />
+                    ) : (
+                        <MetaLine items={[
+                            <ThreadState status={thread.status} queued={thread.queued} />,
+                            <Box component="span" title={t('threadSettings.lastModel')} sx={{ ...mono, overflowWrap: 'anywhere' }}>
+                                {t('threadSettings.lastModel')}: {observedModel || t('threadSettings.modelUnknown')}
+                            </Box>,
+                            // The folder and branch are the details rail's.
+                            !thread.branch && !session && t('thread.noRepo'),
+                            // The work, as badges whose details hover out (the
+                            // rail's Changes card carries them in full).
+                            <ThreadBadges thread={thread} tasks={false} work />,
+                            thread.uncommitted && (
+                                <Tooltip title={t('thread.uncommitted')}>
+                                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                                        <Warning sx={{ fontSize: 14, display: 'block' }} />
+                                    </Box>
+                                </Tooltip>
+                            ),
+                        ]} />
+                    )}
                 </Box>
                 <Collapse in={taskOpen}>
                     <Box sx={{ mt: 1, p: 1.25, bgcolor: 'action.hover', borderRadius: radius.row, maxHeight: 220, overflow: 'auto' }}><Markdown text={thread.task} /></Box>
@@ -536,22 +567,17 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             </Box>
 
             {sheet && thread && (
-                <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', bgcolor: 'background.default' }}>
-                    <ThreadInfoRail
-                        sheet
-                        thread={thread}
-                        folder={session}
-                        tasks={tasks}
-                        onChanged={() => onRefresh?.()}
-                        onReveal={(call) => { setDetailsOpen(false); void openInChat({ call }); }}
-                        subagents={subagents}
-                        onOpenAgent={(agent) => { setDetailsOpen(false); openAgent(agent); }}
-                        onShowAgent={(agent) => { setDetailsOpen(false); void openInChat({ call: agent.call }, agent.event_id); }}
-                        extra={railExtra}
-                        configuredModel={configuredModel}
-                        permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
-                    />
-                </Box>
+                <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', bgcolor: 'background.default' }}>{railNode}</Box>
+            )}
+            {phone && thread && (
+                <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} fullWidth maxWidth="sm">
+                    <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {t('rail.title')}
+                        <Box sx={{ flex: 1 }} />
+                        <IconButton aria-label={t('common.close')} onClick={() => setDetailsOpen(false)}><Close /></IconButton>
+                    </DialogTitle>
+                    <DialogContent>{railNode}</DialogContent>
+                </Dialog>
             )}
             {/* The conversation stays mounted under the cards, so its scroll and draft survive. */}
             <Box sx={{ display: sheet ? 'none' : 'contents' }}>
@@ -568,7 +594,20 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     <Button size="small" onClick={() => void openInChat({ call: focused }, own?.call === focused ? own.events.find((e) => e.kind === 'tool_use')?.id : undefined)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('subagents.show')}</Button>
                 </Box>
             )}
-            {!focused && currentGroup && <Box sx={{ px: 2, pt: 1 }}><ChecklistCard key={`${threadId}:${currentGroup.id}`} todos={currentGroup.todos} history={groups.slice(0, -1)} working={running} /></Box>}
+            {!focused && currentGroup && (phone ? (
+                <ButtonBase onClick={() => setChecklistOpen(true)} sx={{ minHeight: 44, width: '100%', justifyContent: 'flex-start', gap: 1, px: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('phone.checklist')} {currentGroup.todos.filter((x) => x.status === 'completed').length}/{currentGroup.todos.length}</Typography>
+                    {currentGroup.todos.find((x) => x.status === 'in_progress') && (
+                        <Typography variant="body2" noWrap sx={{ color: 'text.secondary', minWidth: 0 }}>
+                            · {currentGroup.todos.find((x) => x.status === 'in_progress')?.activeForm || currentGroup.todos.find((x) => x.status === 'in_progress')?.content}
+                        </Typography>
+                    )}
+                    <Box sx={{ flex: 1 }} />
+                    <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />
+                </ButtonBase>
+            ) : (
+                <Box sx={{ px: 2, pt: 1 }}><ChecklistCard key={`${threadId}:${currentGroup.id}`} todos={currentGroup.todos} history={groups.slice(0, -1)} working={running} /></Box>
+            ))}
             <Box ref={scrollRef} onScroll={() => {
                 const el = scrollRef.current;
                 if (el) {
@@ -583,9 +622,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {events === null || (focused && !focusBlock)
                     ? <Skeleton variant="rounded" height={120} />
                     : focused && focusBlock
-                        ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} />
-                    : view === 'chat'
-                        ? <Transcript hideChecklist backgroundTasks={liveTasks.length} detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} renderCustom={renderCustom} />
+                        ? <SubagentFocus detail={phone ? 'detailed' : detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} />
+                    : (phone || view === 'chat')
+                        ? <Transcript hideChecklist backgroundTasks={liveTasks.length} detail={phone ? 'detailed' : detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} renderCustom={renderCustom} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
                 </AttachmentGallery>
                 </Box>
@@ -612,13 +651,26 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         </Box>
                     </Alert>
                 )}
-                {(view === 'chat' || focused) && <MessageDetailControl detail={detail} onChange={setDetail} surface="thread" />}
-                <ComposerStrip thread={thread} />
+                {phone && pendingBlock?.type === 'request' && (
+                    <Box sx={{ mb: 1 }}>
+                        <TranscriptHostProvider detail={phone ? 'detailed' : detail} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery}>
+                            <PendingRequestCard block={pendingBlock} onRespond={respond} />
+                        </TranscriptHostProvider>
+                    </Box>
+                )}
+                {!phone && (view === 'chat' || focused) && <MessageDetailControl detail={detail} onChange={setDetail} surface="thread" />}
+                {!phone && <ComposerStrip thread={thread} />}
                 <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
                 <ThreadComposer
                     ref={composer}
                     draftKey={threadId}
-                    leftSlot={(modelControl || effortControl || composerContext || thread.status !== 'resolved') && (
+                    inlineRow={phone}
+                    leftSlot={phone ? (
+                        <IconButton size="small" onClick={() => setSettingsOpen(true)} aria-label={t('phone.settings')} sx={{ color: 'text.secondary' }}>
+                            <Settings fontSize="small" />
+                        </IconButton>
+                    ) : (modelControl || effortControl || composerContext || thread.status !== 'resolved') && (
+
                         <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
                             {(modelControl || effortControl || composerContext) && (
                                 <ControlTooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
@@ -636,6 +688,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             )}
                             {running && (modelControl || effortControl || composerContext) && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
                         </Box>
+                    
                     )}
                     streaming={running}
                     sendModes
@@ -651,7 +704,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     }}
                     canSubmit={!settingsSaving}
                     disabled={disabled || thread.status === 'resolved' || (acting && confirm === 'restart')}
-                    placeholder={thread.archived_at ? t('session.archivedPlaceholder') : thread.status === 'resolved' ? t(session ? 'session.resolvedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
+                    placeholder={phone ? t(session ? 'phone.sessionPlaceholder' : 'phone.messagePlaceholder') : thread.archived_at ? t('session.archivedPlaceholder') : thread.status === 'resolved' ? t(session ? 'session.resolvedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     attach={(files) => uploadAttachments(owner, files)}
                     onSend={async (text, attachments, mode) => {
                         if (settingsSaving || (canSend && !canSend())) return false;
@@ -665,9 +718,31 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         }
                     }}
                 />
-                {belowComposer}
+                {!phone && belowComposer}
                 </Box>
             </Box>
+            {phone && (
+                <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="sm">
+                    <DialogTitle>{t('phone.settings')}</DialogTitle>
+                    <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
+                        {modelControl}
+                        {effortControl}
+                        {composerContext}
+                        {thread.status !== 'resolved' && (
+                            <AutoAnswerSelect thread={thread} folder={session} disabled={acting}
+                                onChange={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                        )}
+                    </DialogContent>
+                </Dialog>
+            )}
+            {phone && (
+                <Dialog open={checklistOpen} onClose={() => setChecklistOpen(false)} fullWidth maxWidth="sm">
+                    <DialogTitle>{t('phone.checklist')}</DialogTitle>
+                    <DialogContent>
+                        {currentGroup && <ChecklistCard todos={currentGroup.todos} history={groups.slice(0, -1)} working={running} />}
+                    </DialogContent>
+                </Dialog>
+            )}
             {hasTasks && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>

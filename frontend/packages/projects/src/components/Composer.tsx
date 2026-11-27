@@ -96,6 +96,8 @@ export interface ComposerProps {
     contextLabel?: string;
     /** Controls shown at the bottom-left (project / memory chips). */
     leftSlot?: ReactNode;
+    /** One row: attach, leftSlot, the input and send/stop (the phone's composer). */
+    inlineRow?: boolean;
     /** Tighter spacing and bottom-aligned actions for a row with several pickers. */
     compactToolbar?: boolean;
     /** Lines the box shows when empty (one by default). */
@@ -126,7 +128,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, attach, attachBlocked, onAttachmentsChange, streaming, onStop, sendWhileStreaming, sendModes, insertable = true, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
-    context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands,
+    context, contextCollapsible = false, contextLabel, leftSlot, inlineRow = false, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -323,8 +325,9 @@ export function Composer({
     );
     const hint = keysHint && !mobile && !leftSlot;
     // Nothing under the text: the buttons sit beside it and the box is one
-    // line until the text grows.
-    const inline = !leftSlot && !onModelChange && !onEffortChange && !hint;
+    // line until the text grows. inlineRow keeps a caller's leftSlot (the
+    // phone's settings icon) on that line.
+    const inline = inlineRow || (!leftSlot && !onModelChange && !onEffortChange && !hint);
 
     const attachButton = attach && (
         <ControlTooltip title={attachBlocked || t('composer.attach')}>
@@ -490,6 +493,7 @@ export function Composer({
             {inline ? (
                 <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
                     {attachButton}
+                    {leftSlot}
                     {input}
                     {sendButton}
                     {modeButton}

@@ -1,0 +1,146 @@
+{
+  "v": 3,
+  "title": "Phone session layout",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-26T14:03:32.362Z"
+  },
+  "boards": {
+    "01-Session.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "01 · 会话（待批准）"
+    },
+    "02-Process.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "02 · 过程 sheet"
+    },
+    "03-Long.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "03 · 长文本（折叠）"
+    },
+    "04-Long-expanded.dc.html": {
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "04 · 长文本（展开）"
+    },
+    "05-Folder.dc.html": {
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "05 · 文件夹会话"
+    },
+    "06-Menu.dc.html": {
+      "x": 0,
+      "y": 964,
+      "w": 390,
+      "h": 844,
+      "title": "06 · ⋯ 菜单"
+    },
+    "07-Dark.dc.html": {
+      "x": 470,
+      "y": 964,
+      "w": 390,
+      "h": 844,
+      "title": "07 · 深色"
+    },
+    "08-Principles.dc.html": {
+      "x": 940,
+      "y": 964,
+      "w": 1240,
+      "h": 640,
+      "title": "08 · 判断与取舍"
+    }
+  },
+  "order": [
+    "01-Session.dc.html",
+    "02-Process.dc.html",
+    "03-Long.dc.html",
+    "04-Long-expanded.dc.html",
+    "05-Folder.dc.html",
+    "06-Menu.dc.html",
+    "07-Dark.dc.html",
+    "08-Principles.dc.html"
+  ],
+  "notes": {
+    "t1": {
+      "kind": "title1",
+      "x": 0,
+      "y": -260,
+      "text": "手机会话 · 定稿（方案 A）",
+      "maxW": 2200
+    },
+    "n01": {
+      "x": 0,
+      "y": 884,
+      "w": 390,
+      "fill": "gray",
+      "text": "01 · 会话：紧凑栏、过程一行、待批准 dock、一行 composer。"
+    },
+    "n02": {
+      "x": 470,
+      "y": 884,
+      "w": 390,
+      "fill": "blue",
+      "text": "02 · 过程 sheet：点「过程」展开每一步的输入/输出。"
+    },
+    "n03": {
+      "x": 940,
+      "y": 884,
+      "w": 390,
+      "fill": "blue",
+      "text": "03 · 长文本折叠：10 行，展开在气泡内底边。"
+    },
+    "n04": {
+      "x": 1410,
+      "y": 884,
+      "w": 390,
+      "fill": "gray",
+      "text": "04 · 展开后：收起在 block 末尾，复制始终全文。"
+    },
+    "n05": {
+      "x": 1880,
+      "y": 884,
+      "w": 390,
+      "fill": "teal",
+      "text": "05 · 文件夹会话：进度条、子代理卡、待批准 dock。"
+    },
+    "n06": {
+      "x": 0,
+      "y": 1828,
+      "w": 390,
+      "fill": "gray",
+      "text": "06 · ⋯ 菜单：线程详情/任务/子代理/完成，桌面能力单独说明。"
+    },
+    "n07": {
+      "x": 470,
+      "y": 1828,
+      "w": 390,
+      "fill": "gray",
+      "text": "07 · 深色：同一信息层级与 44px 触控。"
+    },
+    "n08": {
+      "x": 940,
+      "y": 1628,
+      "w": 1240,
+      "fill": "gray",
+      "text": "08 · 判断与取舍：关键工作、次要能力、有意不搬的桌面能力与实测对话占比。"
+    }
+  },
+  "pages": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "designSystems": []
+}

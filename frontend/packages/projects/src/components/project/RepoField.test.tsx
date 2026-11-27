@@ -66,6 +66,19 @@ it('accepts a non-Git directory as a shared workspace', async () => {
     await waitFor(() => expect(change).toHaveBeenCalledWith([{ root: '/docs', branch: '', kind: 'directory', workspace_mode: 'shared', dirty: undefined }]));
 });
 
+it('starts a repository with no commits in shared mode, since worktree needs a commit', async () => {
+    m.post.mockResolvedValue({ data: { ok: true, root: '/empty/repo', kind: 'git', branch: 'main', dirty: false, empty: true }, response: new Response() });
+    const { change, input } = renderField();
+    fireEvent.change(input, { target: { value: '/empty/repo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'repo.add' }));
+    await waitFor(() => expect(change).toHaveBeenCalledWith([{ root: '/empty/repo', branch: 'main', kind: 'git', workspace_mode: 'shared', dirty: false, empty: true }]));
+});
+
+it('shows a no-commits hint for an empty repository', () => {
+    render(<RepoField value={[{ root: '/empty/repo', branch: 'main', kind: 'git', workspace_mode: 'shared', empty: true }]} onChange={vi.fn()} />);
+    expect(screen.getByText('repo.noCommits')).toBeTruthy();
+});
+
 it('creates with the selected directory and explicit primary', async () => {
     inspectOk();
     const create = vi.fn().mockResolvedValue(undefined);

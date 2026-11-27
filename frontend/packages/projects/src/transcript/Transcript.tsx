@@ -1,8 +1,10 @@
-import {Block, Build, Cancel, Check, CheckCircle, Close, ErrorOutline, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
-import {Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material';
+import {Block, Build, Cancel, Check, CheckCircle, Close, ContentCopy, ErrorOutline, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
+import {Alert, Box, Button, ButtonBase, Chip, CircularProgress, Collapse, Dialog, DialogContent, DialogTitle, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material';
 import type {Theme} from '@mui/material/styles';
+import {useCopyFeedback} from '@tingly/ui';
 import {getReadableAccent} from '@tingly/ui/theme/status';
 import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
+import {usePhoneShell} from '@tingly/ui/hooks/usePhoneShell';
 import type {TFunction} from 'i18next';
 import type {ReactNode} from 'react';
 import {Fragment, useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -11,6 +13,7 @@ import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSte
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
 import type {ActivityStep, CommandPayload, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
 import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, hasFiles, uniqueFiles, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
+import ClampedText from './ClampedText';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import {serverNow} from '../utils/serverClock';
@@ -18,6 +21,7 @@ import {DisclosureChevron, DisclosureRow} from '../components/common/Disclosure'
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 import {conciseBlock, type MessageDetail} from './messageDetail';
+import {messageCopyText} from './copyText';
 import {exactLabel, fullLabel, markLabel, nextMidnight, timeMarks, type TimeMark} from './timeMarks';
 
 // Respond answers a request. remember asks to allow the tool from now on
@@ -67,7 +71,7 @@ const preBox = {
     whiteSpace: 'pre-wrap', wordBreak: 'break-word', bgcolor: 'action.hover', color: 'text.secondary',
 } as const;
 
-const UserBubble = ({message}: {message: TranscriptEntry}) => {
+const UserBubble = ({message, phone = false}: {message: TranscriptEntry; phone?: boolean}) => {
     const {t} = useTranslation();
     const {attachments: Attachments, messageSource} = useTranscriptHost();
     const files = message.attachments ?? [];
@@ -78,9 +82,11 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                 ? <Box sx={{maxWidth: userMessageWidth}}><Attachments items={files}/></Box>
                 : <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.5}}>{files.map((f) => f.name).join(', ')}</Typography>)}
             {message.content.trim() !== '' && (
-                <Box sx={userBubble}>
+                <Box sx={{...userBubble, overflow: 'hidden'}}>
                     {message.context && <Typography variant="caption" sx={{display: 'block', color: 'text.secondary', mb: 0.25}}>{message.context}</Typography>}
-                    <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
+                    {phone
+                        ? <ClampedText lines={10} bubble><Typography variant="body1" sx={conversationText}>{message.content}</Typography></ClampedText>
+                        : <Typography variant="body1" sx={conversationText}>{message.content}</Typography>}
                 </Box>
             )}
             {messageSource?.(message)}
@@ -99,13 +105,20 @@ const sentCaptions = (messages: TranscriptEntry[]): Record<string, string> => Ob
     messages.flatMap((m) => (m.content.trim() ? (m.attachments ?? []).map((f) => [f.path, m.content.trim()]) : [])),
 );
 
-const AssistantText = ({message}: {message: TranscriptEntry}) => {
+const AssistantText = ({message, phone = false}: {message: TranscriptEntry; phone?: boolean}) => {
     const {attachments: Attachments} = useTranscriptHost();
     if (hasFiles(message)) {
         const files = message.attachments ?? [];
         return Attachments ? <Attachments items={files} align="flex-start" captions={sentCaptions([message])}/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>;
     }
-    return message.content ? <Markdown content={message.content}/> : null;
+    if (!message.content) return null;
+    // A reply with a fenced code block is not outer-clamped: the phone code
+    // block has its own height cap and 展开, and an outer line clamp would hide
+    // its controls (and could clip its horizontal scroll).
+    if (phone && !/^```/m.test(message.content)) {
+        return <ClampedText lines={12}><Markdown content={message.content}/></ClampedText>;
+    }
+    return <Markdown content={message.content}/>;
 };
 
 // FilesGroup is the files sent one after another, as one row of thumbnails
@@ -550,13 +563,13 @@ interface ShownBlock {
 // one run again. Files sent one after another (with only their own send calls
 // between) become one entry. Each block keeps its index (the trajectory's
 // anchor) and whether it ends the list (the live one).
-const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): ShownBlock[] => {
+const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed', phone = false): ShownBlock[] => {
     const out: ShownBlock[] = [];
     blocks.forEach((original, index) => {
         const block = detail === 'concise' ? conciseBlock(original) : original;
         if (!block) return;
         const last = index === blocks.length - 1;
-        if (detail === 'detailed' && block.type === 'request' && block.toolId && block.message.request_id !== pendingRequestId) {
+        if (!phone && detail === 'detailed' && block.type === 'request' && block.toolId && block.message.request_id !== pendingRequestId) {
             if (last && out.length > 0) out[out.length - 1].last = true;
             return;
         }
@@ -590,8 +603,9 @@ const holdsPending = (block: TranscriptBlock | undefined, pendingRequestId?: str
 // work inside its card.
 const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1, timeMarked = false}: BlockListProps) => {
     const {detail, renderCustom: renderHostCustom} = useTranscriptHost();
+    const phone = usePhoneShell();
     useDayRollover(timeMarked);
-    const items = shownBlocks(blocks, pendingRequestId, detail);
+    const items = shownBlocks(blocks, pendingRequestId, detail, phone);
     // A merged run of calls keeps its first index, so the divider goes
     // before the first item at or past newFrom.
     const dividerAt = newFrom >= 0 ? items.find((x) => x.index >= newFrom)?.index : undefined;
@@ -599,18 +613,43 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
-                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><UserBubble message={b.message}/></Box>;
+                    return (
+                        <Box key={i} {...anchor} sx={phone ? undefined : stampHost}>
+                            {!phone && <MessageActions at={b.message.timestamp} text={messageCopyText(b)}/>}
+                            <UserBubble message={b.message} phone={phone}/>
+                            {phone && <MessageMeta at={b.message.timestamp} text={messageCopyText(b)} user/>}
+                        </Box>
+                    );
                 case 'assistant':
-                    if (files) return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><FilesGroup messages={files}/></Box>;
-                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><AssistantText message={b.message}/></Box>;
+                    if (files) {
+                        return (
+                            <Box key={i} {...anchor} sx={phone ? undefined : stampHost}>
+                                {!phone && <MessageActions at={b.message.timestamp}/>}
+                                <FilesGroup messages={files}/>
+                                {phone && <MessageMeta at={b.message.timestamp} user={false}/>}
+                            </Box>
+                        );
+                    }
+                    return (
+                        <Box key={i} {...anchor} sx={phone ? undefined : stampHost}>
+                            {!phone && <MessageActions at={b.message.timestamp} text={messageCopyText(b)}/>}
+                            <AssistantText message={b.message} phone={phone}/>
+                            {phone && <MessageMeta at={b.message.timestamp} text={messageCopyText(b)} user={false}/>}
+                        </Box>
+                    );
                 case 'activity':
+                    if (phone) return <Box key={i} {...anchor} sx={blockCv}><PhoneActivityRow steps={b.steps} live={working && last}/></Box>;
                     return <ActivityRun key={i} steps={b.steps} live={working && last} hold={holdsPending(items[at + 1]?.block, pendingRequestId)} expandAll={expandAll} pendingRequestId={pendingRequestId}/>;
                 case 'agent':
                     return <AgentCard key={i} block={b} turnLive={working} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>;
                 case 'request':
+                    // On the phone the live request is docked above the composer,
+                    // not repeated in the transcript.
+                    if (phone && b.message.request_id && b.message.request_id === pendingRequestId) return null;
                     if (!b.message.request_id || b.message.request_id !== pendingRequestId) return <SettledRequest key={b.message.request_id ?? i} block={b}/>;
                     return <PendingRequestCard key={b.message.request_id} block={b} onRespond={onRespond}/>;
                 case 'error':
+                    if (phone) return <Box key={i} {...anchor} sx={blockCv}><PhoneErrorRow message={b.message}/></Box>;
                     return (
                         <Stack key={i} {...anchor} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error')}}>
                             <ErrorOutline sx={{fontSize: 18, mt: 0.25}}/>
@@ -618,7 +657,7 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                         </Stack>
                     );
                 case 'command':
-                    return <Box key={i} {...anchor}><CommandCard message={b.message}/></Box>;
+                    return <Box key={i} {...anchor} sx={phone ? blockCv : undefined}><CommandCard message={b.message}/></Box>;
                 case 'system': {
                     // A host's lifecycle notes are often its own words; give
                     // its renderer the first look, then show the text quietly.
@@ -693,13 +732,21 @@ const TimeDivider = ({mark}: {mark: TimeMark}) => {
     );
 };
 
-// stampHost / MessageStamp: the exact time of one message, shown above its
-// corner while the pointer is on it. It sits in the gap between messages, so
-// it never moves anything; touch screens (no hover) rely on the dividers.
+// stampHost / MessageActions: a message's quiet action row, in the gap above
+// its corner: its exact time and its copy button. Pointer devices reveal it
+// while the pointer is on the message, or when its copy button has focus (so
+// the keyboard can reach it); a touch screen has no hover, so the copy button
+// stays visible there while the time remains a pointer-only affordance.
 const stampHost = {
     position: 'relative',
-    '@media (hover: hover)': {'&:hover > .message-stamp': {opacity: 1}},
+    '& > .message-actions': {opacity: 0, pointerEvents: 'none', transition: 'opacity 120ms'},
+    '@media (hover: hover)': {'&:hover > .message-actions, &:focus-within > .message-actions': {opacity: 1, pointerEvents: 'auto'}},
+    '@media (hover: none)': {'& > .message-actions': {opacity: 1, pointerEvents: 'auto'}},
 } as const;
+
+// Offscreen blocks skip layout/paint on the phone; the estimate matches a
+// folded line, and folded blocks are short by construction.
+const blockCv = {contentVisibility: 'auto', containIntrinsicSize: 'auto 80px'} as const;
 
 const MessageStamp = ({at}: {at?: string}) => {
     const {i18n} = useTranslation();
@@ -708,9 +755,132 @@ const MessageStamp = ({at}: {at?: string}) => {
     if (!exact) return null;
     return (
         <Typography className="message-stamp" component="time" dateTime={at} aria-hidden variant="caption"
-            sx={{position: 'absolute', right: 0, bottom: '100%', mb: 0.25, pointerEvents: 'none', color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap', opacity: 0, display: 'none', '@media (hover: hover)': {display: 'block'}, transition: 'opacity 120ms'}}>
+            sx={{color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap', display: 'none', '@media (hover: hover)': {display: 'block'}}}>
             {exact}
         </Typography>
+    );
+};
+
+// MessageCopyButton copies one message's own text (its raw Markdown, not the
+// rendered output), and says so in place: a check while it held, an error
+// outline when the clipboard refused, with the tooltip naming each state.
+const MessageCopyButton = ({text}: {text: string}) => {
+    const {t} = useTranslation();
+    const {copied, failed, copy} = useCopyFeedback();
+    const label = t('projects.transcript.copyMessage', {defaultValue: 'Copy message'});
+    const done = t('projects.transcript.copyMessageDone', {defaultValue: 'Copied'});
+    const error = t('projects.transcript.copyMessageFailed', {defaultValue: 'Could not copy'});
+    return (
+        <Tooltip title={copied ? done : failed ? error : label}>
+            <IconButton
+                size="small"
+                aria-label={copied ? done : failed ? error : label}
+                data-copy-state={copied ? 'copied' : failed ? 'failed' : 'idle'}
+                onClick={() => copy(text)}
+                sx={{p: 0.625, color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary'}}
+            >
+                {copied ? <Check sx={{fontSize: 14}}/> : failed ? <ErrorOutline sx={{fontSize: 14}}/> : <ContentCopy sx={{fontSize: 14}}/>}
+            </IconButton>
+        </Tooltip>
+    );
+};
+
+const MessageActions = ({at, text}: {at?: string; text?: string}) => (
+    // Flush with the message's top edge: a gap here would drop the parent's
+    // :hover while the pointer crosses from the text to the button, hiding
+    // the row before it can be clicked.
+    <Box className="message-actions" sx={{position: 'absolute', right: 0, bottom: '100%', display: 'flex', alignItems: 'center', gap: 0.5}}>
+        <MessageStamp at={at}/>
+        {text !== undefined && <MessageCopyButton text={text}/>}
+    </Box>
+);
+
+// MessageMeta is the phone's message footer: the exact time (no hover on a
+// touch screen) and a right-aligned copy icon, 44px. It sits inside the
+// message block, below the bubble/content.
+const metaTime = (at: string | undefined, language: string): string | undefined => {
+    if (!at) return undefined;
+    const date = new Date(at);
+    if (Number.isNaN(date.getTime())) return undefined;
+    const today = new Date(serverNow()).toDateString() === date.toDateString();
+    return new Intl.DateTimeFormat(language, today
+        ? {hour: '2-digit', minute: '2-digit'}
+        : {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}).format(date);
+};
+
+const MessageMeta = ({at, text, user}: {at?: string; text?: string; user: boolean}) => {
+    const {i18n} = useTranslation();
+    const time = metaTime(at, i18n.language);
+    return (
+        <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minHeight: 44, justifyContent: user ? 'flex-end' : 'flex-start'}}>
+            {time && <Typography component="time" dateTime={at} variant="caption" sx={{color: 'text.secondary'}}>{time}</Typography>}
+            {!user && <Box sx={{flex: 1}}/>}
+            {text !== undefined && <MessageCopyButton text={text}/>}
+        </Box>
+    );
+};
+
+// PhoneActivityRow is a whole run as one neutral line ("Process · 3m") with no
+// per-tool counts; the counts and every call's input/output are one tap away.
+const PhoneActivityRow = ({steps, live}: {steps: ActivityStep[]; live: boolean}) => {
+    const {t} = useTranslation();
+    const [open, setOpen] = useState(false);
+    const sum = useMemo(() => summarizeRun(steps), [steps]);
+    return (
+        <>
+            <ButtonBase
+                onClick={() => setOpen(true)}
+                aria-haspopup="dialog"
+                sx={{
+                    width: '100%', minHeight: 44, justifyContent: 'flex-start', gap: 1, px: 1.25,
+                    border: 1, borderColor: 'divider', borderRadius: radius.row, bgcolor: 'background.paper',
+                    color: 'text.secondary', textAlign: 'left',
+                }}
+            >
+                {live ? <CircularProgress size={12}/> : <Info sx={{fontSize: 14}}/>}
+                <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary'}}>
+                    {t('projects.transcript.process', {defaultValue: 'Process'})}
+                </Typography>
+                {sum.durationMs !== undefined && (
+                    <Typography variant="caption" sx={{color: 'text.secondary'}}>· {formatDuration(sum.durationMs)}</Typography>
+                )}
+                <Box sx={{flex: 1}}/>
+                <DisclosureChevron open={false}/>
+            </ButtonBase>
+            <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{t('projects.transcript.processDetails', {defaultValue: 'This run'})}</DialogTitle>
+                <DialogContent>
+                    <RunRows steps={steps} live={false} expandAll={false}/>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+};
+
+// PhoneErrorRow is one red line; the full text (and its length) is in a sheet.
+const PhoneErrorRow = ({message}: {message: TranscriptEntry}) => {
+    const {t} = useTranslation();
+    const [open, setOpen] = useState(false);
+    return (
+        <>
+            <ButtonBase
+                onClick={() => setOpen(true)}
+                aria-haspopup="dialog"
+                sx={{width: '100%', minHeight: 44, justifyContent: 'flex-start', gap: 1, px: 0.5, color: (theme) => getReadableAccent(theme, 'error'), textAlign: 'left'}}
+            >
+                <ErrorOutline sx={{fontSize: 18}}/>
+                <Typography variant="body2" noWrap sx={{flex: 1, minWidth: 0, color: 'inherit'}}>{message.content}</Typography>
+                <DisclosureChevron open={false}/>
+            </ButtonBase>
+            <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{t('projects.transcript.errorDetails', {defaultValue: 'Error details'})}</DialogTitle>
+                <DialogContent>
+                    <ClampedText lines={10}>
+                        <Typography variant="body2" sx={{whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{message.content}</Typography>
+                    </ClampedText>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 
@@ -785,9 +955,12 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
 }) => {
     const {t} = useTranslation();
     const {detail, subagents} = useTranscriptHost();
+    const phone = usePhoneShell();
     // Keep nested requests discoverable without replacing the card in concise mode.
     const [open, toggle] = useExpanded(expandAll, detail === 'concise' && !!pendingRequestId);
-    const steps = useSubagentSteps(block.call.id, open);
+    const [phoneOpen, setPhoneOpen] = useState(false);
+    const expanded = phone ? phoneOpen : open;
+    const steps = useSubagentSteps(block.call.id, expanded);
     const input = (block.call.input ?? {}) as {description?: string; prompt?: string; subagent_type?: string};
     const task = block.task;
     const status = agentStatus(block, turnLive);
@@ -810,8 +983,9 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
     }[status];
 
     return (
+        <>
         <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: radius.card, overflow: 'hidden'}}>
-            <DisclosureRow open={open} onToggle={toggle} chevron={false} sx={{py: 1, '& > .MuiBox-root, & > .MuiStack-root': {flex: 1, minWidth: 0}}}>
+            <DisclosureRow open={expanded} onToggle={phone ? () => setPhoneOpen(true) : toggle} chevron={false} sx={{py: 1, '& > .MuiBox-root, & > .MuiStack-root': {flex: 1, minWidth: 0}}}>
                 <Box>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
                     <Robot sx={{fontSize: 18, color: 'text.secondary', flexShrink: 0}}/>
@@ -842,7 +1016,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                             </IconButton>
                         </Tooltip>
                     )}
-                    <DisclosureChevron open={open}/>
+                    <DisclosureChevron open={expanded}/>
                 </Stack>
                 {(running && task?.activity) || meta ? (
                     <Typography variant="caption" noWrap component="div" sx={{color: 'text.secondary', pl: 3.25, mt: 0.25}}>
@@ -851,12 +1025,25 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                 ) : null}
                 </Box>
             </DisclosureRow>
-            <Collapse in={open} unmountOnExit>
-                <Stack spacing={1.5} sx={{px: 1.5, pb: 1.5, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
-                    <AgentBody block={block} running={running} report={report} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>
-                </Stack>
-            </Collapse>
+            {!phone && (
+                <Collapse in={open} unmountOnExit>
+                    <Stack spacing={1.5} sx={{px: 1.5, pb: 1.5, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
+                        <AgentBody block={block} running={running} report={report} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>
+                    </Stack>
+                </Collapse>
+            )}
         </Paper>
+        {phone && (
+            <Dialog open={phoneOpen} onClose={() => setPhoneOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{input.description || t('projects.transcript.subagent', {defaultValue: 'Subagent'})}</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={1.5}>
+                        <AgentBody block={block} running={running} report={report} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>
+                    </Stack>
+                </DialogContent>
+            </Dialog>
+        )}
+        </>
     );
 };
 

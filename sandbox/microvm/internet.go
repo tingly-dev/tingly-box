@@ -10,6 +10,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/sandbox"
 	"github.com/tingly-dev/tingly-box/sandbox/netfilter"
+	"github.com/tingly-dev/tingly-box/sandbox/vmguest"
 )
 
 // The internet level: Cloud Hypervisor runs in a network namespace that
@@ -31,17 +32,11 @@ var (
 	guestAddr    = netip.PrefixFrom(netip.MustParseAddr("10.0.2.15"), 24)
 )
 
-// guestNet is what the guest init sets up for the internet level.
-type guestNet struct {
-	Addr    string `json:"addr"`
-	Gateway string `json:"gateway"`
-}
-
 // internet is one VM's internet level on the host.
 type internet struct {
 	via   []string // pasta and the shell that sets the filter, before the VMM
 	conf  string   // the guest's resolv.conf
-	guest guestNet
+	guest vmguest.Net
 }
 
 // newInternet writes the guest's resolv.conf in dir.
@@ -58,7 +53,7 @@ func newInternet(ctx context.Context, dir string, n sandbox.Network) (*internet,
 		return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 	}
 	in := &internet{via: via, conf: filepath.Join(dir, "resolv.conf"),
-		guest: guestNet{Addr: guestAddr.String(), Gateway: guestGateway.String()}}
+		guest: vmguest.Net{Addr: guestAddr.String(), Gateway: guestGateway.String()}}
 	if err := os.WriteFile(in.conf, netfilter.ResolvConf(), 0o644); err != nil {
 		return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 	}

@@ -528,8 +528,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List one directory level of the library (folders first, then files newest first); expand a folder by asking for its path. An upload's name is shown without its stored id. The threads' scratch (.tmp/) is listed too
-         * @description List one directory level of the library (folders first, then files newest first); expand a folder by asking for its path. An upload's name is shown without its stored id. The threads' scratch (.tmp/) is listed too
+         * List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too
+         * @description List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too
          */
         get: operations["apiV1ProjectsIdLibraryTreeGet"];
         put?: never;
@@ -1768,6 +1768,8 @@ export interface components {
             branch: string;
             /** @description Field dirty */
             dirty: boolean;
+            /** @description Field empty */
+            empty: boolean;
             /** @description Field error */
             error: string;
             /**
@@ -1789,6 +1791,8 @@ export interface components {
             branch?: string;
             /** @description Field dirty */
             dirty?: boolean;
+            /** @description Field empty */
+            empty?: boolean;
             /** @description Field error */
             error?: string;
             /** @description Field ok */
@@ -3701,10 +3705,6 @@ export interface operations {
             query?: {
                 /** @description Library-relative directory; empty is the library root */
                 path?: string;
-                /** @description Order of the folder's files: "time" (default, modified time) or "name" */
-                sort?: string;
-                /** @description Sort direction: "desc" (default, newest or Z–A first) or "asc" */
-                order?: string;
             };
             header?: never;
             path: {

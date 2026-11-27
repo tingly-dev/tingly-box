@@ -27,6 +27,7 @@ export const project: PluralDict<typeof en> = {
         placeholder: '/путь/к/каталогу', add: 'Добавить', invalid: 'Не удаётся проверить каталог',
         mode: 'Режим рабочей области', primary: 'Основной', makePrimary: 'Сделать основным', primaryModeHelp: 'Затрагивается только основной каталог ({{path}}). Остальные сохраняют свои настройки.',
         baseHint: 'Потоки ответвляются от этой ветки', dirtyHint: 'В этой копии есть незафиксированные изменения; потоки это не затрагивает, но для слияния нужна чистая копия.',
+        noCommits: 'Пока нет коммитов', emptyHint: 'В этом репозитории ещё нет коммитов, поэтому потоки используют этот каталог напрямую (общий режим). Режиму worktree нужен первый коммит; сделайте его и переключите режим.',
     },
     messageDetail: {
         label: 'Детальность сообщений', detailed: 'Подробно', concise: 'Кратко',
@@ -78,6 +79,7 @@ export const project: PluralDict<typeof en> = {
         bulkFailedSuffix: ' · отказано: {{count}}',
         group: { waiting: 'Ждут вас', failed: 'С ошибкой', ready: 'Готовы к проверке', working: 'В работе', idle: 'Простаивают', resolved: 'Решены', archived: 'В архиве' },
     },
+    phone: { settings: 'Настройки сеанса', messagePlaceholder: 'Написать в поток…', sessionPlaceholder: 'Написать в сеанс…', checklist: 'Прогресс', desktopNote: 'Полная трассировка и diff — на компьютере.', expandCode: 'Показать код', collapseCode: 'Свернуть код', copyFailed: 'Не удалось скопировать' },
     thread: {
         status: { waiting: 'Ждёт вас', ready: 'Готов к проверке', working: 'В работе', queued: 'В очереди', idle: 'Простаивает', resolved: 'Решён', failed: 'Ошибка' },
         commits_one: '{{count}} коммит', commits_few: '{{count}} коммита', commits_many: '{{count}} коммитов', commits_other: '{{count}} коммитов',
@@ -172,6 +174,7 @@ export const project: PluralDict<typeof en> = {
         tree: 'Файлы Библиотеки', tooLarge: 'Файл слишком велик для просмотра.', notPreviewable: 'Этот файл нельзя просмотреть. Скачайте его.',
         previousImage: 'Предыдущее изображение', nextImage: 'Следующее изображение', scratch: 'Временные файлы (TMPDIR)',
         sort: 'Сортировка файлов', sortTimeDesc: 'Сначала новые', sortTimeAsc: 'Сначала старые', sortNameAsc: 'Имя А–Я', sortNameDesc: 'Имя Я–А',
+        search: 'Поиск файлов', noResults: 'Нет файлов, подходящих под запрос.',
     },
     projectSettings: {
         maxRunning: 'Одновременно работающих потоков',
@@ -192,7 +195,7 @@ export const project: PluralDict<typeof en> = {
             hostHelp: 'Лимитам нужна песочница: выберите её выше. Пусто — без ограничений.',
             memoryMin: 'Не меньше 512 МиБ', processesMin: 'Не меньше 64', cpuMin: 'Не меньше 0,1',
         },
-        sandboxes: { host: 'Этот компьютер (без изоляции)', bwrap: 'Песочница (bubblewrap)', microvm: 'Виртуальная машина (microVM)' },
+        sandboxes: { host: 'Этот компьютер (без изоляции)', bwrap: 'Песочница (bubblewrap)', microvm: 'Виртуальная машина (microVM)', macvm: 'Виртуальная машина (macOS)', seatbelt: 'Песочница (macOS Seatbelt)' },
         axes: { storage: 'Файлы', network: 'Сеть', exec: 'Процессы', credentials: 'Секреты', resources: 'Ресурсы' },
         levels: {
             storage: { host: 'всё, что можете читать вы', confined: 'только свой каталог, репозиторий, библиотека и память' },

@@ -12,7 +12,6 @@ The tab's `document.title` tells tabs apart without getting long:
 | Workspace home, project list, IM settings | `Workspace · Tingly Box · host` |
 | A project (coordinator or any thread open) | `tb-ui · Tingly Box · host` |
 | A working folder | `<folder name> · Tingly Box · host` (list: `Folders`) |
-| Something waits on the user | the title starts with `● ` |
 
 Deliberately not in the title: per-page names for ordinary pages, thread
 numbers/titles, counts. The tab is for telling sites and projects apart; the
@@ -24,14 +23,13 @@ page itself says the rest, and a short title stays readable in a narrow tab.
   instances never share a title. No new setting or persistence; a user-set
   site name would need a config field and is not done.
 - Each part is cut at 40 characters (`…`) so the suffix survives.
-- `●` is one boolean, the same "something waits" check as the rail dot, so the
-  tab never flickers with counts. Favicon per state/instance: not done.
+- Nothing changes the title when something waits on the user (no mark, no
+  counts), so the tab never flickers. Favicon per state/instance: not done.
 
 ## Wiring
 
-`useDocumentTitle(parts, priority)` and `setTitleAttention(on)` in
-`@tingly/ui` (`utils/documentTitle.ts`). Projects pages call the hook; `Layout`
-sets only the attention mark.
+`useDocumentTitle(parts, priority)` in `@tingly/ui`
+(`utils/documentTitle.ts`). Projects pages call the hook.
 
 ## Notification clicks
 

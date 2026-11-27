@@ -32,7 +32,7 @@ A marker is a centred, quiet divider placed *between* blocks, never per message:
   ───────────────────── Today ─────────────────────      day crossed mid-flow (23:50 → 00:10): no clock
 ```
 
-Hover on a message (pointer devices) shows its exact time above its corner, in the gap between messages, so nothing moves:
+Hover on a message (pointer devices) shows its exact time above its corner, in the gap between messages, so nothing moves. The same action row carries the message's copy button — see `transcript-message-copy.md`; on a touch screen, where there is no hover, the copy button stays visible while the time does not.
 
 ```
                                   Nov 19, 2026, 8:05:00 AM
@@ -78,7 +78,7 @@ One component (`TimeDivider` in `transcript/Transcript.tsx`) used by `<Transcrip
 
 ### Accessibility
 
-`role="separator"` with `aria-label` = the full date and time (the visible text is the short form; colour is not the only cue, there is text and a rule). Visible text is a `<time dateTime>`. The per-message hover stamp is `aria-hidden` (a pointer affordance); assistive tech gets the separators, which carry the full time.
+`role="separator"` with `aria-label` = the full date and time (the visible text is the short form; colour is not the only cue, there is text and a rule). Visible text is a `<time dateTime>`. The per-message hover stamp is `aria-hidden` (a pointer affordance), and assistive tech gets the separators, which carry the full time. The copy button in the same row is a normal focusable button (revealed on `:focus-within`) with its own `aria-label`.
 
 ### Density, print/export, mobile
 

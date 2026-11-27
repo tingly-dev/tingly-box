@@ -75,6 +75,7 @@ export default {
       "topModels": "Top models",
       "topProviders": "Top providers",
       "others": "Others",
+      "share": "Share",
       "noUsageHintShort": "Try a longer time range.",
       "noUsersHint": "Try a different search term or time range."
     },
@@ -146,7 +147,23 @@ export default {
       "noWindows": "No quota windows reported",
       "notCountable": "Not limited",
       "sampleCount": "{{count}} samples",
-      "limitHint": "Showing the latest 1,000 points. Choose a provider or shorter time range to see more."
+      "limitHint": "Showing the latest 1,000 points. Choose a provider or shorter time range to see more.",
+      "percentLeft": "{{value}}% left",
+      "balanceLeft": "{{value}} {{unit}} left",
+      "resetsIn": "resets in {{time}}",
+      "rangeDelta": "{{value}} over range",
+      "watchTitle": "Quota watch",
+      "watchHint": "Lowest remaining first",
+      "statusHealthy": "Healthy",
+      "statusLow": "Low",
+      "statusCritical": "Critical",
+      "statusBalance": "Balance",
+      "noData": "No data",
+      "bandLegend": "Band = daily low–high · line = day’s latest",
+      "gapLegend": "Gaps = no data",
+      "usedInline": "used {{value}}",
+      "lowHigh": "low {{low}} · high {{high}}",
+      "latestValue": "latest {{value}}"
     },
     "requestsView": {
       "title": "Requests",

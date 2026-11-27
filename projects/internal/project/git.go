@@ -39,24 +39,36 @@ type RepoInfo struct {
 	Root   string `json:"root"`
 	Branch string `json:"branch"`
 	Dirty  bool   `json:"dirty"`
+	// Empty is true when the repository has no commits yet (an unborn HEAD).
+	// It is still usable in shared mode; only worktree mode needs a commit to
+	// branch from.
+	Empty bool `json:"empty,omitempty"`
 }
 
-// InspectRepo checks that path is inside a git work tree with at least one
-// commit and returns its root and current branch.
+// InspectRepo checks that path is inside a git work tree and returns its root
+// and current branch. A repository with no commits (a fresh `git init`, or a
+// clone of an empty remote) is reported with Empty rather than refused: shared
+// threads can work in it, and refusing it would block adding the directory.
 func InspectRepo(ctx context.Context, path string) (RepoInfo, error) {
 	root, err := git(ctx, path, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return RepoInfo{}, fmt.Errorf("%s is not a git repository", path)
 	}
-	if _, err := git(ctx, root, "rev-parse", "--verify", "HEAD"); err != nil {
-		return RepoInfo{}, fmt.Errorf("%s has no commits yet", root)
-	}
-	branch, err := git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return RepoInfo{}, err
+	info := RepoInfo{Root: root}
+	if _, err := git(ctx, root, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+		// Unborn HEAD: there is no commit to resolve, but symbolic-ref still
+		// names the branch the first commit will go to.
+		info.Empty = true
+		if branch, err := git(ctx, root, "symbolic-ref", "--short", "HEAD"); err == nil {
+			info.Branch = branch
+		}
+	} else if branch, err := git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+		// Includes a detached HEAD ("HEAD"), which worktree mode can branch from.
+		info.Branch = branch
 	}
 	status, _ := git(ctx, root, "status", "--porcelain")
-	return RepoInfo{Root: root, Branch: branch, Dirty: status != ""}, nil
+	info.Dirty = status != ""
+	return info, nil
 }
 
 // HeadBranch is the branch a folder is on; empty when the folder is not in

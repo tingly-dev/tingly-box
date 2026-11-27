@@ -7,7 +7,7 @@
 // under a directory that virtiofsd, itself confined by bubblewrap, shares as
 // the guest's root. Read-only mounts stay read-only on the host side, so the
 // guest's kernel cannot change that. The guest's init is this same binary
-// (see guest_linux.go); it talks to the host over vsock: a control
+// (sandbox/vmguest); it talks to the host over vsock: a control
 // connection for the command and its exit, and one each for stdin, stdout
 // and stderr. Under network none and allowlist the guest has no network
 // device (allowlist reaches the host's proxy, sandbox/netproxy, over vsock
@@ -37,6 +37,7 @@ import (
 	"github.com/tingly-dev/tingly-box/sandbox/bwrap"
 	"github.com/tingly-dev/tingly-box/sandbox/netfilter"
 	"github.com/tingly-dev/tingly-box/sandbox/netproxy"
+	"github.com/tingly-dev/tingly-box/sandbox/vmguest"
 )
 
 // Name is the runtime's name in the registry and in settings.
@@ -46,45 +47,6 @@ func init() { sandbox.Register(Runtime{}) }
 
 // Runtime is the microVM runtime.
 type Runtime struct{}
-
-// The vsock ports the guest connects to, on the host (CID 2).
-const (
-	portControl = 1024 + iota
-	portStdin
-	portStdout
-	portStderr
-	portProxy
-	// portExpose + i carries Network.Expose[i].
-	portExpose = 1100
-)
-
-// guestEnv, on the kernel command line, tells this binary it is a guest's
-// init (the kernel hands such words to init as its environment).
-const guestEnv = "TB_SANDBOX_GUEST"
-
-// spec is what the host sends the guest on the control connection.
-type spec struct {
-	Args   []string `json:"args"`
-	Env    []string `json:"env"`
-	Dir    string   `json:"dir"`
-	UID    int      `json:"uid"`
-	GID    int      `json:"gid"`
-	Proxy  bool     `json:"proxy,omitempty"`
-	Expose []int    `json:"expose,omitempty"`
-	// Net sets up the guest's network card (internet).
-	Net *guestNet `json:"net,omitempty"`
-	// Limits, when set, are the command's cgroup in the guest.
-	Limits *sandbox.Resources `json:"limits,omitempty"`
-}
-
-// result is what the guest sends back when the command has ended, or could
-// not start.
-type result struct {
-	Exit   int    `json:"exit"`
-	Signal int    `json:"signal,omitempty"`
-	OOM    bool   `json:"oom,omitempty"`
-	Error  string `json:"error,omitempty"`
-}
 
 // Guest size: the host's CPUs and memory, as unlimited means (an idle vCPU
 // costs nothing, and the guest's RAM is allocated as it is touched; but the
@@ -128,6 +90,15 @@ func guestSize(r sandbox.Resources) (cpus, memoryMB int) {
 	return cpus, memoryMB
 }
 
+// goos is the system this runs on; a variable for tests.
+var goos = runtime.GOOS
+
+// linuxOnly is why the runtime is unavailable elsewhere: it needs KVM, and
+// its guest init is Linux.
+func linuxOnly() error {
+	return fmt.Errorf("the microVM runtime runs on Linux only (this is %s): it needs KVM", goos)
+}
+
 // What the runtime needs, found by an environment variable, on PATH, or
 // where Kata Containers installs it. Variables for tests.
 var (
@@ -156,6 +127,9 @@ func (Runtime) Info() sandbox.Info {
 // Check looks for KVM, Cloud Hypervisor, virtiofsd, a guest kernel and
 // bubblewrap.
 func (Runtime) Check(ctx context.Context) error {
+	if goos != "linux" {
+		return linuxOnly()
+	}
 	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("no access to /dev/kvm (%v): add the user to the kvm group and log in again", err)
@@ -176,6 +150,9 @@ func (Runtime) Check(ctx context.Context) error {
 }
 
 func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sandbox.Proc, error) {
+	if goos != "linux" {
+		return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, linuxOnly())
+	}
 	vmm, err1 := findVMM()
 	fsd, err2 := findVirtiofsd()
 	kernel, err3 := findKernel()
@@ -257,7 +234,7 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 	// The vsock ports the guest connects to.
 	vsock := filepath.Join(m.dir, "vsock.sock")
 	conns := map[int]chan net.Conn{}
-	for _, port := range []int{portControl, portStdin, portStdout, portStderr} {
+	for _, port := range []int{vmguest.PortControl, vmguest.PortStdin, vmguest.PortStdout, vmguest.PortStderr} {
 		ln, err := net.Listen("unix", vsock+"_"+strconv.Itoa(port))
 		if err != nil {
 			return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
@@ -274,14 +251,14 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 	}
 	pl := netproxy.PlanFor(p.Network)
 	if !pl.Empty() {
-		ports := vsockPorts(pl)
+		ports := vmguest.Ports(pl)
 		if m.net, err = netproxy.Listen(p.Network, func(name string) string { return vsock + "_" + strconv.Itoa(ports[name]) }); err != nil {
 			return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 		}
 	}
 
 	cpus, memoryMB := guestSize(p.Resources)
-	cmdline := "console=ttyS0 quiet panic=-1 root=root rootfstype=virtiofs rw init=" + exe + " " + guestEnv + "=1"
+	cmdline := "console=ttyS0 quiet panic=-1 root=root rootfstype=virtiofs rw init=" + exe + " " + vmguest.Env + "=1"
 	vmmArgs := []string{"--kernel", kernel,
 		"--cpus", "boot=" + strconv.Itoa(cpus),
 		"--memory", "size=" + strconv.Itoa(memoryMB) + "M,shared=on",
@@ -317,11 +294,11 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 			return nil, ctx.Err()
 		}
 	}
-	ctl, err := accept(portControl)
+	ctl, err := accept(vmguest.PortControl)
 	if err != nil {
 		return err
 	}
-	s := spec{Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir, UID: os.Getuid(), GID: os.Getgid(), Proxy: pl.Proxy, Expose: pl.Expose}
+	s := vmguest.Spec{Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir, UID: os.Getuid(), GID: os.Getgid(), Proxy: pl.Proxy, Expose: pl.Expose}
 	if m.inet != nil {
 		s.Net = &m.inet.guest
 	}
@@ -332,7 +309,7 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 		return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 	}
 	var streams [3]net.Conn
-	for i, port := range []int{portStdin, portStdout, portStderr} {
+	for i, port := range []int{vmguest.PortStdin, vmguest.PortStdout, vmguest.PortStderr} {
 		if streams[i], err = accept(port); err != nil {
 			return err
 		}
@@ -351,26 +328,17 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 
 // watch waits for the guest's result and the VM's end, then cleans up.
 func (m *machine) watch(ctl net.Conn, vmmExited <-chan struct{}) {
-	var r result
+	var r vmguest.Result
 	line, err := bufio.NewReader(ctl).ReadBytes('\n')
-	failed := func(detail string) error {
-		return &sandbox.ExitError{Code: -1, Reason: sandbox.EndFailed, Detail: detail}
-	}
 	switch {
 	case m.killed.Load():
 		m.waitErr = &sandbox.ExitError{Code: 128 + int(syscall.SIGKILL), Reason: sandbox.EndKilled}
 	case err != nil:
-		m.waitErr = failed("the guest ended without a result" + m.tail("console.log"))
+		m.waitErr = &sandbox.ExitError{Code: -1, Reason: sandbox.EndFailed, Detail: "the guest ended without a result" + m.tail("console.log")}
 	case json.Unmarshal(line, &r) != nil:
-		m.waitErr = failed(fmt.Sprintf("bad result from the guest: %q", line))
-	case r.Error != "":
-		m.waitErr = failed(r.Error)
-	case r.OOM:
-		m.waitErr = &sandbox.ExitError{Code: max(r.Exit, 128+r.Signal), Reason: sandbox.EndOOM}
-	case r.Signal != 0:
-		m.waitErr = &sandbox.ExitError{Code: 128 + r.Signal, Reason: sandbox.EndSignaled}
-	case r.Exit != 0:
-		m.waitErr = &sandbox.ExitError{Code: r.Exit, Reason: sandbox.EndExited}
+		m.waitErr = &sandbox.ExitError{Code: -1, Reason: sandbox.EndFailed, Detail: fmt.Sprintf("bad result from the guest: %q", line)}
+	default:
+		m.waitErr = r.End()
 	}
 	// The guest powers off after it reports; give it a moment, then stop it.
 	select {
@@ -379,15 +347,6 @@ func (m *machine) watch(ctl net.Conn, vmmExited <-chan struct{}) {
 	}
 	m.stop()
 	close(m.done)
-}
-
-// vsockPorts are the vsock ports of a plan's endpoints, by name.
-func vsockPorts(pl netproxy.Plan) map[string]int {
-	ports := map[string]int{netproxy.ProxyName: portProxy}
-	for i, p := range pl.Expose {
-		ports[netproxy.ExposeName(p)] = portExpose + i
-	}
-	return ports
 }
 
 // stop kills the VM and virtiofsd and removes the sockets; it is idempotent.

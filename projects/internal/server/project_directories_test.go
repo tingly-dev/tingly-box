@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -33,6 +34,17 @@ func TestDirectoryInspectHTTP(t *testing.T) {
 	var dirty map[string]any
 	require.Equal(t, http.StatusOK, c.do("POST", "/projects/directories/inspect", map[string]any{"path": repo}, &dirty))
 	require.Equal(t, true, dirty["dirty"])
+	// A repository with no commits is still inspectable: adding the path must
+	// not require HEAD to exist.
+	emptyRepo := t.TempDir()
+	out, err := exec.Command("git", "-C", emptyRepo, "init", "-q", "-b", "main").CombinedOutput()
+	require.NoError(t, err, string(out))
+	var emptyRepoGot map[string]any
+	require.Equal(t, http.StatusOK, c.do("POST", "/projects/directories/inspect", map[string]any{"path": emptyRepo}, &emptyRepoGot))
+	require.Equal(t, true, emptyRepoGot["ok"])
+	require.Equal(t, "git", emptyRepoGot["kind"])
+	require.Equal(t, true, emptyRepoGot["empty"])
+	require.Equal(t, "main", emptyRepoGot["branch"])
 	var invalid map[string]any
 	require.Equal(t, http.StatusOK, c.do("POST", "/projects/directories/inspect", map[string]any{"path": filepath.Join(dir, "missing")}, &invalid))
 	require.Equal(t, false, invalid["ok"])

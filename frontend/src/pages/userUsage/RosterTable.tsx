@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { ArrowForward } from '@/components/icons';
 import SearchField from '@/components/SearchField';
-import { UsageMetricValueCells } from '@/components/dashboard';
+import { UsageMetricValueCells, getTotalTokens } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, RosterAxisState } from '@/components/dashboard';
 import { formatDateTime, getModelKey, getProviderKey, accountKey } from './userUsageModel';
 import type { UserUsageRow, ViewMode, PrimaryColumn } from './userUsageModel';
@@ -68,6 +68,10 @@ export default function RosterTable({
 }) {
     const { t } = useTranslation();
     const theme = useTheme();
+    // Each row's share of the axis' grand total (every row, not just this
+    // page or the current search) — the "占比" column that replaced the
+    // separate ranked Top list.
+    const shareTotal = activeAxis.rosterTotal;
 
     const rosterRowSx = (selected: boolean) => ({
         cursor: 'pointer',
@@ -99,6 +103,9 @@ export default function RosterTable({
         >
             {identityCells}
             <UsageMetricValueCells usage={usage} showTotal showCacheWrite={showCacheWrite} />
+            <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {shareTotal > 0 ? `${((getTotalTokens(usage) / shareTotal) * 100).toFixed(1)}%` : '—'}
+            </TableCell>
             <TableCell padding="checkbox">
                 <ArrowForward sx={selectionArrowSx(selected)} color={selected ? 'primary' : 'inherit'} />
             </TableCell>
@@ -162,6 +169,9 @@ export default function RosterTable({
                                     ) : col.label}
                                 </TableCell>
                             ))}
+                            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                {t('dashboard.userUsage.share', { defaultValue: 'Share' })}
+                            </TableCell>
                             <TableCell padding="checkbox" />
                         </TableRow>
                     </TableHead>
@@ -257,7 +267,7 @@ export default function RosterTable({
                         {activeAxis.visibleRows.length === 0 && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={primaryColumns.length + 1}
+                                    colSpan={primaryColumns.length + 2}
                                     align="center"
                                     sx={{ py: 8 }}
                                 >

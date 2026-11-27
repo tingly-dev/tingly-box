@@ -128,8 +128,119 @@ func TestDirectoryInspectionAliasesAndInvalidGit(t *testing.T) {
 	require.Error(t, err)
 	emptyGit := t.TempDir()
 	run(t, emptyGit, "git", "init")
-	_, err = InspectDirectory(context.Background(), emptyGit)
-	require.ErrorContains(t, err, "no commits")
+	empty, err := InspectDirectory(context.Background(), emptyGit)
+	require.NoError(t, err)
+	assert.True(t, empty.Empty, "a repository with no commits is still a usable directory")
 	_, err = InspectDirectory(context.Background(), filepath.Join(dir, "missing"))
 	require.Error(t, err)
+}
+
+// configureDirectory adds one directory to f's project in the given mode and
+// returns the path the project stores for it.
+func configureDirectory(t *testing.T, f *testFixture, path, mode string) string {
+	t.Helper()
+	repos, err := ResolveDirectories(context.Background(), []DirectorySpec{{Path: path, WorkspaceMode: mode}}, nil, false)
+	require.NoError(t, err)
+	require.NoError(t, SetProjectDirectories(f.project, repos, repos[0].Path))
+	return repos[0].Path
+}
+
+// gitRepoWithCommit makes dir a repository with one commit.
+func gitRepoWithCommit(t *testing.T, dir string) {
+	t.Helper()
+	run(t, dir, "git", "init", "-q", "-b", "main")
+	run(t, dir, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+}
+
+// A shared thread runs in its directory, so the directory's Git state is not
+// part of its identity: a repository created or removed, or an outer one
+// created around it, must not refuse the thread.
+func TestSharedThreadStartsWhateverTheGitState(t *testing.T) {
+	cases := []struct {
+		name   string
+		dir    func(t *testing.T) string
+		change func(t *testing.T, dir string)
+	}{
+		{"plain directory becomes a repository", func(t *testing.T) string { return t.TempDir() }, gitRepoWithCommit},
+		{"repository loses its .git", newRepo, func(t *testing.T, dir string) {
+			require.NoError(t, os.RemoveAll(filepath.Join(dir, ".git")))
+		}},
+		{"outer repository created around it", func(t *testing.T) string {
+			dir := filepath.Join(t.TempDir(), "notes")
+			require.NoError(t, os.MkdirAll(dir, 0o755))
+			return dir
+		}, func(t *testing.T, dir string) { gitRepoWithCommit(t, filepath.Dir(dir)) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, func(*enginetest.Turn) error { return nil })
+			dir := tc.dir(t)
+			stored := configureDirectory(t, f, dir, db.WorkspaceShared)
+			tc.change(t, dir)
+			thread, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Shared", Task: "work"})
+			require.NoError(t, err)
+			assert.Equal(t, stored, thread.Cwd)
+			assert.Empty(t, thread.Branch)
+		})
+	}
+}
+
+// Two spellings of one directory are one directory: symlinks, a trailing slash
+// and ".." reach the same workspace, also when an old project row stored them.
+func TestSharedThreadAcceptsEverySpellingOfItsDirectory(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	repo := newRepo(t)
+	alias := filepath.Join(t.TempDir(), "alias")
+	require.NoError(t, os.Symlink(repo, alias))
+	configureDirectory(t, f, alias, db.WorkspaceShared)
+	thread, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Symlink", Task: "work"})
+	require.NoError(t, err)
+	assert.Equal(t, repo, thread.Cwd, "the stored path is the resolved directory")
+
+	for _, stored := range []string{repo + string(filepath.Separator), filepath.Join(repo, "..", filepath.Base(repo))} {
+		f := newFixture(t, func(*enginetest.Turn) error { return nil })
+		f.project.Repos = []db.Repo{{Path: stored, Kind: db.RepoGit, WorkspaceMode: db.WorkspaceShared}}
+		f.project.PrimaryRepoPath = stored
+		thread, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Spelling", Task: "work"})
+		require.NoError(t, err, "stored path %q", stored)
+		assert.Equal(t, repo, thread.Cwd, "a thread starts in the resolved directory, whichever spelling was stored")
+	}
+}
+
+// A worktree thread needs its configured directory to still be the root of a
+// Git repository, and says which setting to change when it is not.
+func TestWorktreeThreadRequiresItsGitRepository(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	configureDirectory(t, f, f.repo, db.WorkspaceWorktree)
+	require.NoError(t, os.RemoveAll(filepath.Join(f.repo, ".git")))
+	_, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "W", Task: "work"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "switch it to shared mode")
+
+	// The same directory, still inside a Git repository, but its own repository
+	// is gone and an outer one covers it: a thread there would get a worktree of
+	// a different workspace than the directory the user selected.
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "repo")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	gitRepoWithCommit(t, dir)
+	f = newFixture(t, func(*enginetest.Turn) error { return nil })
+	configureDirectory(t, f, dir, db.WorkspaceWorktree)
+	require.NoError(t, os.RemoveAll(filepath.Join(dir, ".git")))
+	gitRepoWithCommit(t, parent)
+	_, err = f.threads.Start(context.Background(), f.project, StartSpec{Title: "W", Task: "work"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "switch it to shared mode")
+}
+
+// A directory that is gone is a real change: the thread is refused with a way
+// to fix the project rather than a message about the directory's contents.
+func TestThreadRefusesDirectoryThatIsGone(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	dir := t.TempDir()
+	configureDirectory(t, f, dir, db.WorkspaceShared)
+	require.NoError(t, os.RemoveAll(dir))
+	_, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Gone", Task: "work"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "select it again in the project's settings")
 }

@@ -85,6 +85,7 @@ export default {
       "topModels": "Топ моделей",
       "topProviders": "Топ провайдеров",
       "others": "Прочие",
+      "share": "Доля",
       "noUsageHintShort": "Попробуйте более длинный период.",
       "noUsersHint": "Попробуйте другой запрос или другой период."
     },
@@ -156,7 +157,23 @@ export default {
       "noWindows": "Провайдер не сообщил окна квот",
       "notCountable": "Без ограничения",
       "sampleCount": "Измерений: {{count}}",
-      "limitHint": "Показаны последние 1 000 точек. Выберите провайдера или более короткий период, чтобы увидеть больше."
+      "limitHint": "Показаны последние 1 000 точек. Выберите провайдера или более короткий период, чтобы увидеть больше.",
+      "percentLeft": "осталось {{value}}%",
+      "balanceLeft": "осталось {{value}} {{unit}}",
+      "resetsIn": "сброс через {{time}}",
+      "rangeDelta": "{{value}} за период",
+      "watchTitle": "Обзор квот",
+      "watchHint": "Сначала с наименьшим остатком",
+      "statusHealthy": "В норме",
+      "statusLow": "Мало",
+      "statusCritical": "Критично",
+      "statusBalance": "Баланс",
+      "noData": "Нет данных",
+      "bandLegend": "Полоса = дневной минимум–максимум · линия = последнее значение дня",
+      "gapLegend": "Пропуски = нет данных",
+      "usedInline": "использовано {{value}}",
+      "lowHigh": "минимум {{low}} · максимум {{high}}",
+      "latestValue": "последнее {{value}}"
     },
     "requestsView": {
       "title": "Запросы",

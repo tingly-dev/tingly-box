@@ -185,7 +185,9 @@ type InspectRepoResponse struct {
 	Root   string `json:"root,omitempty"`
 	Branch string `json:"branch,omitempty"`
 	Dirty  bool   `json:"dirty,omitempty"`
-	Error  string `json:"error,omitempty"`
+	// Empty is true when the repository has no commits yet.
+	Empty bool   `json:"empty,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // InspectDirectoryResponse describes a Git repository or a plain directory.
@@ -195,7 +197,9 @@ type InspectDirectoryResponse struct {
 	Kind   string `json:"kind" enum:",git,directory"`
 	Branch string `json:"branch"`
 	Dirty  bool   `json:"dirty"`
-	Error  string `json:"error"`
+	// Empty is true when a Git repository has no commits yet.
+	Empty bool   `json:"empty"`
+	Error string `json:"error"`
 }
 
 // ProjectModelsResponse lists the models the host offers. Error is set (and
@@ -331,10 +335,8 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("List library files (uploads, thread outputs, and the threads' scratch under .tmp/)"),
 		swagger.WithResponseModel(LibraryResponse{}))
 	api.GET("/projects/:id/library/tree", h.libraryTree, tag,
-		swagger.WithDescription("List one directory level of the library (folders first, then files newest first); expand a folder by asking for its path. An upload's name is shown without its stored id. The threads' scratch (.tmp/) is listed too"),
+		swagger.WithDescription("List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too"),
 		swagger.WithQuery("path", "string", "Library-relative directory; empty is the library root"),
-		swagger.WithQuery("sort", "string", "Order of the folder's files: \"time\" (default, modified time) or \"name\""),
-		swagger.WithQuery("order", "string", "Sort direction: \"desc\" (default, newest or Z–A first) or \"asc\""),
 		swagger.WithResponseModel(LibraryTreeResponse{}))
 	api.GET("/projects/:id/library/archive", h.archiveLibrary, tag,
 		swagger.WithDescription("Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out."),
@@ -486,7 +488,7 @@ func (h *Handler) inspectDirectory(c *gin.Context) {
 		c.JSON(http.StatusOK, InspectDirectoryResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, InspectDirectoryResponse{OK: true, Root: info.Root, Kind: info.Kind, Branch: info.Branch, Dirty: info.Dirty})
+	c.JSON(http.StatusOK, InspectDirectoryResponse{OK: true, Root: info.Root, Kind: info.Kind, Branch: info.Branch, Dirty: info.Dirty, Empty: info.Empty})
 }
 
 func (h *Handler) inspectRepo(c *gin.Context) {
@@ -504,7 +506,7 @@ func (h *Handler) inspectRepo(c *gin.Context) {
 		c.JSON(http.StatusOK, InspectRepoResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, InspectRepoResponse{OK: true, Root: info.Root, Branch: info.Branch, Dirty: info.Dirty})
+	c.JSON(http.StatusOK, InspectRepoResponse{OK: true, Root: info.Root, Branch: info.Branch, Dirty: info.Dirty, Empty: info.Empty})
 }
 
 func (h *Handler) recoverCoordinator(c *gin.Context) {
@@ -977,17 +979,7 @@ func (h *Handler) libraryTree(c *gin.Context) {
 		return
 	}
 	rel := c.Query("path")
-	by := c.DefaultQuery("sort", rt.LibraryOrderTime)
-	dir := c.DefaultQuery("order", "desc")
-	if by != rt.LibraryOrderTime && by != rt.LibraryOrderName {
-		apierr.BadRequest(c, "sort must be time or name")
-		return
-	}
-	if dir != "asc" && dir != "desc" {
-		apierr.BadRequest(c, "order must be asc or desc")
-		return
-	}
-	entries, err := h.svc.Layout.ListLibraryDirOrdered(p.ID, rel, rt.LibraryOrder{By: by, Desc: dir == "desc"})
+	entries, err := h.svc.Layout.ListLibraryDir(p.ID, rel)
 	switch {
 	case errors.Is(err, rt.ErrInvalidLibraryPath), errors.Is(err, rt.ErrNotDirectory):
 		apierr.BadRequest(c, err.Error())

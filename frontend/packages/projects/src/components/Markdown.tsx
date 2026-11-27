@@ -1,11 +1,12 @@
-import { memo } from 'react';
+import { memo, useId, useLayoutEffect, useRef, useState } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
+import { Box, ButtonBase, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useTranslation } from 'react-i18next';
-import { Check, ContentCopy } from './icons';
+import { Check, ContentCopy, ExpandMore } from './icons';
 import { useCopyFeedback } from '@tingly/ui';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from '../transcript/conversationStyles';
@@ -14,24 +15,58 @@ import { remarkBreaks } from '../transcript/breaks';
 
 type RemarkPlugin = NonNullable<Options['remarkPlugins']>[number];
 
-/** A fenced code block: highlighted, with a copy button. */
+/** A fenced code block: highlighted, with a copy button. On a phone a long
+ * block is height-capped, with its own 展开/收起 row inside the box; the copy
+ * icon sits on the right of the header (short) or of that row (long), matching
+ * the desktop header's icon. */
 export function CodeBlock({ code, language }: { code: string; language: string }) {
     const theme = useTheme();
     const { t } = useTranslation('projects');
-    const { copied, copy } = useCopyFeedback();
+    const phone = usePhoneShell();
+    const { copied, failed, copy } = useCopyFeedback();
+    const pre = useRef<HTMLDivElement>(null);
+    const bodyId = useId();
+    const [overflows, setOverflows] = useState(false);
+    const [open, setOpen] = useState(false);
+    useLayoutEffect(() => {
+        if (!phone) return;
+        const el = pre.current;
+        if (!el || open) return;
+        const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [phone, open, code]);
+    // The cap itself is what makes the block measurable: apply it whenever the
+    // phone shows a collapsed block, then the effect finds whether it overflows.
+    const capping = phone && !open;
+    const footer = phone && (overflows || open);
+    const copyButton = (
+        <Tooltip title={copied ? t('common.copied') : failed ? t('phone.copyFailed', { defaultValue: 'Could not copy' }) : t('common.copy')}>
+            <IconButton size="small" onClick={() => copy(code)} aria-label={t('common.copy')} sx={{ color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary' }}>
+                {copied ? <Check fontSize="inherit" color="success" /> : <ContentCopy fontSize="inherit" />}
+            </IconButton>
+        </Tooltip>
+    );
     return (
         <Box sx={{ position: 'relative', my: 1.5, borderRadius: radius.row, border: 1, borderColor: 'divider', overflow: 'hidden' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 0.25, bgcolor: 'action.hover', fontSize: fontSizes.sm, color: 'text.secondary' }}>
                 <span>{language || 'text'}</span>
-                <Tooltip title={copied ? t('common.copied') : t('common.copy')}>
-                    <IconButton size="small" onClick={() => copy(code)} aria-label={t('common.copy')}>
-                        {copied ? <Check fontSize="inherit" color="success" /> : <ContentCopy fontSize="inherit" />}
-                    </IconButton>
-                </Tooltip>
+                {(!phone || !footer) && copyButton}
             </Box>
             <Highlight code={code} language={language || 'text'} theme={theme.palette.mode === 'dark' ? themes.vsDark : themes.github}>
                 {({ style, tokens, getLineProps, getTokenProps }) => (
-                    <Box component="pre" sx={{ m: 0, p: 1.5, overflowX: 'auto', fontSize: fontSizes.base, lineHeight: 1.55 }} style={{ ...style, background: 'transparent' }}>
+                    <Box ref={pre} id={bodyId} component="pre" sx={{
+                        m: 0, p: 1.5, overflowX: 'auto', fontSize: fontSizes.base, lineHeight: 1.55, whiteSpace: 'pre', wordBreak: 'normal',
+                        ...(capping && {
+                            maxHeight: 210,
+                            overflowY: 'hidden',
+                            WebkitMaskImage: (t: typeof theme) => `linear-gradient(to bottom, ${t.palette.common.black} calc(100% - 26px), transparent)`,
+                            maskImage: (t: typeof theme) => `linear-gradient(to bottom, ${t.palette.common.black} calc(100% - 26px), transparent)`,
+                        }),
+                    }} style={{ ...style, background: 'transparent', whiteSpace: 'pre', wordBreak: 'normal' }}>
                         {tokens.map((line, i) => (
                             <div key={i} {...getLineProps({ line })}>
                                 {line.map((token, key) => <span key={key} {...getTokenProps({ token })} />)}
@@ -40,6 +75,18 @@ export function CodeBlock({ code, language }: { code: string; language: string }
                     </Box>
                 )}
             </Highlight>
+            {footer && (
+                <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 44, px: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+                    <ButtonBase onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls={bodyId} sx={{ minHeight: 44, gap: 0.75, color: 'primary.main', fontSize: fontSizes.sm, fontWeight: 600 }}>
+                        {open
+                            ? t('phone.collapseCode', { defaultValue: 'Collapse code' })
+                            : t('phone.expandCode', { defaultValue: 'Show full code' })}
+                        <ExpandMore sx={{ fontSize: 16, transform: open ? 'rotate(180deg)' : 'none' }} />
+                    </ButtonBase>
+                    <Box sx={{ flex: 1 }} />
+                    {copyButton}
+                </Box>
+            )}
         </Box>
     );
 }

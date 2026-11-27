@@ -218,6 +218,8 @@ type DirectoryInfo struct {
 	Kind   string `json:"kind"`
 	Branch string `json:"branch,omitempty"`
 	Dirty  bool   `json:"dirty,omitempty"`
+	// Empty is true for a Git repository with no commits yet.
+	Empty bool `json:"empty,omitempty"`
 }
 
 func InspectDirectory(ctx context.Context, raw string) (DirectoryInfo, error) {
@@ -244,7 +246,37 @@ func InspectDirectory(ctx context.Context, raw string) (DirectoryInfo, error) {
 	if err != nil {
 		return DirectoryInfo{}, err
 	}
-	return DirectoryInfo{Root: root, Kind: db.RepoGit, Branch: info.Branch, Dirty: info.Dirty}, nil
+	return DirectoryInfo{Root: root, Kind: db.RepoGit, Branch: info.Branch, Dirty: info.Dirty, Empty: info.Empty}, nil
+}
+
+// checkWorkspace refuses a new thread that would not run where the project
+// configured it, and returns that workspace: the directory's resolved path, the
+// one form its spellings share (symlink, "..", trailing slash). A shared
+// thread runs in the directory itself, so only its existence matters; what Git
+// says about it (git init in it, a removed .git, a repository created around
+// it) is not part of its identity. A worktree thread's branch and worktree are
+// created at the directory, so it must still be a Git repository root; the
+// message says which setting to change when it is not.
+func checkWorkspace(ctx context.Context, repo db.Repo) (string, error) {
+	path, err := CleanFolder(repo.Path)
+	if err != nil {
+		return "", fmt.Errorf("directory %q is not available any more (%v); select it again in the project's settings", repo.Path, err)
+	}
+	workspace := db.CanonicalPath(path)
+	if repo.WorkspaceMode == db.WorkspaceShared {
+		return workspace, nil
+	}
+	info, err := InspectDirectory(ctx, workspace)
+	if err != nil {
+		return "", fmt.Errorf("directory %q is no longer a Git repository (%v); switch it to shared mode or select a Git repository in the project's settings", repo.Path, err)
+	}
+	if info.Kind != db.RepoGit || db.PathKey(info.Root) != db.PathKey(workspace) {
+		return "", fmt.Errorf("directory %q is no longer the Git repository it was configured as; switch it to shared mode or select a Git repository in the project's settings", repo.Path)
+	}
+	if info.Empty {
+		return "", fmt.Errorf("directory %q has no commits yet: worktree mode needs an initial commit to branch from; make an initial commit, or use shared mode", repo.Path)
+	}
+	return workspace, nil
 }
 
 // ResolveDirectories checks paths and applies defaults, preserving previously
@@ -282,7 +314,10 @@ func ResolveDirectories(ctx context.Context, specs []DirectorySpec, previous []d
 			r.WorkspaceMode = spec.WorkspaceMode
 		}
 		if r.WorkspaceMode == "" {
-			if r.Kind == db.RepoDirectory || disabled {
+			// An empty repository has no branch to worktree from yet, so it can
+			// only start in shared mode; the user can switch to worktree after
+			// the first commit.
+			if r.Kind == db.RepoDirectory || disabled || info.Empty {
 				r.WorkspaceMode = db.WorkspaceShared
 			} else {
 				r.WorkspaceMode = db.WorkspaceWorktree
@@ -293,6 +328,9 @@ func ResolveDirectories(ctx context.Context, specs []DirectorySpec, previous []d
 		}
 		if r.Kind == db.RepoDirectory && r.WorkspaceMode != db.WorkspaceShared {
 			return nil, fmt.Errorf("non-Git directory %q must use shared mode", r.Path)
+		}
+		if info.Empty && r.WorkspaceMode == db.WorkspaceWorktree {
+			return nil, fmt.Errorf("directory %q has no commits yet: worktree mode needs an initial commit to branch from; make an initial commit, or use shared mode", r.Path)
 		}
 		result = append(result, r)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/sandbox"
@@ -43,5 +44,20 @@ func TestGuestOutOfMemoryEndsAsOOM(t *testing.T) {
 	var end *sandbox.ExitError
 	if err := proc.Wait(); !errors.As(err, &end) || end.Reason != sandbox.EndOOM {
 		t.Fatalf("got %v, want an oom end", err)
+	}
+}
+
+// Elsewhere than Linux, the runtime is unavailable and says why, not that
+// /dev/kvm is out of reach.
+func TestLinuxOnly(t *testing.T) {
+	defer func(old string) { goos = old }(goos)
+	goos = "darwin"
+	err := Runtime{}.Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "Linux only (this is darwin)") || strings.Contains(err.Error(), "kvm group") {
+		t.Errorf("Check: %v", err)
+	}
+	_, err = Runtime{}.Start(context.Background(), sandbox.Cmd{Args: []string{"true"}}, sandbox.Policy{})
+	if !errors.Is(err, sandbox.ErrUnavailable) || !strings.Contains(err.Error(), "Linux only") {
+		t.Errorf("Start: %v", err)
 	}
 }

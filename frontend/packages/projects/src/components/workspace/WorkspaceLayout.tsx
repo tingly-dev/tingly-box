@@ -70,6 +70,8 @@ interface WorkspaceLayoutProps {
     hidePaneToggle?: boolean;
     /** Left padding of the header on small screens, clear of a host's or the standalone app's menu button. */
     headerInsetXs?: number;
+    /** A phone session is a pushed screen with its own compact bar: leave the page header out. */
+    hideHeader?: boolean;
 }
 
 /**
@@ -78,7 +80,7 @@ interface WorkspaceLayoutProps {
  * resizable side pane (what is going on in it). Hosts build their own
  * workspace pages from it.
  */
-export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention, notice, main, side, top, sideAlwaysOpen, paneToggle, hidePaneToggle, headerInsetXs = 2 }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention, notice, main, side, top, sideAlwaysOpen, paneToggle, hidePaneToggle, headerInsetXs = 2, hideHeader = false }: WorkspaceLayoutProps) {
     const row = useRef<HTMLDivElement>(null);
     const { storageKey, setWidth } = pane;
 
@@ -93,17 +95,19 @@ export function WorkspaceLayout({ pane, title, actions, paneLabel, paneAttention
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: headerInsetXs, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-                <Box sx={{ minWidth: 0, flex: 1 }}>{title}</Box>
-                {actions}
-                {!hidePaneToggle && (
-                    <Tooltip title={paneLabel}>
-                        <IconButton size="small" onClick={paneToggle?.onClick ?? pane.toggle} aria-label={paneLabel} aria-expanded={paneToggle ? paneToggle.expanded : pane.narrow ? pane.drawerOpen : pane.open}>
-                            <Badge color="warning" variant="dot" invisible={!paneAttention}><PaneIcon fontSize="small" /></Badge>
-                        </IconButton>
-                    </Tooltip>
-                )}
-            </Box>
+            {!hideHeader && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: headerInsetXs, md: 3 }, py: 1, minHeight: 52, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>{title}</Box>
+                    {actions}
+                    {!hidePaneToggle && (
+                        <Tooltip title={paneLabel}>
+                            <IconButton size="small" onClick={paneToggle?.onClick ?? pane.toggle} aria-label={paneLabel} aria-expanded={paneToggle ? paneToggle.expanded : pane.narrow ? pane.drawerOpen : pane.open}>
+                                <Badge color="warning" variant="dot" invisible={!paneAttention}><PaneIcon fontSize="small" /></Badge>
+                            </IconButton>
+                        </Tooltip>
+                    )}
+                </Box>
+            )}
             {notice}
             {top}
             <Box ref={row} sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
