@@ -87,7 +87,9 @@ with `nm`, checks the Mach-O deployment target against the bundle's macOS 12
 minimum, rejects non-system dylib paths, and verifies the signature before
 and after the release ZIP/unzip round trip. This checks packaging and linking
 on the current runner; it does not establish runtime compatibility on every
-older macOS version or prove VM boot behavior.
+older macOS version or prove VM boot behavior. A separate Intel macOS leg
+builds the CLI and checks platform runtime registration; Intel GUI packages
+are not distributed.
 
 ## Naming
 

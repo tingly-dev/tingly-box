@@ -31,12 +31,13 @@ concurrency:
 
 jobs:
   platform-build:
-    name: Build CLI and GUI (${{ matrix.os }})
+    name: Native builds (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # The GUI ships on Apple Silicon; the CLI also ships on Intel Macs.
+        os: [windows-latest, macos-latest, macos-15-intel]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -63,15 +64,15 @@ jobs:
         working-directory: gui/wails3
         run: go build -tags production,private_mac_apis -o "$RUNNER_TEMP/tb-gui" .
       - name: Install macOS release build tools
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos-latest'
         run: |
           go install github.com/go-task/task/v3/cmd/task@latest
           go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
       - name: Verify macOS release build and package
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos-latest'
         run: bash .github/scripts/verify-macos-gui.sh
       - name: Verify distinct macOS application delegates
-        if: runner.os == 'macOS'
+        if: matrix.os == 'macos-latest'
         shell: bash
         run: |
           nm -Uj bin/TinglyBox.app/Contents/MacOS/tingly-box-gui > "$RUNNER_TEMP/tb-gui.symbols"
