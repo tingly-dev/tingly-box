@@ -20,11 +20,6 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/process"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/sandbox"
-	// The runtimes this build ships: a new one is one more import here.
-	_ "github.com/tingly-dev/tingly-box/sandbox/bwrap"
-	_ "github.com/tingly-dev/tingly-box/sandbox/macvm"
-	_ "github.com/tingly-dev/tingly-box/sandbox/microvm"
-	_ "github.com/tingly-dev/tingly-box/sandbox/seatbelt"
 )
 
 // db.Project.ThreadSandbox names the sandbox runtime a project's threads run

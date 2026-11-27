@@ -1,3 +1,5 @@
+//go:build darwin
+
 // Package macvm isolates a process in a Linux virtual machine on macOS, made
 // with Apple's Virtualization.framework (vz_darwin.go). Its root is a
 // read-only guest image (image.go); the policy's mounts are virtio-fs shares

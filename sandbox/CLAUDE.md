@@ -10,7 +10,10 @@ this repository, and agentboot, Projects and Tingly Box use it.
   `Check`, `Start`). `sandbox.Start` validates every axis and refuses what a
   runtime cannot give (`ErrUnavailable`); nothing falls back to the host.
 - **Registry**: a runtime package registers itself in `init`; a build ships
-  the runtimes it imports (Projects: `projects/internal/project/sandbox.go`).
+  the runtimes it imports (Projects:
+  `projects/internal/project/sandbox_runtimes_{linux,darwin}.go`). Windows
+  ships only the host runtime; a saved isolated runtime is rejected, never
+  silently run on the host.
 
 - **Host endpoints**: `netproxy` is the allowlist proxy, the exposed-port
   forwarders and the in-sandbox bridge, which any runtime without a network
