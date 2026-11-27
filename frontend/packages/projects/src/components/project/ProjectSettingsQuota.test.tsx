@@ -19,7 +19,7 @@ function open(p: Record<string, unknown>) {
     ];
     m.get.mockResolvedValue({ data: { max_running_threads_limit: 100, sandboxes }, response: new Response() });
     m.patch.mockResolvedValue({ data: { ...p }, response: new Response() });
-    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="general" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="runtime" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
 }
 const save = () => screen.getByRole('button', { name: 'common.save' });
 const input = (name: string) => screen.getByRole('textbox', { name: `projectSettings.quota.${name}` }) as HTMLInputElement;
@@ -64,4 +64,22 @@ it('shows stored limits and clears one by emptying it', async () => {
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', expect.objectContaining({
         body: expect.objectContaining({ thread_memory_bytes: 2 * 1024 ** 3, thread_tasks: 0, thread_cpu: 500 }),
     })));
+});
+
+it('offers a way to switch to a sandbox in place when limits are disabled', async () => {
+    open(project);
+    await screen.findByText('projectSettings.quota.hostHelp');
+    expect(screen.getByRole('button', { name: 'projectSettings.switchToSandbox' })).toBeTruthy();
+});
+
+it('saves the runtime tab alone, without the Basic tab fields', async () => {
+    open({ ...project, thread_sandbox: 'bwrap' });
+    await screen.findByText('projectSettings.quota.help');
+    fireEvent.change(input('processes'), { target: { value: '200' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', expect.objectContaining({
+        body: expect.objectContaining({ thread_tasks: 200 }),
+    })));
+    expect(m.patch.mock.calls[0][1].body).not.toHaveProperty('name');
+    expect(m.patch.mock.calls[0][1].body).not.toHaveProperty('github_auto');
 });
