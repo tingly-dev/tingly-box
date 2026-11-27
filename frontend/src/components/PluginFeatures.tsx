@@ -1,6 +1,6 @@
 import { Box, Chip, CircularProgress, Popover, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { alpha, type Theme } from '@mui/material/styles';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { ConfigRow } from './ConfigRow';
 import { VisionProxyControl } from './flags';
@@ -57,7 +57,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [providers, setProviders] = useState<Provider[]>([]);
     const [panelAnchor, setPanelAnchor] = useState<HTMLElement | null>(null);
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
 
@@ -88,7 +88,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [scenario]);
 
     // Scenario string-flags share one optimistic save flow; build the setters
     // from a single factory keyed by flag name (also the in-flight key).
@@ -133,8 +133,8 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     };
 
     useEffect(() => {
-        loadData();
-    }, [scenario]);
+        void loadData();
+    }, [loadData]);
 
     // One strip summarizing every scenario plugin; clicking it opens a panel
     // to change them. Thinking and Vision Proxy — the ones people actually use —

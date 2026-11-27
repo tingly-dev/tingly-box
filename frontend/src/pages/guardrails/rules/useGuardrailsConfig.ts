@@ -2,7 +2,7 @@
 // Handles the initial config load, the builtins/scenario fetch (Rules only),
 // the optional registry card load (Rules only), and the default-group
 // bootstrap effect that both pages previously duplicated near-verbatim.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { DEFAULT_GROUP_ID, type GuardrailsPolicy, type PolicyGroup, type RegistryPolicyEntry } from './types';
@@ -38,7 +38,7 @@ export const useGuardrailsConfig = (options: UseGuardrailsConfigOptions = {}) =>
     const [registryLoading, setRegistryLoading] = useState(true);
     const [registryLoadError, setRegistryLoadError] = useState<string | null>(null);
 
-    const loadPolicies = async (silent = false) => {
+    const loadPolicies = useCallback(async (silent = false) => {
         try {
             if (!silent) {
                 setLoading(true);
@@ -79,9 +79,9 @@ export const useGuardrailsConfig = (options: UseGuardrailsConfigOptions = {}) =>
                 setLoading(false);
             }
         }
-    };
+    }, [loadBuiltins]);
 
-    const loadRegistry = async (force = false) => {
+    const loadRegistry = useCallback(async (force = false) => {
         try {
             setRegistryLoading(true);
             setRegistryLoadError(null);
@@ -99,17 +99,17 @@ export const useGuardrailsConfig = (options: UseGuardrailsConfigOptions = {}) =>
         } finally {
             setRegistryLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        loadPolicies();
-    }, []);
+        void loadPolicies();
+    }, [loadPolicies]);
 
     useEffect(() => {
         if (registry) {
             loadRegistry();
         }
-    }, [registry]);
+    }, [registry, loadRegistry]);
 
     useEffect(() => {
         if (loading || loadError || initializingDefaultGroup) {
@@ -144,7 +144,7 @@ export const useGuardrailsConfig = (options: UseGuardrailsConfigOptions = {}) =>
         };
 
         ensureDefaultGroup();
-    }, [defaultGroupErrorMessage, groups, initializingDefaultGroup, loadError, loading, notify, requireScenarios, supportedScenarios]);
+    }, [defaultGroupErrorMessage, groups, initializingDefaultGroup, loadError, loading, loadPolicies, notify, requireScenarios, supportedScenarios]);
 
     return {
         loading,

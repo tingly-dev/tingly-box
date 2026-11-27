@@ -77,12 +77,13 @@ export const useScenarioPageInternal = (scenario: string, options: UseScenarioPa
     // Scenario page data (header ref, base URL, header height)
     const scenarioPageData = useScenarioPageData(functionPanelData.providers);
 
+    const { loadRules } = ruleManagement;
     // Load rules for the specified scenario
     useEffect(() => {
         if (skipRules) return;
         if (!scenario.trim()) return;
-        ruleManagement.loadRules(scenario);
-    }, [scenario, ruleManagement.loadRules, skipRules]);
+        void loadRules(scenario);
+    }, [scenario, loadRules, skipRules]);
 
     // Combined loading state
     const isLoading = functionPanelData.loading || (!skipRules && ruleManagement.loadingRule);

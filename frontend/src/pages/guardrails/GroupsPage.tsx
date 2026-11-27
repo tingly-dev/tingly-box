@@ -108,10 +108,6 @@ const GuardrailsGroupsPage = () => {
         );
 
     useEffect(() => {
-        loadConfig();
-    }, []);
-
-    useEffect(() => {
         if (groups.length === 0) return;
         if (!groups.some((group) => group.id === selectedGroupId)) {
             setSelectedGroupId(DEFAULT_GROUP_ID);

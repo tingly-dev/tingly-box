@@ -262,17 +262,16 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
 
     // Initialize expanded states when rules change
     useEffect(() => {
-        if (collapsible) {
+        if (!collapsible) return;
+        setExpandedStates(prev => {
             const initialStates: Record<string, boolean> = {};
             rules.forEach(rule => {
-                if (!(rule.uuid in expandedStates)) {
+                if (!(rule.uuid in prev)) {
                     initialStates[rule.uuid] = allExpanded;
                 }
             });
-            if (Object.keys(initialStates).length > 0) {
-                setExpandedStates(prev => ({...prev, ...initialStates}));
-            }
-        }
+            return Object.keys(initialStates).length > 0 ? {...prev, ...initialStates} : prev;
+        });
     }, [rules, collapsible, allExpanded]);
 
     // Handle scroll to show/hide the back-to-top button
