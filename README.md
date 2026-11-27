@@ -227,10 +227,12 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 
 **Quick Setup**
 
-1. Open Web UI like `http://localhost:12580`
-2. Turn on **Projects** under **Power-ups** in the gear menu at the bottom of the left rail, then open **IM** in the rail
-3. Configure your preferred IM platform bot
-4. Start interacting with your agents remotely
+1. Open the Web UI at `http://localhost:12580` and turn on **Workspace** under **Power-ups**.
+2. Open **Workspace → IM Bots** and connect a bot.
+3. Open **Remote** on the bot row, pair your chat if prompted, and grant it access.
+4. Open **Bind** in the Workspace sidebar and choose the project or folder the chat should reach.
+
+See the [IM Bots and Remote Control guide](./docs/guide/en/12-remote-control.md#quick-start) for pairing, access settings, and notifications.
 
 **Use Cases**
 
