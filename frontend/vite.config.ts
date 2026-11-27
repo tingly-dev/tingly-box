@@ -1,11 +1,13 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { execSync } from 'node:child_process';
 import path from 'path';
+import { readGitDevVersion } from './src/utils/devVersion.ts';
 
 // Web-only Vite configuration
 // For Wails builds, use vite.config.wails.ts instead
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
     // Check if we should use mock data. Read from the mode's .env file
     // (`.env.mock` sets USE_MOCK=true) via loadEnv so it works on any shell —
     // a `USE_MOCK=true vite ...` prefix is POSIX-only and breaks on Windows.
@@ -13,6 +15,17 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const useMock = env.USE_MOCK === 'true';
     console.log("use mock", useMock)
+
+    // Stamp the current commit into dev builds so the UI shows "dev-a1b2c3d"
+    // (or "dev-a1b2c3d-dirty") instead of a bare "dev". Computed once when the
+    // dev server starts / a dev build runs — restart the dev server after
+    // committing to pick up the new hash. A production build must not change
+    // the release version display, so it gets an empty value.
+    const isProductionBuild = command === 'build' && mode === 'production';
+    const devVersion = isProductionBuild
+        ? ''
+        : readGitDevVersion((cmd) =>
+              execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
 
     return {
         plugins: [
@@ -29,6 +42,8 @@ export default defineConfig(({ mode }) => {
         define: {
             // Make USE_MOCK available to the app
             'import.meta.env.VITE_USE_MOCK': JSON.stringify(useMock ? 'true' : 'false'),
+            // The dev build's short commit (see src/utils/devVersion.ts).
+            'import.meta.env.VITE_DEV_VERSION': JSON.stringify(devVersion),
         },
         resolve: {
             alias: {

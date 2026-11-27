@@ -23,4 +23,19 @@ describe('version formatting', () => {
         expect(displayVersion('')).toBe('Unknown');
         expect(displayVersion(null)).toBe('Unknown');
     });
+
+    it('swaps the build commit in for a bare dev version', () => {
+        expect(displayVersion('dev', 'dev-a1b2c3d')).toBe('dev-a1b2c3d');
+        expect(displayVersion('dev', 'dev-a1b2c3d-dirty')).toBe('dev-a1b2c3d-dirty');
+    });
+
+    it('leaves a dev version alone when no commit was stamped in', () => {
+        expect(displayVersion('dev', undefined)).toBe('dev');
+        expect(displayVersion('dev', '')).toBe('dev');
+    });
+
+    it('never lets the dev commit override a release version', () => {
+        expect(displayVersion('v1.261001.1', 'dev-a1b2c3d')).toBe('v1.261001.1');
+        expect(displayVersion('1.261002.0', 'dev-a1b2c3d')).toBe('v1.261002.0');
+    });
 });
