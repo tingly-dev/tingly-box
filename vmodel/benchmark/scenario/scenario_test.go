@@ -72,3 +72,16 @@ func TestBuildErrorFromSpec_RateLimit(t *testing.T) {
 		t.Fatal("expected an error body")
 	}
 }
+
+func TestBuiltinExpectationsCoverCatalog(t *testing.T) {
+	scenarios := AllScenarios()
+	if len(scenarios) != len(builtinExpectations) {
+		t.Fatal("expectation inventory differs from scenario inventory")
+	}
+	for _, s := range scenarios {
+		e, structural := BuiltinExpectations(s.Name)
+		if len(e.Assertions()) != len(s.Assertions) || len(structural.Assertions()) != len(s.Structural) {
+			t.Errorf("%s: assertion inventory mismatch", s.Name)
+		}
+	}
+}

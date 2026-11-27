@@ -1,13 +1,16 @@
 package check
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 
+	"github.com/tidwall/gjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/vmodel/validate"
 )
 
 // AssertContentEquals returns an Assertion that the response content equals expected.
@@ -15,7 +18,7 @@ func AssertContentEquals(expected string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("content_equals(%q)", expected),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("eq", r.Content, expected) != nil {
+			if r.Content != expected {
 				return fmt.Errorf("content: got %q, want %q", r.Content, expected)
 			}
 			return nil
@@ -28,7 +31,7 @@ func AssertContentContains(substring string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("content_contains(%q)", substring),
 		Check: func(r *RoundTripResult) error {
-			if !validate.Contains(r.Content, substring) {
+			if !strings.Contains(r.Content, substring) {
 				return fmt.Errorf("content %q does not contain %q", r.Content, substring)
 			}
 			return nil
@@ -57,7 +60,7 @@ func AssertRoleEquals(expected string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("role_equals(%q)", expected),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("eq", r.Role, expected) != nil {
+			if r.Role != expected {
 				return fmt.Errorf("role: got %q, want %q", r.Role, expected)
 			}
 			return nil
@@ -70,7 +73,7 @@ func AssertFinishReason(expected string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("finish_reason(%q)", expected),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("eq", r.FinishReason, expected) != nil {
+			if r.FinishReason != expected {
 				return fmt.Errorf("finish_reason: got %q, want %q", r.FinishReason, expected)
 			}
 			return nil
@@ -86,7 +89,7 @@ func AssertFinishReasonOneOf(accepted ...string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("finish_reason_one_of(%v)", accepted),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("one_of", r.FinishReason, accepted) == nil {
+			if slices.Contains(accepted, r.FinishReason) {
 				return nil
 			}
 			return fmt.Errorf("finish_reason: got %q, want one of %v", r.FinishReason, accepted)
@@ -99,7 +102,7 @@ func AssertHasToolCalls(count int) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("has_tool_calls(%d)", count),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("eq", len(r.ToolCalls), count) != nil {
+			if len(r.ToolCalls) != count {
 				return fmt.Errorf("tool_calls: got %d, want %d", len(r.ToolCalls), count)
 			}
 			return nil
@@ -115,7 +118,7 @@ func AssertToolCallName(index int, name string) Assertion {
 			if index < 0 || index >= len(r.ToolCalls) {
 				return fmt.Errorf("tool_call[%d]: index out of range (have %d)", index, len(r.ToolCalls))
 			}
-			if validate.Value("eq", r.ToolCalls[index].Name, name) != nil {
+			if r.ToolCalls[index].Name != name {
 				return fmt.Errorf("tool_call[%d].name: got %q, want %q", index, r.ToolCalls[index].Name, name)
 			}
 			return nil
@@ -138,7 +141,7 @@ func AssertToolCallArgs(index int, key, value string) Assertion {
 			}
 			expected, _ := json.Marshal(value)
 			actual, ok := fields[key]
-			if !ok || validate.EqualJSON(actual, expected) != nil {
+			if !ok || !EqualJSON(actual, expected) {
 				return fmt.Errorf("tool_call[%d].arguments does not contain %s=%s in %q", index, key, value, args)
 			}
 			return nil
@@ -198,7 +201,7 @@ func AssertHTTPStatus(expected int) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("http_status(%d)", expected),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("eq", r.HTTPStatus, expected) != nil {
+			if r.HTTPStatus != expected {
 				return fmt.Errorf("http_status: got %d, want %d", r.HTTPStatus, expected)
 			}
 			return nil
@@ -211,7 +214,7 @@ func AssertStreamEventCount(min int) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("stream_event_count(>=%d)", min),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("gte", len(r.StreamEvents), min) != nil {
+			if len(r.StreamEvents) < min {
 				return fmt.Errorf("stream events: got %d, want >= %d", len(r.StreamEvents), min)
 			}
 			return nil
@@ -253,7 +256,7 @@ func AssertHTTPStatusAtLeast(min int) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("http_status(>=%d)", min),
 		Check: func(r *RoundTripResult) error {
-			if validate.Value("gte", r.HTTPStatus, min) != nil {
+			if r.HTTPStatus < min {
 				return fmt.Errorf("http_status: got %d, want >= %d", r.HTTPStatus, min)
 			}
 			return nil
@@ -268,7 +271,7 @@ func AssertErrorMessageContains(substring string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("error_message_contains(%q)", substring),
 		Check: func(r *RoundTripResult) error {
-			if !validate.Contains(string(r.RawBody), substring) {
+			if !strings.Contains(string(r.RawBody), substring) {
 				return fmt.Errorf("raw body does not contain %q", substring)
 			}
 			return nil
@@ -281,7 +284,7 @@ func AssertModelContains(substring string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("model_contains(%q)", substring),
 		Check: func(r *RoundTripResult) error {
-			if !validate.Contains(r.Model, substring) {
+			if !strings.Contains(r.Model, substring) {
 				return fmt.Errorf("model %q does not contain %q", r.Model, substring)
 			}
 			return nil
@@ -300,7 +303,7 @@ func AssertStreamEventsContain(markers ...string) Assertion {
 			joined := strings.Join(r.StreamEvents, "\n")
 			var missing []string
 			for _, m := range markers {
-				if !validate.Contains(joined, m) {
+				if !strings.Contains(joined, m) {
 					missing = append(missing, m)
 				}
 			}
@@ -527,4 +530,40 @@ func outputItems(resp map[string]any) []map[string]any {
 func str(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// EqualJSON compares valid JSON values structurally, preserving array order,
+// string whitespace and number precision. Invalid JSON never compares equal.
+func EqualJSON(actual, expected []byte) bool {
+	if !json.Valid(actual) || !json.Valid(expected) {
+		return false
+	}
+	decode := func(raw []byte) (any, error) {
+		var value any
+		d := json.NewDecoder(bytes.NewReader(raw))
+		d.UseNumber()
+		err := d.Decode(&value)
+		return value, err
+	}
+	got, e1 := decode(actual)
+	want, e2 := decode(expected)
+	return e1 == nil && e2 == nil && reflect.DeepEqual(got, want)
+}
+
+// AssertJSONField checks a native response body using the existing GJSON path syntax.
+func AssertJSONField(path string, expected json.RawMessage) Assertion {
+	expected = append(json.RawMessage(nil), expected...)
+	return Assertion{Name: "json_field(" + path + ")", Check: func(r *RoundTripResult) error {
+		if !json.Valid(r.RawBody) {
+			return fmt.Errorf("response body is not JSON")
+		}
+		actual := gjson.GetBytes(r.RawBody, path)
+		if !actual.Exists() {
+			return fmt.Errorf("missing JSON field %s", path)
+		}
+		if !EqualJSON([]byte(actual.Raw), expected) {
+			return fmt.Errorf("JSON field %s: got %s, want %s", path, actual.Raw, expected)
+		}
+		return nil
+	}}
 }

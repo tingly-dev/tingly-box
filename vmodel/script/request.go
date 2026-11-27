@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
-	"github.com/tingly-dev/tingly-box/vmodel/validate"
 )
 
 // Request classes: the main loop of a conversation, a subagent, or an
@@ -162,7 +160,7 @@ func (r *request) class() string {
 	default:
 		return ClassAuxiliary
 	}
-	if validate.Contains(r.System, "cc_is_subagent=true") {
+	if strings.Contains(r.System, "cc_is_subagent=true") {
 		return ClassSubagent
 	}
 	if len(r.Tools) == 0 {
@@ -233,12 +231,6 @@ func (m *Match) eval(r *request, resolve func(string) string) (bool, string) {
 	if m == nil {
 		return true, ""
 	}
-	if len(m.Rules) > 0 {
-		actual := map[string]any{"class": r.class(), "model": r.Model, "system": r.System, "first_user": r.first("user").text(), "last_user": r.last("user").text(), "last_text": r.last("user").lastText(), "inserted": r.Inserted, "tools": r.Tools, "headers": r.Header, "streaming": r.Stream}
-		if err := matchRules(actual, m.Rules); err != nil {
-			return false, err.Error()
-		}
-	}
 	if len(m.Class) > 0 {
 		c := r.class()
 		ok := false
@@ -252,25 +244,25 @@ func (m *Match) eval(r *request, resolve func(string) string) (bool, string) {
 	if m.Model != "" && !re(m.Model).MatchString(r.Model) {
 		return false, fmt.Sprintf("model %q does not match %q", r.Model, m.Model)
 	}
-	if m.SystemContains != "" && !validate.Contains(r.System, m.SystemContains) {
+	if m.SystemContains != "" && !strings.Contains(r.System, m.SystemContains) {
 		return false, fmt.Sprintf("system lacks %q", m.SystemContains)
 	}
 	if m.SystemRegex != "" && !re(m.SystemRegex).MatchString(r.System) {
 		return false, fmt.Sprintf("system does not match %q", m.SystemRegex)
 	}
-	if m.FirstUserContains != "" && !validate.Contains(r.first("user").text(), m.FirstUserContains) {
+	if m.FirstUserContains != "" && !strings.Contains(r.first("user").text(), m.FirstUserContains) {
 		return false, fmt.Sprintf("first user message lacks %q", m.FirstUserContains)
 	}
-	if m.LastUserContains != "" && !validate.Contains(r.last("user").text(), m.LastUserContains) {
+	if m.LastUserContains != "" && !strings.Contains(r.last("user").text(), m.LastUserContains) {
 		return false, fmt.Sprintf("last user message lacks %q", m.LastUserContains)
 	}
 	if m.LastUserRegex != "" && !re(m.LastUserRegex).MatchString(r.last("user").text()) {
 		return false, fmt.Sprintf("last user message does not match %q", m.LastUserRegex)
 	}
-	if m.LastTextContains != "" && !validate.Contains(r.last("user").lastText(), m.LastTextContains) {
+	if m.LastTextContains != "" && !strings.Contains(r.last("user").lastText(), m.LastTextContains) {
 		return false, fmt.Sprintf("last text block lacks %q", m.LastTextContains)
 	}
-	if m.InsertedContains != "" && !validate.Contains(strings.Join(r.Inserted, "\n"), m.InsertedContains) {
+	if m.InsertedContains != "" && !strings.Contains(strings.Join(r.Inserted, "\n"), m.InsertedContains) {
 		return false, fmt.Sprintf("no message inserted since the last reply contains %q", m.InsertedContains)
 	}
 	for _, t := range m.ToolsInclude {
@@ -324,12 +316,7 @@ func (m *Match) eval(r *request, resolve func(string) string) (bool, string) {
 
 func (m *ResultMatch) eval(b block) (bool, string) {
 	text := b.resultText()
-	if len(m.Rules) > 0 {
-		if err := matchRules(map[string]any{"text": text, "is_error": b.IsError}, m.Rules); err != nil {
-			return false, err.Error()
-		}
-	}
-	if m.Contains != "" && !validate.Contains(text, m.Contains) {
+	if m.Contains != "" && !strings.Contains(text, m.Contains) {
 		return false, fmt.Sprintf("result lacks %q: %s", m.Contains, clip(text, 200))
 	}
 	if m.Regex != "" && !re(m.Regex).MatchString(text) {
@@ -347,17 +334,4 @@ func clip(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
-}
-
-func matchRules(actual any, rules []validate.Rule) error {
-	raw, err := json.Marshal(actual)
-	if err != nil {
-		return err
-	}
-	for _, rule := range rules {
-		if err := rule.Match(raw); err != nil {
-			return err
-		}
-	}
-	return nil
 }

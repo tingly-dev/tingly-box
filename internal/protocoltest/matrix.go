@@ -497,9 +497,15 @@ func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target prot
 	// Check assertions
 	var errors []AssertionError
 	passed := true
-	for _, failure := range EvaluateAssertions(result, s.Assertions) {
-		passed = false
-		errors = append(errors, AssertionError{Assertion: failure.Name, Error: failure.Err.Error(), Context: truncate(string(result.RawBody), 300)})
+	for _, a := range s.Assertions {
+		if err := a.Check(result); err != nil {
+			passed = false
+			errors = append(errors, AssertionError{
+				Assertion: a.Name,
+				Error:     err.Error(),
+				Context:   truncate(string(result.RawBody), 300),
+			})
+		}
 	}
 
 	base.Passed = passed

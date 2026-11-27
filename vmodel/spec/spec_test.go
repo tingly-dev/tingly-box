@@ -370,31 +370,25 @@ func TestExplicitToolStreamingContentIsRetained(t *testing.T) {
 	}
 }
 
-func TestDeclarativeRules(t *testing.T) {
-	r := compile(t, `id: rules
+func TestBuiltinExpectationFields(t *testing.T) {
+	r := compile(t, `id: configured
 kind: mock
 mock: {content: hello}
 expect:
-  rules:
-    - {path: http_status, op: eq, value: 200}
-    - {path: content, op: regex, value: '^hello$'}
-  checks: [content_non_empty]
+  http_status: 200
+  role: assistant
+  tool_call_count: 1
+  tool_calls:
+    - name: get_weather
+      arguments: {location: Paris}
+  usage_non_zero: true
 `)
-	result := &check.RoundTripResult{HTTPStatus: 200, Content: "hello"}
-	if err := r.Check("rules", result); err != nil {
+	result := &check.RoundTripResult{HTTPStatus: 200, Role: "assistant", ToolCalls: []check.ToolCallResult{{Name: "get_weather", Arguments: `{"location" : "Paris"}`}}, Usage: &check.TokenUsage{InputTokens: 1}}
+	if err := r.Check("configured", result); err != nil {
 		t.Fatal(err)
 	}
-	result.Content = "wrong"
-	if err := r.Check("rules", result); err == nil {
-		t.Fatal("unexpected pass")
-	}
-	if _, err := spec.Decode([]byte(`id: bad
-kind: mock
-mock: {content: hello}
-expect:
-  rules:
-    - {path: content, op: typo, value: hello}
-`)); err == nil {
-		t.Fatal("unknown operator accepted")
+	result.ToolCalls[0].Arguments = `{"nested":{"location":"Paris"}}`
+	if err := r.Check("configured", result); err == nil {
+		t.Fatal("nested argument matched top-level expectation")
 	}
 }

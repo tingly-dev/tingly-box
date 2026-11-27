@@ -24,12 +24,6 @@ func loadBuiltinExpectations() map[string]builtinExpectation {
 		panic(fmt.Errorf("builtin expectations: %w", err))
 	}
 	for id, entry := range data {
-		if err := entry.Expect.Validate(); err != nil {
-			panic(fmt.Errorf("%s expect: %w", id, err))
-		}
-		if err := entry.Structural.Validate(); err != nil {
-			panic(fmt.Errorf("%s structural: %w", id, err))
-		}
 		if len(entry.Expect.Assertions()) == 0 || len(entry.Structural.Assertions()) == 0 {
 			panic(fmt.Errorf("%s: missing builtin expectations", id))
 		}
@@ -57,4 +51,11 @@ func BuiltinExpectations(name string) (expect, structural *Expect) {
 		panic(err)
 	}
 	return &copy.Expect, &copy.Structural
+}
+
+func withBuiltinExpectations(s Scenario) Scenario {
+	entry := builtinContract(s.Name)
+	s.Assertions = entry.Expect.Assertions()
+	s.Structural = entry.Structural.Assertions()
+	return s
 }

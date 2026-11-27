@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
-	"github.com/tingly-dev/tingly-box/vmodel/validate"
 )
 
 // Response stores either JSON body data or an exact raw body, plus SSE lines in
@@ -25,34 +24,30 @@ type Response struct {
 // Expect maps a small declarative vocabulary onto the existing check library.
 // Pointers distinguish an omitted assertion from an explicit empty/zero value.
 type Expect struct {
-	Checks          []string                   `json:"checks,omitempty"`
-	Rules           []validate.Rule            `json:"rules,omitempty"`
-	JSONFields      map[string]json.RawMessage `json:"json_fields,omitempty"`
-	BodyContains    *string                    `json:"body_contains,omitempty"`
-	HTTPStatus      *int                       `json:"http_status,omitempty"`
-	ContentEquals   *string                    `json:"content_equals,omitempty"`
-	ContentContains *string                    `json:"content_contains,omitempty"`
-	FinishReason    *string                    `json:"finish_reason,omitempty"`
-	ToolCallCount   *int                       `json:"tool_call_count,omitempty"`
-	ContentNonEmpty bool                       `json:"content_non_empty,omitempty"`
-	StreamEvents    []string                   `json:"stream_events,omitempty"`
+	Role                      *string                    `json:"role,omitempty"`
+	HTTPStatusAtLeast         *int                       `json:"http_status_at_least,omitempty"`
+	MinStreamEvents           *int                       `json:"min_stream_events,omitempty"`
+	StreamError               bool                       `json:"stream_error,omitempty"`
+	StreamNotCompleted        bool                       `json:"stream_not_completed,omitempty"`
+	UsageNonZero              bool                       `json:"usage_non_zero,omitempty"`
+	ResponsesItemIDsCanonical bool                       `json:"responses_item_ids_canonical,omitempty"`
+	ToolCalls                 []ToolCallExpect           `json:"tool_calls,omitempty"`
+	JSONFields                map[string]json.RawMessage `json:"json_fields,omitempty"`
+	BodyContains              *string                    `json:"body_contains,omitempty"`
+	HTTPStatus                *int                       `json:"http_status,omitempty"`
+	ContentEquals             *string                    `json:"content_equals,omitempty"`
+	ContentContains           *string                    `json:"content_contains,omitempty"`
+	FinishReason              *string                    `json:"finish_reason,omitempty"`
+	ToolCallCount             *int                       `json:"tool_call_count,omitempty"`
+	ContentNonEmpty           bool                       `json:"content_non_empty,omitempty"`
+	StreamEvents              []string                   `json:"stream_events,omitempty"`
 }
 
-func (e *Expect) Validate() error {
-	if e == nil {
-		return nil
-	}
-	for _, name := range e.Checks {
-		if _, ok := check.NamedAssertion(name); !ok {
-			return fmt.Errorf("unknown named check %q", name)
-		}
-	}
-	for i, rule := range e.Rules {
-		if err := rule.Validate(); err != nil {
-			return fmt.Errorf("rules[%d]: %w", i, err)
-		}
-	}
-	return nil
+// ToolCallExpect checks the tool at the corresponding position. Arguments are
+// top-level string values; use json_fields for native response JSON.
+type ToolCallExpect struct {
+	Name      *string           `json:"name,omitempty"`
+	Arguments map[string]string `json:"arguments,omitempty"`
 }
 
 func (e *Expect) Assertions() []check.Assertion {
@@ -61,13 +56,9 @@ func (e *Expect) Assertions() []check.Assertion {
 	}
 	var out []check.Assertion
 	if e.BodyContains != nil {
-		want := *e.BodyContains
-		out = append(out, check.Assertion{Name: "body_contains", Check: func(r *check.RoundTripResult) error {
-			if !validate.Contains(string(r.RawBody), want) {
-				return fmt.Errorf("body does not contain %q", want)
-			}
-			return nil
-		}})
+		a := check.AssertErrorMessageContains(*e.BodyContains)
+		a.Name = "body_contains"
+		out = append(out, a)
 	}
 	keys := make([]string, 0, len(e.JSONFields))
 	for path := range e.JSONFields {
@@ -75,10 +66,7 @@ func (e *Expect) Assertions() []check.Assertion {
 	}
 	sort.Strings(keys)
 	for _, path := range keys {
-		expected := append(json.RawMessage(nil), e.JSONFields[path]...)
-		out = append(out, check.Assertion{Name: "json_field(" + path + ")", Check: func(r *check.RoundTripResult) error {
-			return (validate.Rule{Path: path, Op: "eq", Value: expected}).Match(r.RawBody)
-		}})
+		out = append(out, check.AssertJSONField(path, e.JSONFields[path]))
 	}
 	if e.HTTPStatus != nil {
 		out = append(out, check.AssertHTTPStatus(*e.HTTPStatus))
@@ -101,14 +89,38 @@ func (e *Expect) Assertions() []check.Assertion {
 	if len(e.StreamEvents) > 0 {
 		out = append(out, check.AssertStreamEventsContain(e.StreamEvents...))
 	}
-	for _, rule := range e.Rules {
-		out = append(out, check.AssertRule(rule))
+	if e.Role != nil {
+		out = append(out, check.AssertRoleEquals(*e.Role))
 	}
-	for _, name := range e.Checks {
-		if a, ok := check.NamedAssertion(name); ok {
-			out = append(out, a)
-		} else {
-			out = append(out, check.Assertion{Name: name, Check: func(*check.RoundTripResult) error { return fmt.Errorf("unknown named check %q", name) }})
+	if e.HTTPStatusAtLeast != nil {
+		out = append(out, check.AssertHTTPStatusAtLeast(*e.HTTPStatusAtLeast))
+	}
+	if e.MinStreamEvents != nil {
+		out = append(out, check.AssertStreamEventCount(*e.MinStreamEvents))
+	}
+	if e.StreamError {
+		out = append(out, check.AssertStreamError())
+	}
+	if e.StreamNotCompleted {
+		out = append(out, check.AssertStreamNotCompleted())
+	}
+	if e.UsageNonZero {
+		out = append(out, check.AssertUsageNonZero())
+	}
+	if e.ResponsesItemIDsCanonical {
+		out = append(out, check.AssertResponsesItemIDsCanonical())
+	}
+	for i, call := range e.ToolCalls {
+		if call.Name != nil {
+			out = append(out, check.AssertToolCallName(i, *call.Name))
+		}
+		keys := make([]string, 0, len(call.Arguments))
+		for key := range call.Arguments {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			out = append(out, check.AssertToolCallArgs(i, key, call.Arguments[key]))
 		}
 	}
 	return out

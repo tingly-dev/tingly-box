@@ -154,32 +154,26 @@ package; they are not automatically discovered or exported. Captured requests
 and golden output files remain test inputs/evidence, rather than being
 misidentified as complete model definitions.
 
-## Output validation
+### Built-in expectations
 
-`expect` and `structural` also accept shared validation `rules` and named
-protocol checks. Existing shorthand fields remain supported. For example:
+The existing `expect` and `structural` blocks also expose the existing role,
+usage, tool-call, status and streaming checks. For example:
 
 ```yaml
 expect:
-  rules:
-    - {path: http_status, op: eq, value: 200}
-    - {path: tool_calls.0.arguments.location, op: eq, value: Paris}
-    - {path: body.id, op: regex, value: '^resp_'}
-  checks: [usage_non_zero]
+  http_status: 200
+  role: assistant
+  tool_call_count: 1
+  tool_calls:
+    - name: get_weather
+      arguments: {location: Paris}
+  usage_non_zero: true
 ```
 
-Rules select values using GJSON paths and compare with a literal `value` or
-another path in the same observation (`ref`). Operators: `eq`, `ne`, `contains`,
-`regex`, `one_of`, `gte`, `exists`, `absent`. A missing path is distinct from
-JSON null. The observation includes normalized response fields, `body` (when
-valid JSON), `raw_body`, `tool_calls`, `usage`, `stream_events` (raw lines),
-`stream_data` (ordered decoded JSON payloads), `stream_event_count`,
-`stream_error`, `stream_completed`, and `streaming`. Named checks handle
-protocol-specific or composite invariants. Built-in scenario expectations live
-in `benchmark/scenario/builtin_expect.json` and are exported with definitions.
-
-Script request and tool result matchers also accept `rules` using their own
-observation fields. Existing routing predicates and script captures remain
-unchanged. Golden wire snapshots and their comparison remain unchanged in this
-phase; future snapshot adapters should use the same matcher without weakening
-strict wire regression checks.
+`http_status_at_least`, `min_stream_events`, `stream_error`,
+`stream_not_completed` and `responses_item_ids_canonical` select their
+corresponding existing checks. `tool_calls` is positioned by index; arguments
+match top-level string values. Existing `json_fields` uses structural JSON
+comparison for native response bodies. The embedded built-in contracts use the
+same Expect type and are exported with the canonical definitions. Golden
+snapshots and their exact wire comparison are unchanged.

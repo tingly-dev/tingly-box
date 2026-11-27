@@ -612,8 +612,10 @@ func (r *Runtime) Check(id string, result *check.RoundTripResult) error {
 		return fmt.Errorf("model %s has no expectations", id)
 	}
 	var failures []error
-	for _, failure := range check.Evaluate(result, assertions) {
-		failures = append(failures, fmt.Errorf("%s: %w", failure.Name, failure.Err))
+	for _, a := range assertions {
+		if err := a.Check(result); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", a.Name, err))
+		}
 	}
 	return errors.Join(failures...)
 }

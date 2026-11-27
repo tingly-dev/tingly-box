@@ -239,11 +239,21 @@ func (m *Matrix) executeIdempotentCase(env *TestEnv, scenario Scenario, ic Idemp
 	}
 
 	var errs []AssertionError
-	for _, failure := range EvaluateAssertions(baseline, scenario.Assertions) {
-		errs = append(errs, AssertionError{Assertion: "baseline:" + failure.Name, Error: failure.Err.Error(), Context: truncate(string(baseline.RawBody), 300)})
-	}
-	for _, failure := range EvaluateAssertions(roundtrip, scenario.Assertions) {
-		errs = append(errs, AssertionError{Assertion: "roundtrip:" + failure.Name, Error: failure.Err.Error(), Context: truncate(string(roundtrip.RawBody), 300)})
+	for _, a := range scenario.Assertions {
+		if checkErr := a.Check(baseline); checkErr != nil {
+			errs = append(errs, AssertionError{
+				Assertion: "baseline:" + a.Name,
+				Error:     checkErr.Error(),
+				Context:   truncate(string(baseline.RawBody), 300),
+			})
+		}
+		if checkErr := a.Check(roundtrip); checkErr != nil {
+			errs = append(errs, AssertionError{
+				Assertion: "roundtrip:" + a.Name,
+				Error:     checkErr.Error(),
+				Context:   truncate(string(roundtrip.RawBody), 300),
+			})
+		}
 	}
 	label := fmt.Sprintf("%s→%s→%s vs %s→%s", ic.Source, ic.Mid, ic.Baseline, ic.Source, ic.Baseline)
 	errs = append(errs, semanticEquivalenceErrors(label, baseline, roundtrip)...)

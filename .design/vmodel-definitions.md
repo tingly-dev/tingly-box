@@ -167,26 +167,15 @@ checks, routing and catalog checks, plus the harness/protocoltest package
 suites. Registered skips and two existing FP3 recording gaps remain visible;
 live-provider credentials and missing real agent CLIs were outside that run.
 
-## Output validation evolution
+## Output validation convergence
 
-The configuration contract remains `Definition`; `expect` and `structural`
-are independent of response generation. `vmodel/validate` owns value matching
-and named check execution, without protocol or serving dependencies. Adapters
-(`benchmark/check`, `script`, and test runners) project their own observations
-and retain domain-specific invariants. Built-in expectations are declarative
-and are exported as part of the definition inventory.
+Keep `expect` / `structural` as the sole response expectation format and
+`vmodel/benchmark/check` as the implementation. Built-in scenario expectations
+are data using the same type; export includes them in canonical definitions.
+Extend the typed fields only for existing checks that need configuration. Do
+not introduce a second rule language, evaluator, or protocol observation model.
 
-- Phase 1: shared rule vocabulary; bridge legacy expectations; migrate core
-  scenario, matrix/replay and scripted conversation validation. Compare JSON
-  tool arguments structurally. Do not change wire golden data or comparison.
-- Phase 2: CLI agent output, load-balancer expectations, Projects live journeys
-  and other specialized checks reuse the matcher where their semantics overlap.
-- Phase 3: Golden adapter projects captured request/response and SSE framing
-  into observations; add scoped dynamic-value captures/references and snapshot
-  diffs. Keep an independent exact-wire comparison mode. Never derive expected
-  output from the same execution that is being validated.
-
-The first phase supports intra-observation references. Cross-event capture scope,
-full SSE framing validation, schema validation and structured snapshot updates
-are subsequent capabilities; a decoded event payload list is not a substitute
-for a wire snapshot.
+Phase one configures the existing built-in assertions and shares structural
+JSON comparison; existing runners and script routing are unchanged. Later,
+reuse the check package for overlapping peripheral harness assertions and
+Golden structural comparison, retaining the exact-wire snapshot mode.
