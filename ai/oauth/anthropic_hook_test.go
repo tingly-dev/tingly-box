@@ -32,10 +32,10 @@ func TestAnthropicHook_BeforeToken(t *testing.T) {
 	if got := header.Get("Content-Type"); got != "application/json" {
 		t.Errorf("expected Content-Type=application/json, got %q", got)
 	}
-	if got := header.Get("User-Agent"); got != "tingly-box" {
-		t.Errorf("unexpected OAuth User-Agent %q", got)
+	if got := header.Get("Accept"); got != "application/json, text/plain, */*" {
+		t.Errorf("unexpected Accept %q", got)
 	}
-	for _, key := range []string{"Origin", "Referer", "Accept-Language"} {
+	for _, key := range []string{"User-Agent", "Origin", "Referer", "Accept-Language"} {
 		if got := header.Get(key); got != "" {
 			t.Errorf("unexpected browser header %s=%q", key, got)
 		}

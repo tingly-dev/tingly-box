@@ -85,8 +85,8 @@ func (h *AnthropicHook) BeforeAuth(params map[string]string) error {
 
 func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) error {
 	header.Set("Content-Type", "application/json")
-	header.Set("User-Agent", "tingly-box")
-	header.Set("Accept", "application/json")
+	// The HTTP transport supplies its own User-Agent.
+	header.Set("Accept", "application/json, text/plain, */*")
 	return nil
 }
 
