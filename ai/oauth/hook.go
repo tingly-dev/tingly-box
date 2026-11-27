@@ -85,7 +85,8 @@ func (h *AnthropicHook) BeforeAuth(params map[string]string) error {
 
 func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) error {
 	header.Set("Content-Type", "application/json")
-	// The HTTP transport supplies its own User-Agent.
+	// Match the versioned OAuth User-Agent used by CLIProxyAPI.
+	header.Set("User-Agent", "axios/1.15.2")
 	header.Set("Accept", "application/json, text/plain, */*")
 	return nil
 }
