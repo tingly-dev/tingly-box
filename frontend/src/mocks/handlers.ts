@@ -3940,6 +3940,11 @@ export const handlers = [
             return HttpResponse.json({chats: [
                 // Feishu gave no sender name: no alias, so the chat shows by its id.
                 {chat: {id: 'direct-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_chat_id: 'feishu:oc_mock_chat_0001', peer_actor_id: 'actor-f1', blocked: false}, permissions: []},
+                // A DM keyed by the sender's open_id: also a valid receiver.
+                {chat: {id: 'direct-f2', bot_uuid: 'mock-bot-002', platform: 'feishu', external_chat_id: 'feishu:ou_mock_user_0002', peer_actor_id: 'actor-f2', blocked: false}, permissions: []},
+                // Not message receivers: shown in IM settings with their type, hidden from the bind selector.
+                {chat: {id: 'direct-f3', bot_uuid: 'mock-bot-002', platform: 'feishu', external_chat_id: 'feishu:od-4e6ac4d14bcd5071a37a39de902c7141', blocked: false}, permissions: []},
+                {chat: {id: 'direct-f4', bot_uuid: 'mock-bot-002', platform: 'feishu', external_chat_id: 'feishu:cli_mock_app_id', blocked: false}, permissions: []},
             ]})
         }
         if (params.bot === 'mock-bot-003' || String(params.bot).endsWith('-imbot')) return HttpResponse.json({chats: []})

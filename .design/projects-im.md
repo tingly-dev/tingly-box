@@ -92,6 +92,33 @@ Projects 事件 ──▶ 订阅了该落点的 binding ──▶ 渲染到 chat
   文件夹里的线程）是编号和标题（`[#2 修登录] …`），与 Web 上的编号一致。
 - 一个 chat 同一时刻只绑一个落点；一个落点可以被多个 chat 绑定（手机和群各一个），出站按 binding 广播。
 
+### 绑定候选的可发送性（ID 类型）
+
+绑定候选来自 Remote 的两个访问列表（direct chats + groups），合并成 `ImChat`
+（`frontend/src/pages/projects/imHost.tsx`）。这两个列表都取自入站消息的
+`Recipient.ID`，但**记录里没有保存 ID 类型**；不同平台、甚至同一平台的不同实体
+（飞书 `oc_` 会话、`ou_` open_id、`od-` 部门、`cli_` 应用……）格式和可发送性不同。
+逐平台依据（适配器 `file:line`、SDK 的 `receive_id_type` 列表）见
+[`../.research/im-id-types.md`](../.research/im-id-types.md)。
+
+分类器是显式映射表，不靠 UI 猜字符串：
+`frontend/packages/projects/src/components/im/imIdKind.ts`
+（`classifyImId(platform, recordKind, id)`）。三种结果：
+
+| class | 含义 | 绑定选择器 | 原始总览（IM 设置） |
+|---|---|---|---|
+| `sendable` | 平台的消息接收方 | 显示、可选 | 显示，标注 ID 类型 |
+| `unsendable` | 已知不是接收方（飞书部门/应用、WhatsApp 群 JID…） | **不出现** | 仍显示，标注类型与原因，绑定按钮禁用 |
+| `unknown` | 无法可靠判断（未知平台、Slack `U…` 等） | 显示但禁用，行内给原因 | 仍显示，标注类型与原因 |
+
+全部候选都不可发送时，选择器给专门的空态并指向 IM 设置（原始总览）；有隐藏项时
+选择器底部说明隐藏了多少。审计日志目前仍只是 log-only（见
+[`bot-im-alias-display.md`](./bot-im-alias-display.md) §6），IM 设置表就是当前的原始
+总览。
+
+未决：飞书 `union_id` 在 SDK 的 `receive_id_type` 允许列表里，因此保持可绑定；若产品
+决定仍隐藏，只改表一行。Slack 用户 ID 暂标 `unknown`（可见禁用），而不是静默隐藏。
+
 ## 统一到 Project ID（已被取代）
 
 曾提议给 `Project` 加 `kind`（`project`/`workdir`），所有落点认 `project_id`。讨论中确认：coordinator 对话、线程、文件夹会话、

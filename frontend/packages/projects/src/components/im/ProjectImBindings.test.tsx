@@ -39,8 +39,8 @@ const show = (h: ProjectsHost, folder = false) => render(
 
 beforeEach(() => {
     m.list.mockResolvedValue([
-        binding('cb1', 'tg:1', 'yz', 'p1'),
-        binding('cb2', 'tg:2', 'Team', 'p2'),
+        binding('cb1', 'telegram:1', 'yz', 'p1'),
+        binding('cb2', 'telegram:2', 'Team', 'p2'),
     ]);
     m.bind.mockImplementation(async (r: { chat_id: string }) => binding('new', r.chat_id, 'x', 'p1'));
     m.unbind.mockResolvedValue(undefined);
@@ -53,28 +53,28 @@ afterEach(() => {
 
 describe('project IM bindings', () => {
     it('keeps a project binding visible when the chat focuses a project thread', async () => {
-        m.list.mockResolvedValue([{ ...binding('focused', 'tg:1', 'yz', 'p1'), thread_id: 'worker-1', target_project_id: 'p1' }]);
-        show(host([chat('tg:1', 'yz')]));
+        m.list.mockResolvedValue([{ ...binding('focused', 'telegram:1', 'yz', 'p1'), thread_id: 'worker-1', target_project_id: 'p1' }]);
+        show(host([chat('telegram:1', 'yz')]));
         expect(await screen.findByText('yz')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /im\.tags\.bind/ }));
         expect(await screen.findByText('im.bind.noChatsTitle')).toBeInTheDocument();
     });
     it('allows moving a chat from a specific session to its folder', async () => {
-        m.list.mockResolvedValue([{ ...binding('session', 'tg:1', 'yz', 'f1'), thread_id: 'session1', target_project_id: 'f1', target_thread_id: 'session1' }]);
-        show(host([chat('tg:1', 'yz')]), true);
+        m.list.mockResolvedValue([{ ...binding('session', 'telegram:1', 'yz', 'f1'), thread_id: 'session1', target_project_id: 'f1', target_thread_id: 'session1' }]);
+        show(host([chat('telegram:1', 'yz')]), true);
         fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
         fireEvent.click(await screen.findByRole('radio', { name: /yz/ }));
         fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'telegram:1', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
     });
     it('binds a chat to a folder before a session exists and shows pending bindings', async () => {
-        m.list.mockResolvedValue([{ ...binding('pending', 'tg:1', 'yz', 'f1'), thread_id: '', folder: '/work' }]);
-        show(host([chat('tg:1', 'yz'), chat('tg:3', 'Free')]), true);
+        m.list.mockResolvedValue([{ ...binding('pending', 'telegram:1', 'yz', 'f1'), thread_id: '', folder: '/work' }]);
+        show(host([chat('telegram:1', 'yz'), chat('telegram:3', 'Free')]), true);
         expect(await screen.findByText('yz')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /im\.tags\.bind/ }));
         fireEvent.click(await screen.findByRole('radio', { name: /Free/ }));
         fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:3', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'telegram:3', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
     });
     it('shows a bound chat by its alias and id, and marks one the host no longer has as deleted', async () => {
         m.list.mockResolvedValue([binding('cb1', 'telegram:1', 'yz', 'p1'), binding('cb2', 'telegram:2', 'Gone chat', 'p1')]);
@@ -117,11 +117,11 @@ describe('project IM bindings', () => {
     });
 
     it('binds a free chat, marks a chat bound elsewhere "will move", and leaves out chats already here', async () => {
-        show(host([chat('tg:1', 'yz'), chat('tg:2', 'Team', { kind: 'group' }), chat('tg:3', 'Free'), chat('tg:4', 'Off', { state: 'blocked' })]));
+        show(host([chat('telegram:1', 'yz'), chat('telegram:2', 'Team', { kind: 'group' }), chat('telegram:3', 'Free'), chat('telegram:4', 'Off', { state: 'blocked' })]));
         fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
         const dialog = await screen.findByRole('dialog');
         const radios = await within(dialog).findAllByRole('radio');
-        // tg:1 is bound here (in the header), so: Free, Off (disabled), then Team (bound elsewhere) last among enabled free-first order.
+        // telegram:1 is bound here (in the header), so: Free, Off (disabled), then Team (bound elsewhere) last among enabled free-first order.
         expect(radios.map((r) => r.textContent)).toEqual([
             expect.stringContaining('Free'),
             expect.stringContaining('Off'),
@@ -134,21 +134,21 @@ describe('project IM bindings', () => {
         expect(submit).toBeDisabled();
         fireEvent.click(radios[2]);
         fireEvent.click(submit);
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'p1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'telegram:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'p1' }));
         expect(m.notify).toHaveBeenCalledWith(expect.stringContaining('im.bind.moved'), 'success');
     });
 
     it('allows selecting another bot for the same chat and thread', async () => {
         const bots = [{ uuid: 'b1', name: 'First bot', platform: 'telegram', online: true }, { uuid: 'b2', name: 'Second bot', platform: 'telegram', online: true }];
         const h = host([], bots);
-        h.im!.listChats = async (bot) => [chat('tg:1', 'yz', { botUuid: bot.uuid })];
+        h.im!.listChats = async (bot) => [chat('telegram:1', 'yz', { botUuid: bot.uuid })];
         show(h);
         fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
         const dialog = await screen.findByRole('dialog');
         const other = await within(dialog).findByRole('radio', { name: /Second bot/ });
         fireEvent.click(other);
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:1', bot_uuid: 'b2', chat_title: expect.any(String), project_id: 'p1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'telegram:1', bot_uuid: 'b2', chat_title: expect.any(String), project_id: 'p1' }));
     });
 
     it('says why there is nothing to bind', async () => {
@@ -158,9 +158,39 @@ describe('project IM bindings', () => {
         expect(screen.getByRole('button', { name: 'im.bind.openSettings' })).toBeInTheDocument();
     });
 
+    it('hides ids that cannot receive a message and keeps an unreadable one visible but disabled', async () => {
+        show(host([
+            chat('oc_group', 'Feishu group', { platform: 'feishu', kind: 'group' }),
+            chat('od-4e6ac4d14bcd5071a37a39de902c7141', 'Department', { platform: 'feishu' }),
+            chat('U012ABCDEF', 'A user', { platform: 'slack' }),
+        ]));
+        fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
+        const dialog = await screen.findByRole('dialog');
+        const radios = await within(dialog).findAllByRole('radio');
+        // The department is not offered at all; the Slack user id stays, disabled, with the reason.
+        expect(radios).toHaveLength(2);
+        expect(radios[0].textContent).toContain('oc_group');
+        expect(radios[1].textContent).toContain('U012ABCDEF');
+        expect(radios[1].textContent).toContain('im.idReason.userNotChat');
+        expect(radios[1]).toBeDisabled();
+        expect(within(dialog).queryByText(/od-4e6ac4d14bcd5071a37a39de902c7141/)).not.toBeInTheDocument();
+        expect(within(dialog).getByText(/im\.bind\.hidden/)).toBeInTheDocument();
+    });
+
+    it('says when every known entry is not a message target', async () => {
+        show(host([
+            chat('od-4e6ac4d14bcd5071a37a39de902c7141', 'Department', { platform: 'feishu' }),
+            chat('cli_a1b2c3', 'App', { platform: 'feishu' }),
+        ]));
+        fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
+        expect(await screen.findByText('im.bind.noSendableTitle')).toBeInTheDocument();
+        expect(screen.getByText('im.bind.noSendableBody')).toBeInTheDocument();
+        expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    });
+
     it('keeps the dialog open and reports a failed bind', async () => {
         m.bind.mockRejectedValue(new Error('boom'));
-        show(host([chat('tg:3', 'Free')]));
+        show(host([chat('telegram:3', 'Free')]));
         fireEvent.click(await screen.findByRole('button', { name: /im\.tags\.bind/ }));
         fireEvent.click(await screen.findByRole('radio'));
         fireEvent.click(screen.getByRole('button', { name: 'im.bind.submit' }));

@@ -19,7 +19,7 @@ const host = (over: Partial<NonNullable<ProjectsHost['im']>> = {}): ProjectsHost
     notify: m.notify,
     im: {
         listBots: async () => [{ uuid: 'b1', name: 'My bot', platform: 'telegram', online: true }],
-        listChats: async () => [chat('tg:1', 'yz'), chat('tg:2', 'New chat'), chat('tg:3', 'Muted', { state: 'blocked' })],
+        listChats: async () => [chat('telegram:1', 'yz'), chat('telegram:2', 'New chat'), chat('telegram:3', 'Muted', { state: 'blocked' })],
         ...over,
     },
 });
@@ -29,7 +29,7 @@ const summary = (id: string, name: string, over: Record<string, unknown> = {}) =
 const show = (h: ProjectsHost) => render(<MemoryRouter><ProjectsHostProvider host={h}><ImSettingsPage /></ProjectsHostProvider></MemoryRouter>);
 
 beforeEach(() => {
-    m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false } satisfies ChannelBinding]);
+    m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'telegram:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false } satisfies ChannelBinding]);
     m.bind.mockResolvedValue({});
     m.get.mockResolvedValue({ data: { projects: [summary('p1', 'Alpha'), summary('p2', 'Docs'), summary('f1', 'notes', { type: 'folder', main_thread_id: undefined, path: '/home/me/notes' })] }, response: new Response() });
 });
@@ -54,8 +54,8 @@ describe('ImSettingsPage', () => {
 
     it('links a folder binding to its folder and an existing session to that session', async () => {
         m.list.mockResolvedValue([
-            { id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'f1', thread_id: '', folder: '/home/me/notes', created_at: '', updated_at: '', verbose: false },
-            { id: 'cb2', platform: 'telegram', chat_id: 'tg:2', chat_title: 'New chat', project_id: 'f1', thread_id: 'session1', created_at: '', updated_at: '', verbose: false },
+            { id: 'cb1', platform: 'telegram', chat_id: 'telegram:1', chat_title: 'yz', project_id: 'f1', thread_id: '', folder: '/home/me/notes', created_at: '', updated_at: '', verbose: false },
+            { id: 'cb2', platform: 'telegram', chat_id: 'telegram:2', chat_title: 'New chat', project_id: 'f1', thread_id: 'session1', created_at: '', updated_at: '', verbose: false },
         ]);
         show(host());
         const rows = await screen.findAllByRole('row');
@@ -65,7 +65,7 @@ describe('ImSettingsPage', () => {
     });
 
     it('shows a project binding and its current thread focus separately', async () => {
-        m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', target_project_id: 'p1', thread_id: 'worker', focus_seq: 2, focus_title: 'Fix tests', focus_agent: 'claude_code', created_at: '', updated_at: '', verbose: false }]);
+        m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'telegram:1', chat_title: 'yz', project_id: 'p1', target_project_id: 'p1', thread_id: 'worker', focus_seq: 2, focus_title: 'Fix tests', focus_agent: 'claude_code', created_at: '', updated_at: '', verbose: false }]);
         show(host());
         const rows = await screen.findAllByRole('row');
         await waitFor(() => expect(within(rows[1]).getByRole('link', { name: 'Alpha' })).toBeInTheDocument());
@@ -73,7 +73,7 @@ describe('ImSettingsPage', () => {
     });
 
     it('shows the bound folder session even after the current focus changes', async () => {
-        m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'f1', target_project_id: 'f1', target_thread_id: 'original', target_seq: 1, target_title: 'Original', thread_id: 'other', focus_seq: 2, focus_title: 'Other', focus_agent: 'claude_code', created_at: '', updated_at: '', verbose: false }]);
+        m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'telegram:1', chat_title: 'yz', project_id: 'f1', target_project_id: 'f1', target_thread_id: 'original', target_seq: 1, target_title: 'Original', thread_id: 'other', focus_seq: 2, focus_title: 'Other', focus_agent: 'claude_code', created_at: '', updated_at: '', verbose: false }]);
         show(host());
         const rows = await screen.findAllByRole('row');
         await waitFor(() => expect(within(rows[1]).getByText(/im\.focus\.boundSession.*Original/)).toBeInTheDocument());
@@ -99,7 +99,7 @@ describe('ImSettingsPage', () => {
         const dialog = await screen.findByRole('dialog');
         fireEvent.click(await within(dialog).findByRole('radio', { name: /Docs/ }));
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'p2' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'telegram:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'p2' }));
     });
 
     it('offers folders but not the project a chat is already bound to', async () => {
@@ -118,7 +118,28 @@ describe('ImSettingsPage', () => {
         const dialog = await screen.findByRole('dialog');
         fireEvent.click(await within(dialog).findByRole('radio', { name: /notes/ }));
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
-        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
+        await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'telegram:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
+    });
+
+    it('keeps ids that cannot receive messages in the list, with their type and reason, and does not offer to bind them', async () => {
+        show(host({
+            listChats: async () => [
+                chat('telegram:1', 'yz'),
+                chat('od-4e6ac4d14bcd5071a37a39de902c7141', 'Department', { platform: 'feishu' }),
+                chat('U012ABCDEF', 'A user', { platform: 'slack' }),
+            ],
+        }));
+        const rows = await screen.findAllByRole('row');
+        // header + three chats: the raw overview keeps every entity.
+        expect(rows).toHaveLength(4);
+        expect(within(rows[1]).getByText('im.idType.chat')).toBeInTheDocument();
+        expect(within(rows[2]).getByText('im.idType.department')).toBeInTheDocument();
+        expect(within(rows[2]).getByText('im.idReason.department')).toBeInTheDocument();
+        expect(within(rows[2]).getByRole('button', { name: 'im.settings.bindAction' })).toBeDisabled();
+        // An id we cannot read is marked unknown, with the reason, and also cannot be bound.
+        expect(within(rows[3]).getByText('im.idType.unknown')).toBeInTheDocument();
+        expect(within(rows[3]).getByText('im.idReason.userNotChat')).toBeInTheDocument();
+        expect(within(rows[3]).getByRole('button', { name: 'im.settings.bindAction' })).toBeDisabled();
     });
 
     it('opens the host\'s access dialog for a bot', async () => {
