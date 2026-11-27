@@ -45,18 +45,36 @@ No additional options are required for standard usage.
 
 No public inbound webhook URL is required; the bot initiates the connection.
 
-## ID routing
+## ID kinds and routing
 
-`SendMessage` automatically selects `receive_id_type` from the target ID's
-prefix (Feishu writes the ID kind into the prefix):
+Feishu writes the kind of an ID into its prefix. `SendMessage` selects
+`receive_id_type` from it (`feishu.go`, `getReceiveIdType`):
 
-| Prefix | `receive_id_type` | Meaning |
-|---|---|---|
-| `oc_` | `chat_id` | Conversation (group or one-to-one) |
-| `ou_` | `open_id` | User, scoped to this app |
-| `on_` | `union_id` | User, scoped to the app developer |
-| *(contains `@`)* | `email` | Email address |
-| *(no prefix)* | `user_id` | Tenant-assigned user id |
+| Prefix | `receive_id_type` | Meaning | Receiver? |
+|---|---|---|---|
+| `oc_` | `chat_id` | Conversation (group or one-to-one) | ✅ |
+| `ou_` | `open_id` | User, scoped to this app | ✅ |
+| `on_` | `union_id` | User, scoped to the app developer | ✅ (the send API lists `union_id` among its `receive_id_type` values) |
+| *(contains `@`)* | `email` | Email address | ✅ |
+| *(no prefix)* | `user_id` | Tenant-assigned user id | ✅ |
+| `od-` | — | Department (`open_department_id`) | ❌ not a message receiver |
+| `cli_` | — | App id | ❌ not a message receiver |
+| tenant key | — | Tenant identity (16 hex chars, no prefix) | ❌ not a message receiver; indistinguishable from a `user_id` by shape |
+
+What the adapter stores as `core.Message.Recipient.ID` (`feishu.go`,
+`convertLarkMessageToCore`):
+
+- **Direct message** — the sender's `user_id` when present, otherwise their
+  `open_id`; the p2p conversation's `oc_` id is kept only in
+  `Metadata["original_chat_id"]`.
+- **Group / channel** — the event's `chat_id` (`oc_…`).
+- **Card press** — the `chat` value the card was sent with when it belongs to
+  the same DM (`card_callback.go`), so a DM stays keyed by its user id/open id.
+
+The Projects bind selector offers only the receiver kinds above; `od-` and
+`cli_` rows stay visible in IM settings with the reason but cannot be bound.
+See [`.design/projects-im.md`](../../../.design/projects-im.md#绑定候选的可发送性id-类型)
+for that policy and `.research/im-id-types.md` for the full evidence.
 
 ## Capabilities
 

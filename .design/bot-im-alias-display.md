@@ -107,6 +107,12 @@ Considered and dropped: provenance columns (`alias_source`, `display_name_source
 - A name typed for a group member (`AddGroupActor`) is stored as the actor's `display_name` and a later platform name for that actor replaces it, as before; actors carry no separate alias.
 - A direct chat that is not paired yet has no peer, so it shows its id.
 
+Which entity ids each platform can actually address as a message receiver (and
+which cannot: a Feishu department or app id, a Slack user id, a WhatsApp group
+JID) is documented in
+[`imbot/platform/README.md` § ID kinds and send targets](../imbot/platform/README.md#id-kinds-and-send-targets),
+with the binding policy in [`projects-im.md`](./projects-im.md#绑定候选的可发送性id-类型).
+
 ## 7. Split out of this change
 
 Built, tested and kept on the branch `tp/audit-and-design-bot-im-alias-di-c6b317`, not part of this PR:

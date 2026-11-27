@@ -40,6 +40,14 @@ The bot wraps `wecom.WecomBot` from the tingly-dev weixin SDK.  The underlying
 transport is a **WebSocket** connection managed by the SDK.  `Connect` starts
 the WebSocket session and `Disconnect` stops it.
 
+## ID routing
+
+Inbound messages use `Metadata["chatId"]` when present (groups) and otherwise
+the recipient id (`msg.To`) as `Recipient.ID` (`adapter.go`). Both are send
+targets: a group `chatid` and an external user id for a direct chat. The
+upstream SDK sets `chatId` only when the event carries one; a direct message
+without a target is not recorded.
+
 ## Capabilities
 
 | Feature | Supported |

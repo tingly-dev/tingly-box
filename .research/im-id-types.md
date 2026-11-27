@@ -9,6 +9,11 @@
 > Method: read the code that produces the records, the platform adapters, and
 > the SDK type comments in `GOMODULE` (no live API calls, no real credentials).
 > Docs are cited as `file:line`; SDK comments reproduce the vendor docs.
+>
+> **Maintained mapping**: [`imbot/platform/README.md`](../imbot/platform/README.md#id-kinds-and-send-targets)
+> (§ ID kinds and send targets) plus the `## ID routing` section of each
+> platform README. This file is the evidence log behind that mapping; change
+> the platform README when an adapter changes, and keep the citations here.
 
 ## 1. Where the binding candidates come from
 

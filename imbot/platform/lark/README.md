@@ -42,6 +42,12 @@ Auth: core.AuthConfig{
 - The WebSocket event-push endpoint also targets Lark's infrastructure.
 - `PlatformInfo()` returns `"lark"` as the platform identifier.
 
+## ID routing
+
+Lark is Feishu with a different base URL, so its ID kinds and `receive_id_type`
+routing are identical: see
+[`feishu/README.md` § ID kinds and routing](../feishu/README.md#id-kinds-and-routing).
+
 ## Webhook helpers
 
 `GetWebhookURL(path)` returns `/webhook/lark/<path>` — use this if you

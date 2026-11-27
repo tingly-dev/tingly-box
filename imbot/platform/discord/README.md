@@ -70,6 +70,14 @@ Discord encodes message references as `"channelID:messageID"` (colon-separated).
 `React`, `EditMessage`, and `DeleteMessage` all parse this format to call the
 appropriate discordgo API.
 
+## ID routing
+
+Inbound `MessageCreate` events store `msg.ChannelID` as `Recipient.ID`
+(`adapter.go`), and that channel id is what `SendMessage` posts to. Discord
+channel, user and guild ids are all snowflakes, so the shape alone cannot tell
+them apart; the record's origin (a received message) is what makes it a
+channel. A user id must not be used as a send target.
+
 ## Capabilities
 
 | Feature | Supported |

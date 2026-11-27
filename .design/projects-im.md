@@ -98,12 +98,14 @@ Projects 事件 ──▶ 订阅了该落点的 binding ──▶ 渲染到 chat
 （`frontend/src/pages/projects/imHost.tsx`）。这两个列表都取自入站消息的
 `Recipient.ID`，但**记录里没有保存 ID 类型**；不同平台、甚至同一平台的不同实体
 （飞书 `oc_` 会话、`ou_` open_id、`od-` 部门、`cli_` 应用……）格式和可发送性不同。
-逐平台依据（适配器 `file:line`、SDK 的 `receive_id_type` 列表）见
-[`../.research/im-id-types.md`](../.research/im-id-types.md)。
 
 分类器是显式映射表，不靠 UI 猜字符串：
 `frontend/packages/projects/src/components/im/imIdKind.ts`
-（`classifyImId(platform, recordKind, id)`）。三种结果：
+（`classifyImId(platform, recordKind, id)`）。平台侧映射的权威文档是
+[`imbot/platform/README.md`](../imbot/platform/README.md#id-kinds-and-send-targets)
+（§ ID kinds and send targets）和各平台 README 的 `## ID routing`；
+[`../.research/im-id-types.md`](../.research/im-id-types.md) 保留逐条证据
+（适配器 `file:line`、SDK `receive_id_type` 列表）。三种结果：
 
 | class | 含义 | 绑定选择器 | 原始总览（IM 设置） |
 |---|---|---|---|
