@@ -464,7 +464,7 @@ export default function ProjectPage() {
                             <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
                         </Tooltip>
                         <Tooltip title={t('projectSettings.title')}>
-                            <IconButton size="small" onClick={() => setSettingsTab('general')} aria-label={t('projectSettings.title')}><Settings fontSize="small" /></IconButton>
+                            <IconButton size="small" onClick={() => setSettingsTab('basic')} aria-label={t('projectSettings.title')}><Settings fontSize="small" /></IconButton>
                         </Tooltip>
                     </>
                 )}

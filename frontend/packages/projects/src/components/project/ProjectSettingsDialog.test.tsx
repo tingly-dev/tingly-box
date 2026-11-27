@@ -16,7 +16,7 @@ function open(p: Record<string, unknown> = project) {
     m.get.mockResolvedValue({ data: { max_running_threads_limit: 100 }, response: new Response() });
     m.patch.mockResolvedValue({ data: { ...p }, response: new Response() });
     // The fork dialog (nested under General) navigates, so the tree needs a router.
-    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="general" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="basic" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
     return screen.getByRole('textbox', { name: 'projectSettings.maxRunning' }) as HTMLInputElement;
 }
 const save = () => screen.getByRole('button', { name: 'common.save' });
@@ -92,11 +92,11 @@ it('saves a newly selected primary without changing other modes', async () => {
     ] };
     m.get.mockResolvedValue({ data: {}, response: new Response() });
     m.patch.mockResolvedValue({ data: p, response: new Response() });
-    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="environment" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="basic" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
     expect(screen.getByRole('combobox', { name: 'repo.mode /docs' })).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'repo.makePrimary' }));
     fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/git', workspace_mode: 'worktree' }, { path: '/docs', workspace_mode: 'shared' }], primary_repo_path: '/docs' } }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', expect.objectContaining({ params: { path: { id: 'p' } }, body: expect.objectContaining({ directories: [{ path: '/git', workspace_mode: 'worktree' }, { path: '/docs', workspace_mode: 'shared' }], primary_repo_path: '/docs' }) })));
 });
 
 const sw = (g: string) => screen.getByRole('switch', { name: `projectSettings.githubGroups.${g}` });
@@ -124,4 +124,26 @@ it('starts the switches from project.github_auto and saves an empty list when al
     expect(save()).not.toBeDisabled();
     fireEvent.click(save());
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', body({ github_auto: [] })));
+});
+
+it('has four tabs in daily-first order: Basic, Runtime, Memory, Usage', () => {
+    open();
+    expect(screen.getAllByRole('tab').map((el) => el.textContent)).toEqual([
+        'projectSettings.tabBasic', 'projectSettings.tabRuntime', 'projectSettings.tabMemory', 'projectSettings.tabUsage',
+    ]);
+});
+
+it('does not silently discard unsaved edits when switching tabs', async () => {
+    const onTab = vi.fn();
+    m.get.mockResolvedValue({ data: { max_running_threads_limit: 100, sandboxes: [] }, response: new Response() });
+    m.patch.mockResolvedValue({ data: { ...project }, response: new Response() });
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={project as never} open tab="basic" onTab={onTab} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+    fireEvent.change(screen.getByRole('textbox', { name: 'project.name' }), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'projectSettings.tabRuntime' }));
+    expect(screen.getByText('projectSettings.discardTitle')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }));
+    expect(onTab).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('tab', { name: 'projectSettings.tabRuntime' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'projectSettings.discardConfirm' }));
+    expect(onTab).toHaveBeenCalledWith('runtime');
 });
