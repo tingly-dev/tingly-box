@@ -2,15 +2,13 @@ package scenario
 
 import (
 	"time"
-
-	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 )
 
 // ─── Text ──────────────────────────────────────────────────────────────────────
 
 // TextScenario is the baseline: a single user message and a plain text reply.
 func TextScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "text",
 		Description: "Basic text completion: user asks a question, assistant answers",
 		Tags:        []string{"text"},
@@ -20,19 +18,7 @@ func TextScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
-	}
+	})
 }
 
 func openAITextResponse() MockResponseBuilder {
@@ -115,7 +101,7 @@ func googleTextResponse() MockResponseBuilder {
 
 // ToolUseScenario exercises a single tool/function call.
 func ToolUseScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "tool_use",
 		Description: "Single tool call: assistant calls get_weather with location arg",
 		Tags:        []string{"tool_use"},
@@ -125,19 +111,7 @@ func ToolUseScenario() Scenario {
 			FormatAnthropic:       anthropicToolUseResponse(),
 			FormatGoogle:          googleToolUseResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertHasToolCalls(1),
-			check.AssertToolCallName(0, "get_weather"),
-			check.AssertToolCallArgs(0, "location", "Paris"),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertHasToolCalls(1),
-		},
-	}
+	})
 }
 
 func openAIToolUseResponse() MockResponseBuilder {
@@ -239,7 +213,7 @@ func googleToolUseResponse() MockResponseBuilder {
 
 // ToolResultScenario tests a multi-turn conversation including a tool result message.
 func ToolResultScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "tool_result",
 		Description: "Multi-turn with tool result: user→assistant(tool_use)→user(tool_result)→assistant",
 		Tags:        []string{"tool_use", "multi_turn"},
@@ -249,25 +223,14 @@ func ToolResultScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
-	}
+	})
 }
 
 // ─── Thinking ─────────────────────────────────────────────────────────────────
 
 // ThinkingScenario tests that extended thinking blocks are present in Anthropic responses.
 func ThinkingScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "thinking",
 		Description: "Extended thinking: response contains a thinking block before text",
 		Tags:        []string{"thinking"},
@@ -277,18 +240,7 @@ func ThinkingScenario() Scenario {
 			FormatOpenAIResponses: openAIResponsesTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
-	}
+	})
 }
 
 func anthropicThinkingResponse() MockResponseBuilder {
@@ -324,7 +276,7 @@ func anthropicThinkingResponse() MockResponseBuilder {
 
 // MultiTurnScenario tests a conversation with system prompt + 2 turns of history.
 func MultiTurnScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "multi_turn",
 		Description: "Multi-turn conversation: system + user/assistant history + final user message",
 		Tags:        []string{"multi_turn"},
@@ -334,25 +286,14 @@ func MultiTurnScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
-	}
+	})
 }
 
 // ─── Streaming Text ───────────────────────────────────────────────────────────
 
 // StreamingTextScenario tests SSE streaming for a plain text response.
 func StreamingTextScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "streaming_text",
 		Description: "Streaming text: SSE chunks assembling to a complete text response",
 		Tags:        []string{"text", "streaming"},
@@ -362,27 +303,14 @@ func StreamingTextScenario() Scenario {
 			FormatAnthropic:       anthropicTextResponse(),
 			FormatGoogle:          googleTextResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(3),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("Paris"),
-			check.AssertContentNonEmpty(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(1),
-			check.AssertContentNonEmpty(),
-		},
-	}
+	})
 }
 
 // ─── Streaming Tool Use ───────────────────────────────────────────────────────
 
 // StreamingToolUseScenario tests SSE streaming for a tool call response.
 func StreamingToolUseScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "streaming_tool_use",
 		Description: "Streaming tool use: SSE chunks with tool call deltas",
 		Tags:        []string{"tool_use", "streaming"},
@@ -392,20 +320,7 @@ func StreamingToolUseScenario() Scenario {
 			FormatAnthropic:       anthropicToolUseResponse(),
 			FormatGoogle:          googleToolUseResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertResponsesItemIDsCanonical(),
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(3),
-			check.AssertHasToolCalls(1),
-			check.AssertToolCallName(0, "get_weather"),
-			check.AssertToolCallArgs(0, "location", "Paris"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertStreamEventCount(1),
-			check.AssertHasToolCalls(1),
-		},
-	}
+	})
 }
 
 // ─── Incomplete ──────────────────────────────────────────────────────────────
@@ -415,7 +330,7 @@ func StreamingToolUseScenario() Scenario {
 // must preserve the partial content and map the finish reason correctly
 // (Chat → "length", Anthropic → "max_tokens", Responses → "incomplete").
 func IncompleteScenario() Scenario {
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:        "incomplete",
 		Description: "Provider truncated response due to max_output_tokens",
 		Tags:        []string{"incomplete", "length"},
@@ -425,18 +340,7 @@ func IncompleteScenario() Scenario {
 			FormatAnthropic:       anthropicIncompleteResponse(),
 			FormatGoogle:          googleIncompleteResponse(),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertRoleEquals("assistant"),
-			check.AssertContentContains("truncated"),
-			check.AssertContentNonEmpty(),
-			check.AssertUsageNonZero(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-			check.AssertContentNonEmpty(),
-		},
-	}
+	})
 }
 
 func openAIIncompleteResponse() MockResponseBuilder {
@@ -608,7 +512,7 @@ func openAIResponsesIncompleteSSE() []string {
 // ErrorScenario tests that provider error responses are forwarded to the client.
 func ErrorScenario() Scenario {
 	spec429 := GetErrorSpec("virtual-fail-429")
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:           "error",
 		Description:    "Provider rate limit error (429) propagated to client",
 		Tags:           []string{"error"},
@@ -619,20 +523,13 @@ func ErrorScenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec429),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec429),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-			check.AssertErrorMessageContains("rate limit"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-		},
-	}
+	})
 }
 
 // Error500Scenario tests upstream server error (500) propagated to client.
 func Error500Scenario() Scenario {
 	spec500 := GetErrorSpec("virtual-fail-500")
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:           "error-500",
 		Description:    "Provider upstream error (500) propagated to client",
 		Tags:           []string{"error"},
@@ -643,20 +540,13 @@ func Error500Scenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec500),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec500),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-			check.AssertErrorMessageContains("upstream"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-		},
-	}
+	})
 }
 
 // ErrorAuth401Scenario tests authentication failure (401) propagated to client.
 func ErrorAuth401Scenario() Scenario {
 	spec401 := GetErrorSpec("virtual-fail-auth-401")
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:           "error-auth-401",
 		Description:    "Authentication failure (401) propagated to client",
 		Tags:           []string{"error", "auth"},
@@ -667,20 +557,13 @@ func ErrorAuth401Scenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec401),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec401),
 		},
-		Assertions: []check.Assertion{
-			check.AssertHTTPStatus(401),
-			check.AssertErrorMessageContains("authentication"),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatusAtLeast(400),
-		},
-	}
+	})
 }
 
 // ErrorMidStreamCloseScenario tests mid-stream connection close failure.
 func ErrorMidStreamCloseScenario() Scenario {
 	specClose := GetErrorSpec("virtual-fail-midstream-close")
-	return Scenario{
+	return withBuiltinExpectations(Scenario{
 		Name:           "error-midstream-close",
 		Description:    "Mid-stream connection close failure",
 		Tags:           []string{"error", "midstream"},
@@ -691,20 +574,7 @@ func ErrorMidStreamCloseScenario() Scenario {
 			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, specClose),
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, specClose),
 		},
-		Assertions: []check.Assertion{
-			// A mid-stream cut must be handled gracefully: the response stays
-			// 200 (headers were already sent) and the stream terminates in a
-			// client-consumable way. The client must preserve the events it
-			// already received, report the stream error explicitly, and never
-			// present the truncated turn as normally completed.
-			check.AssertHTTPStatus(200),
-			check.AssertStreamError(),
-			check.AssertStreamNotCompleted(),
-		},
-		Structural: []check.Assertion{
-			check.AssertHTTPStatus(200),
-		},
-	}
+	})
 }
 
 // ─── OpenAI Responses API mock builders ───────────────────────────────────────

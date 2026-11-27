@@ -1,11 +1,8 @@
 package scenario
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/tidwall/gjson"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -27,15 +24,30 @@ type Response struct {
 // Expect maps a small declarative vocabulary onto the existing check library.
 // Pointers distinguish an omitted assertion from an explicit empty/zero value.
 type Expect struct {
-	JSONFields      map[string]json.RawMessage `json:"json_fields,omitempty"`
-	BodyContains    *string                    `json:"body_contains,omitempty"`
-	HTTPStatus      *int                       `json:"http_status,omitempty"`
-	ContentEquals   *string                    `json:"content_equals,omitempty"`
-	ContentContains *string                    `json:"content_contains,omitempty"`
-	FinishReason    *string                    `json:"finish_reason,omitempty"`
-	ToolCallCount   *int                       `json:"tool_call_count,omitempty"`
-	ContentNonEmpty bool                       `json:"content_non_empty,omitempty"`
-	StreamEvents    []string                   `json:"stream_events,omitempty"`
+	Role                      *string                    `json:"role,omitempty"`
+	HTTPStatusAtLeast         *int                       `json:"http_status_at_least,omitempty"`
+	MinStreamEvents           *int                       `json:"min_stream_events,omitempty"`
+	StreamError               bool                       `json:"stream_error,omitempty"`
+	StreamNotCompleted        bool                       `json:"stream_not_completed,omitempty"`
+	UsageNonZero              bool                       `json:"usage_non_zero,omitempty"`
+	ResponsesItemIDsCanonical bool                       `json:"responses_item_ids_canonical,omitempty"`
+	ToolCalls                 []ToolCallExpect           `json:"tool_calls,omitempty"`
+	JSONFields                map[string]json.RawMessage `json:"json_fields,omitempty"`
+	BodyContains              *string                    `json:"body_contains,omitempty"`
+	HTTPStatus                *int                       `json:"http_status,omitempty"`
+	ContentEquals             *string                    `json:"content_equals,omitempty"`
+	ContentContains           *string                    `json:"content_contains,omitempty"`
+	FinishReason              *string                    `json:"finish_reason,omitempty"`
+	ToolCallCount             *int                       `json:"tool_call_count,omitempty"`
+	ContentNonEmpty           bool                       `json:"content_non_empty,omitempty"`
+	StreamEvents              []string                   `json:"stream_events,omitempty"`
+}
+
+// ToolCallExpect checks the tool at the corresponding position. Arguments are
+// top-level string values; use json_fields for native response JSON.
+type ToolCallExpect struct {
+	Name      *string           `json:"name,omitempty"`
+	Arguments map[string]string `json:"arguments,omitempty"`
 }
 
 func (e *Expect) Assertions() []check.Assertion {
@@ -44,13 +56,9 @@ func (e *Expect) Assertions() []check.Assertion {
 	}
 	var out []check.Assertion
 	if e.BodyContains != nil {
-		want := *e.BodyContains
-		out = append(out, check.Assertion{Name: "body_contains", Check: func(r *check.RoundTripResult) error {
-			if !strings.Contains(string(r.RawBody), want) {
-				return fmt.Errorf("body does not contain %q", want)
-			}
-			return nil
-		}})
+		a := check.AssertErrorMessageContains(*e.BodyContains)
+		a.Name = "body_contains"
+		out = append(out, a)
 	}
 	keys := make([]string, 0, len(e.JSONFields))
 	for path := range e.JSONFields {
@@ -58,35 +66,7 @@ func (e *Expect) Assertions() []check.Assertion {
 	}
 	sort.Strings(keys)
 	for _, path := range keys {
-		expected := append(json.RawMessage(nil), e.JSONFields[path]...)
-		out = append(out, check.Assertion{Name: "json_field(" + path + ")", Check: func(r *check.RoundTripResult) error {
-			if !json.Valid(r.RawBody) {
-				return fmt.Errorf("response body is not JSON")
-			}
-			actual := gjson.GetBytes(r.RawBody, path)
-			if !actual.Exists() {
-				return fmt.Errorf("missing JSON field %s", path)
-			}
-			decode := func(raw []byte) (any, error) {
-				var value any
-				decoder := json.NewDecoder(bytes.NewReader(raw))
-				decoder.UseNumber()
-				err := decoder.Decode(&value)
-				return value, err
-			}
-			want, err := decode(expected)
-			if err != nil {
-				return err
-			}
-			got, err := decode([]byte(actual.Raw))
-			if err != nil {
-				return err
-			}
-			if !reflect.DeepEqual(want, got) {
-				return fmt.Errorf("JSON field %s: got %s, want %s", path, actual.Raw, expected)
-			}
-			return nil
-		}})
+		out = append(out, check.AssertJSONField(path, e.JSONFields[path]))
 	}
 	if e.HTTPStatus != nil {
 		out = append(out, check.AssertHTTPStatus(*e.HTTPStatus))
@@ -108,6 +88,40 @@ func (e *Expect) Assertions() []check.Assertion {
 	}
 	if len(e.StreamEvents) > 0 {
 		out = append(out, check.AssertStreamEventsContain(e.StreamEvents...))
+	}
+	if e.Role != nil {
+		out = append(out, check.AssertRoleEquals(*e.Role))
+	}
+	if e.HTTPStatusAtLeast != nil {
+		out = append(out, check.AssertHTTPStatusAtLeast(*e.HTTPStatusAtLeast))
+	}
+	if e.MinStreamEvents != nil {
+		out = append(out, check.AssertStreamEventCount(*e.MinStreamEvents))
+	}
+	if e.StreamError {
+		out = append(out, check.AssertStreamError())
+	}
+	if e.StreamNotCompleted {
+		out = append(out, check.AssertStreamNotCompleted())
+	}
+	if e.UsageNonZero {
+		out = append(out, check.AssertUsageNonZero())
+	}
+	if e.ResponsesItemIDsCanonical {
+		out = append(out, check.AssertResponsesItemIDsCanonical())
+	}
+	for i, call := range e.ToolCalls {
+		if call.Name != nil {
+			out = append(out, check.AssertToolCallName(i, *call.Name))
+		}
+		keys := make([]string, 0, len(call.Arguments))
+		for key := range call.Arguments {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			out = append(out, check.AssertToolCallArgs(i, key, call.Arguments[key]))
+		}
 	}
 	return out
 }

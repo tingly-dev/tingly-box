@@ -1,10 +1,13 @@
 package protocoltest
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 )
 
 // TransitiveChain represents a two-hop conversion path: A→B then B→C.
@@ -90,10 +93,12 @@ func skipTransitiveScenario(s Scenario) bool {
 	return s.SkipTransitive
 }
 
-// normalizeJSON strips whitespace from a JSON string for comparison.
-// Falls back to trimmed string comparison if the input is not valid JSON.
-func normalizeJSON(s string) string {
-	return strings.Join(strings.Fields(s), "")
+// equivalentArguments compares JSON structurally; malformed data remains literal.
+func equivalentArguments(a, b string) bool {
+	if json.Valid([]byte(a)) && json.Valid([]byte(b)) {
+		return check.EqualJSON([]byte(a), []byte(b))
+	}
+	return a == b
 }
 
 // ExecuteAllTransitive runs two-hop chain tests without requiring testing.T.
@@ -213,7 +218,7 @@ func semanticEquivalenceErrors(label string, r1, r2 *RoundTripResult) []Assertio
 			if r1.ToolCalls[i].Name != r2.ToolCalls[i].Name {
 				add(fmt.Sprintf("tool_call[%d].name", i), fmt.Sprintf("hop1=%q hop2=%q", r1.ToolCalls[i].Name, r2.ToolCalls[i].Name))
 			}
-			if normalizeJSON(r1.ToolCalls[i].Arguments) != normalizeJSON(r2.ToolCalls[i].Arguments) {
+			if !equivalentArguments(r1.ToolCalls[i].Arguments, r2.ToolCalls[i].Arguments) {
 				add(fmt.Sprintf("tool_call[%d].arguments", i), fmt.Sprintf("hop1=%s hop2=%s", r1.ToolCalls[i].Arguments, r2.ToolCalls[i].Arguments))
 			}
 		}

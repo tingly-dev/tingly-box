@@ -1,0 +1,161 @@
+{
+  "text": {
+    "expect": {
+      "http_status": 200,
+      "role": "assistant",
+      "content_contains": "Paris",
+      "responses_item_ids_canonical": true,
+      "content_non_empty": true,
+      "usage_non_zero": true
+    },
+    "structural": {
+      "http_status": 200,
+      "content_non_empty": true
+    }
+  },
+  "tool_use": {
+    "expect": {
+      "http_status": 200,
+      "tool_call_count": 1,
+      "tool_calls": [
+        {
+          "name": "get_weather",
+          "arguments": {
+            "location": "Paris"
+          }
+        }
+      ],
+      "responses_item_ids_canonical": true,
+      "usage_non_zero": true
+    },
+    "structural": {
+      "http_status": 200,
+      "tool_call_count": 1
+    }
+  },
+  "tool_result": {
+    "expect": {
+      "http_status": 200,
+      "role": "assistant",
+      "content_contains": "Paris",
+      "content_non_empty": true,
+      "usage_non_zero": true
+    },
+    "structural": {
+      "http_status": 200,
+      "content_non_empty": true
+    }
+  },
+  "thinking": {
+    "expect": {
+      "http_status": 200,
+      "role": "assistant",
+      "content_contains": "Paris",
+      "content_non_empty": true,
+      "usage_non_zero": true
+    },
+    "structural": {
+      "http_status": 200,
+      "content_non_empty": true
+    }
+  },
+  "multi_turn": {
+    "expect": {
+      "http_status": 200,
+      "role": "assistant",
+      "content_contains": "Paris",
+      "content_non_empty": true,
+      "usage_non_zero": true
+    },
+    "structural": {
+      "http_status": 200,
+      "content_non_empty": true
+    }
+  },
+  "streaming_text": {
+    "expect": {
+      "http_status": 200,
+      "min_stream_events": 3,
+      "role": "assistant",
+      "content_contains": "Paris",
+      "responses_item_ids_canonical": true,
+      "content_non_empty": true
+    },
+    "structural": {
+      "http_status": 200,
+      "min_stream_events": 1,
+      "content_non_empty": true
+    }
+  },
+  "streaming_tool_use": {
+    "expect": {
+      "http_status": 200,
+      "min_stream_events": 3,
+      "tool_call_count": 1,
+      "tool_calls": [
+        {
+          "name": "get_weather",
+          "arguments": {
+            "location": "Paris"
+          }
+        }
+      ],
+      "responses_item_ids_canonical": true
+    },
+    "structural": {
+      "http_status": 200,
+      "min_stream_events": 1,
+      "tool_call_count": 1
+    }
+  },
+  "incomplete": {
+    "expect": {
+      "http_status": 200,
+      "role": "assistant",
+      "content_contains": "truncated",
+      "content_non_empty": true,
+      "usage_non_zero": true
+    },
+    "structural": {
+      "http_status": 200,
+      "content_non_empty": true
+    }
+  },
+  "error": {
+    "expect": {
+      "http_status_at_least": 400,
+      "body_contains": "rate limit"
+    },
+    "structural": {
+      "http_status_at_least": 400
+    }
+  },
+  "error-500": {
+    "expect": {
+      "http_status_at_least": 400,
+      "body_contains": "upstream"
+    },
+    "structural": {
+      "http_status_at_least": 400
+    }
+  },
+  "error-auth-401": {
+    "expect": {
+      "http_status": 401,
+      "body_contains": "authentication"
+    },
+    "structural": {
+      "http_status_at_least": 400
+    }
+  },
+  "error-midstream-close": {
+    "expect": {
+      "http_status": 200,
+      "stream_error": true,
+      "stream_not_completed": true
+    },
+    "structural": {
+      "http_status": 200
+    }
+  }
+}

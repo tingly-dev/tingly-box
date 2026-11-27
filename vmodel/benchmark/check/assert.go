@@ -1,12 +1,16 @@
 package check
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // AssertContentEquals returns an Assertion that the response content equals expected.
@@ -111,7 +115,7 @@ func AssertToolCallName(index int, name string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("tool_call_name[%d](%q)", index, name),
 		Check: func(r *RoundTripResult) error {
-			if index >= len(r.ToolCalls) {
+			if index < 0 || index >= len(r.ToolCalls) {
 				return fmt.Errorf("tool_call[%d]: index out of range (have %d)", index, len(r.ToolCalls))
 			}
 			if r.ToolCalls[index].Name != name {
@@ -127,13 +131,17 @@ func AssertToolCallArgs(index int, key, value string) Assertion {
 	return Assertion{
 		Name: fmt.Sprintf("tool_call_args[%d](%q=%q)", index, key, value),
 		Check: func(r *RoundTripResult) error {
-			if index >= len(r.ToolCalls) {
+			if index < 0 || index >= len(r.ToolCalls) {
 				return fmt.Errorf("tool_call[%d]: index out of range (have %d)", index, len(r.ToolCalls))
 			}
 			args := r.ToolCalls[index].Arguments
-			needle := fmt.Sprintf(`%q:%q`, key, value)
-			altNeedle := fmt.Sprintf(`%q: %q`, key, value)
-			if !strings.Contains(args, needle) && !strings.Contains(args, altNeedle) {
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(args), &fields); err != nil {
+				return fmt.Errorf("tool_call[%d].arguments: %w", index, err)
+			}
+			expected, _ := json.Marshal(value)
+			actual, ok := fields[key]
+			if !ok || !EqualJSON(actual, expected) {
 				return fmt.Errorf("tool_call[%d].arguments does not contain %s=%s in %q", index, key, value, args)
 			}
 			return nil
@@ -522,4 +530,40 @@ func outputItems(resp map[string]any) []map[string]any {
 func str(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// EqualJSON compares valid JSON values structurally, preserving array order,
+// string whitespace and number precision. Invalid JSON never compares equal.
+func EqualJSON(actual, expected []byte) bool {
+	if !json.Valid(actual) || !json.Valid(expected) {
+		return false
+	}
+	decode := func(raw []byte) (any, error) {
+		var value any
+		d := json.NewDecoder(bytes.NewReader(raw))
+		d.UseNumber()
+		err := d.Decode(&value)
+		return value, err
+	}
+	got, e1 := decode(actual)
+	want, e2 := decode(expected)
+	return e1 == nil && e2 == nil && reflect.DeepEqual(got, want)
+}
+
+// AssertJSONField checks a native response body using the existing GJSON path syntax.
+func AssertJSONField(path string, expected json.RawMessage) Assertion {
+	expected = append(json.RawMessage(nil), expected...)
+	return Assertion{Name: "json_field(" + path + ")", Check: func(r *RoundTripResult) error {
+		if !json.Valid(r.RawBody) {
+			return fmt.Errorf("response body is not JSON")
+		}
+		actual := gjson.GetBytes(r.RawBody, path)
+		if !actual.Exists() {
+			return fmt.Errorf("missing JSON field %s", path)
+		}
+		if !EqualJSON([]byte(actual.Raw), expected) {
+			return fmt.Errorf("JSON field %s: got %s, want %s", path, actual.Raw, expected)
+		}
+		return nil
+	}}
 }

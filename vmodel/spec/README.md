@@ -153,3 +153,27 @@ Anonymous application-specific callbacks must be given a name by their owning
 package; they are not automatically discovered or exported. Captured requests
 and golden output files remain test inputs/evidence, rather than being
 misidentified as complete model definitions.
+
+### Built-in expectations
+
+The existing `expect` and `structural` blocks also expose the existing role,
+usage, tool-call, status and streaming checks. For example:
+
+```yaml
+expect:
+  http_status: 200
+  role: assistant
+  tool_call_count: 1
+  tool_calls:
+    - name: get_weather
+      arguments: {location: Paris}
+  usage_non_zero: true
+```
+
+`http_status_at_least`, `min_stream_events`, `stream_error`,
+`stream_not_completed` and `responses_item_ids_canonical` select their
+corresponding existing checks. `tool_calls` is positioned by index; arguments
+match top-level string values. Existing `json_fields` uses structural JSON
+comparison for native response bodies. The embedded built-in contracts use the
+same Expect type and are exported with the canonical definitions. Golden
+snapshots and their exact wire comparison are unchanged.

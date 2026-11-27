@@ -166,3 +166,16 @@ four SDK drivers, virtual/vmodel replay, LB, duo including default memory
 checks, routing and catalog checks, plus the harness/protocoltest package
 suites. Registered skips and two existing FP3 recording gaps remain visible;
 live-provider credentials and missing real agent CLIs were outside that run.
+
+## Output validation convergence
+
+Keep `expect` / `structural` as the sole response expectation format and
+`vmodel/benchmark/check` as the implementation. Built-in scenario expectations
+are data using the same type; export includes them in canonical definitions.
+Extend the typed fields only for existing checks that need configuration. Do
+not introduce a second rule language, evaluator, or protocol observation model.
+
+Phase one configures the existing built-in assertions and shares structural
+JSON comparison; existing runners and script routing are unchanged. Later,
+reuse the check package for overlapping peripheral harness assertions and
+Golden structural comparison, retaining the exact-wire snapshot mode.
