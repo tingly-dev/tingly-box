@@ -55,6 +55,7 @@ tasks:
       CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'
       CGO_CFLAGS: "-mmacosx-version-min=12.0"
+      CGO_CPPFLAGS: '{{.CGO_CPPFLAGS | default ""}} -include "{{.ROOT_DIR}}/build/darwin/vz_namespace.h"'
       CGO_LDFLAGS: "-mmacosx-version-min=12.0"
       MACOSX_DEPLOYMENT_TARGET: "12.0"
 

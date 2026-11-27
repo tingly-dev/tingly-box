@@ -149,7 +149,11 @@ tasks:
 
   wails:manual:
     cmds:
-      - go build -tags debug,private_mac_apis -trimpath -buildvcs=false -ldflags="{{.VERSION_LDFLAGS}} -w -s" -o bin/{{.BIN_NAME}} {{.PACKAGE_PATH}}
+      - |
+        if [ "{{OS}}" = darwin ]; then
+          export CGO_CPPFLAGS="${CGO_CPPFLAGS:-} -include \"{{.ROOT_DIR}}/build/darwin/vz_namespace.h\""
+        fi
+        go build -tags debug,private_mac_apis -trimpath -buildvcs=false -ldflags="{{.VERSION_LDFLAGS}} -w -s" -o bin/{{.BIN_NAME}} {{.PACKAGE_PATH}}
         mkdir -p bin/{{.APP_NAME}}.app/Contents/{MacOS,Resources}
         cp build/darwin/icons.icns bin/{{.APP_NAME}}.app/Contents/Resources
         cp bin/{{.BIN_NAME}} bin/{{.APP_NAME}}.app/Contents/MacOS

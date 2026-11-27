@@ -16,6 +16,9 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'go.work*'
+      - 'build/darwin/**'
+      - 'Taskfile.wails.yml'
+      - '.github/scripts/verify-macos-gui.sh'
       - '.github/workflows/verify-imbot-projects.yml'
   workflow_dispatch:
 
@@ -28,12 +31,13 @@ concurrency:
 
 jobs:
   platform-build:
-    name: Build CLI and GUI (${{ matrix.os }})
+    name: Native builds (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # The GUI ships on Apple Silicon; the CLI also ships on Intel Macs.
+        os: [windows-latest, macos-latest, macos-15-intel]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -47,16 +51,33 @@ jobs:
       - name: Prepare frontend placeholders for linking
         shell: bash
         run: |
-          mkdir -p internal/web/dist projects/web/dist
+          mkdir -p frontend/dist internal/web/dist projects/web/dist
+          echo '<html></html>' > frontend/dist/index.html
           echo '<html></html>' > internal/web/dist/index.html
           echo '<html></html>' > projects/web/dist/index.html
       - name: Build CLI
         shell: bash
         run: go build -o "$RUNNER_TEMP/tb-cli" ./cli/tingly-box
       - name: Build GUI with native dependencies
+        if: runner.os == 'Windows'
         shell: bash
         working-directory: gui/wails3
         run: go build -tags production,private_mac_apis -o "$RUNNER_TEMP/tb-gui" .
+      - name: Install macOS release build tools
+        if: matrix.os == 'macos-latest'
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+      - name: Verify macOS release build and package
+        if: matrix.os == 'macos-latest'
+        run: bash .github/scripts/verify-macos-gui.sh
+      - name: Verify distinct macOS application delegates
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          nm -Uj bin/TinglyBox.app/Contents/MacOS/tingly-box-gui > "$RUNNER_TEMP/tb-gui.symbols"
+          grep -Fxq '_OBJC_CLASS_$_AppDelegate' "$RUNNER_TEMP/tb-gui.symbols"
+          grep -Fxq '_OBJC_CLASS_$_TinglyVZAppDelegate' "$RUNNER_TEMP/tb-gui.symbols"
       - name: Verify platform sandbox registration and rejection
         run: go test ./projects/internal/project -run '^Test(SandboxRuntimesMatchPlatform|WindowsSandboxUnavailable)$' -count=1
 
