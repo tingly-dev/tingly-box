@@ -27,6 +27,7 @@ export const project: Dict<typeof projectEn> = {
         placeholder: '/path/to/directory', add: '添加', invalid: '无法检查目录',
         mode: '工作目录模式', primary: '主目录', makePrimary: '设为主目录', primaryModeHelp: '仅影响主目录（{{path}}），其他目录保持各自设置。',
         baseHint: '线程从这个分支切出', dirtyHint: '该工作区有未提交的改动；不影响线程，但合并需要干净的工作区。',
+        noCommits: '尚无提交', emptyHint: '该仓库还没有任何提交，线程会直接使用此目录（共享模式）。Worktree 模式需要先有一次初始提交；提交后可以切换模式。',
     },
     messageDetail: {
         label: '消息详细度', detailed: '详细', concise: '简洁',

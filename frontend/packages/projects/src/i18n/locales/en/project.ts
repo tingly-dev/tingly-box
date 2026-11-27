@@ -24,6 +24,7 @@ export const project = {
         placeholder: '/path/to/directory', add: 'Add', invalid: 'Cannot inspect directory',
         mode: 'Workspace mode', primary: 'Primary', makePrimary: 'Make primary', primaryModeHelp: 'Only the primary directory ({{path}}) is affected. Other directories keep their settings.',
         baseHint: 'Threads branch from this branch', dirtyHint: 'This checkout has uncommitted changes; threads are unaffected, but merging needs a clean checkout.',
+        noCommits: 'No commits yet', emptyHint: 'This repository has no commits yet, so threads share this checkout. Worktree mode needs an initial commit; make one, then switch the mode.',
     },
     messageDetail: {
         label: 'Message detail', detailed: 'Detailed', concise: 'Concise',

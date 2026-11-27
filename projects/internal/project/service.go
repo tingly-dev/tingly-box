@@ -218,6 +218,8 @@ type DirectoryInfo struct {
 	Kind   string `json:"kind"`
 	Branch string `json:"branch,omitempty"`
 	Dirty  bool   `json:"dirty,omitempty"`
+	// Empty is true for a Git repository with no commits yet.
+	Empty bool `json:"empty,omitempty"`
 }
 
 func InspectDirectory(ctx context.Context, raw string) (DirectoryInfo, error) {
@@ -244,7 +246,7 @@ func InspectDirectory(ctx context.Context, raw string) (DirectoryInfo, error) {
 	if err != nil {
 		return DirectoryInfo{}, err
 	}
-	return DirectoryInfo{Root: root, Kind: db.RepoGit, Branch: info.Branch, Dirty: info.Dirty}, nil
+	return DirectoryInfo{Root: root, Kind: db.RepoGit, Branch: info.Branch, Dirty: info.Dirty, Empty: info.Empty}, nil
 }
 
 // checkWorkspace refuses a new thread that would not run where the project
@@ -270,6 +272,9 @@ func checkWorkspace(ctx context.Context, repo db.Repo) (string, error) {
 	}
 	if info.Kind != db.RepoGit || db.PathKey(info.Root) != db.PathKey(workspace) {
 		return "", fmt.Errorf("directory %q is no longer the Git repository it was configured as; switch it to shared mode or select a Git repository in the project's settings", repo.Path)
+	}
+	if info.Empty {
+		return "", fmt.Errorf("directory %q has no commits yet: worktree mode needs an initial commit to branch from; make an initial commit, or use shared mode", repo.Path)
 	}
 	return workspace, nil
 }
@@ -309,7 +314,10 @@ func ResolveDirectories(ctx context.Context, specs []DirectorySpec, previous []d
 			r.WorkspaceMode = spec.WorkspaceMode
 		}
 		if r.WorkspaceMode == "" {
-			if r.Kind == db.RepoDirectory || disabled {
+			// An empty repository has no branch to worktree from yet, so it can
+			// only start in shared mode; the user can switch to worktree after
+			// the first commit.
+			if r.Kind == db.RepoDirectory || disabled || info.Empty {
 				r.WorkspaceMode = db.WorkspaceShared
 			} else {
 				r.WorkspaceMode = db.WorkspaceWorktree
@@ -320,6 +328,9 @@ func ResolveDirectories(ctx context.Context, specs []DirectorySpec, previous []d
 		}
 		if r.Kind == db.RepoDirectory && r.WorkspaceMode != db.WorkspaceShared {
 			return nil, fmt.Errorf("non-Git directory %q must use shared mode", r.Path)
+		}
+		if info.Empty && r.WorkspaceMode == db.WorkspaceWorktree {
+			return nil, fmt.Errorf("directory %q has no commits yet: worktree mode needs an initial commit to branch from; make an initial commit, or use shared mode", r.Path)
 		}
 		result = append(result, r)
 	}

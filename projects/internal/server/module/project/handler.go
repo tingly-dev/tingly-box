@@ -185,7 +185,9 @@ type InspectRepoResponse struct {
 	Root   string `json:"root,omitempty"`
 	Branch string `json:"branch,omitempty"`
 	Dirty  bool   `json:"dirty,omitempty"`
-	Error  string `json:"error,omitempty"`
+	// Empty is true when the repository has no commits yet.
+	Empty bool   `json:"empty,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // InspectDirectoryResponse describes a Git repository or a plain directory.
@@ -195,7 +197,9 @@ type InspectDirectoryResponse struct {
 	Kind   string `json:"kind" enum:",git,directory"`
 	Branch string `json:"branch"`
 	Dirty  bool   `json:"dirty"`
-	Error  string `json:"error"`
+	// Empty is true when a Git repository has no commits yet.
+	Empty bool   `json:"empty"`
+	Error string `json:"error"`
 }
 
 // ProjectModelsResponse lists the models the host offers. Error is set (and
@@ -484,7 +488,7 @@ func (h *Handler) inspectDirectory(c *gin.Context) {
 		c.JSON(http.StatusOK, InspectDirectoryResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, InspectDirectoryResponse{OK: true, Root: info.Root, Kind: info.Kind, Branch: info.Branch, Dirty: info.Dirty})
+	c.JSON(http.StatusOK, InspectDirectoryResponse{OK: true, Root: info.Root, Kind: info.Kind, Branch: info.Branch, Dirty: info.Dirty, Empty: info.Empty})
 }
 
 func (h *Handler) inspectRepo(c *gin.Context) {
@@ -502,7 +506,7 @@ func (h *Handler) inspectRepo(c *gin.Context) {
 		c.JSON(http.StatusOK, InspectRepoResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, InspectRepoResponse{OK: true, Root: info.Root, Branch: info.Branch, Dirty: info.Dirty})
+	c.JSON(http.StatusOK, InspectRepoResponse{OK: true, Root: info.Root, Branch: info.Branch, Dirty: info.Dirty, Empty: info.Empty})
 }
 
 func (h *Handler) recoverCoordinator(c *gin.Context) {
