@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -546,6 +547,17 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		hint := "wait before starting a new login"
+		retry := strings.TrimSpace(resp.Header.Get("Retry-After"))
+		if seconds, err := strconv.ParseUint(retry, 10, 63); err == nil {
+			hint = fmt.Sprintf("wait %d seconds before starting a new login", seconds)
+		} else if until, err := http.ParseTime(retry); err == nil {
+			hint = "start a new login after " + until.UTC().Format(time.RFC3339)
+		}
+		return nil, fmt.Errorf("%w: token endpoint returned HTTP 429 (rate limited); %s", ErrTokenExchangeFailed, hint)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
@@ -567,6 +579,10 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	token := &Token{}
 	if err := json.Unmarshal(rawBody, token); err != nil {
 		return nil, fmt.Errorf("data decode: %w: %v", ErrTokenExchangeFailed, err)
+	}
+
+	if strings.TrimSpace(token.AccessToken) == "" {
+		return nil, fmt.Errorf("%w: response carried no access_token", ErrTokenExchangeFailed)
 	}
 
 	// Convert ExpiresIn to Expiry
@@ -701,6 +717,10 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 	token := &Token{}
 	if err := json.NewDecoder(resp.Body).Decode(token); err != nil {
 		return nil, fmt.Errorf("decode error: %w: %v", ErrTokenExchangeFailed, err)
+	}
+
+	if strings.TrimSpace(token.AccessToken) == "" {
+		return nil, fmt.Errorf("%w: response carried no access_token", ErrTokenExchangeFailed)
 	}
 
 	// Convert ExpiresIn to Expiry

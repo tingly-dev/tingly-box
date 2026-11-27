@@ -85,11 +85,8 @@ func (h *AnthropicHook) BeforeAuth(params map[string]string) error {
 
 func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) error {
 	header.Set("Content-Type", "application/json")
-	header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-	header.Set("Accept", "application/json, text/plain, */*")
-	header.Set("Accept-Language", "en-US,en;q=0.9")
-	header.Set("Referer", "https://claude.ai/")
-	header.Set("Origin", "https://claude.ai")
+	header.Set("User-Agent", "tingly-box")
+	header.Set("Accept", "application/json")
 	return nil
 }
 

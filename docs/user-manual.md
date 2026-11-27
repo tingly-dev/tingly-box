@@ -242,3 +242,31 @@ Configure `~/.tingly-box/global.json` to reduce log noise.
 * **Server won't start?** Ensure port `12580` isn't taken. Use `tingly-box start --port 9000` to change it.
 * **No models showing?** Check if your provider token is valid by testing it with a direct `curl` to the vendor.
 * **401 Unauthorized?** You are likely using the **User Token** where the **Model Token** is required, or vice-versa.
+
+## Claude Code Enterprise
+
+### 认证方式
+
+Claude Enterprise 订阅与 Claude Platform API 是不同的认证及计费体系。企业订阅的 OAuth 登录由官方 Claude Code 完成；第三方应用的受支持认证方式为 Claude Platform API key 或组织批准的云推理服务凭证。参见 [Anthropic authentication and credential use](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)。
+
+TB 的 Claude Code OAuth provider 目前使用 CLI 的公开 client ID、PKCE、固定授权 scope 和 Anthropic token endpoint；这不代表存在受支持的第三方 Enterprise OAuth 接口。没有真实失败响应时，不能确认此次错误来自 OAuth、企业席位权限、组织策略还是后续模型请求。
+
+### 推荐的企业接入路径
+
+- 需要使用企业订阅：在官方 Claude Code 中登录自己的企业账号，由管理员确认席位和 Claude Code 使用权限。
+- 需要通过 TB 调用模型：在 TB 中创建 Anthropic API provider，填写组织批准的 Claude Platform API key，使用默认 API endpoint，并配置模型路由。也可根据组织的部署方式使用 TB 已提供的 Bedrock、Vertex AI 等 provider。不要将企业订阅会话 token 作为 API key。
+- 在企业允许使用网关的情况下，使用 TB 的 Claude Code 场景配置生成的 endpoint 和 TB model token；通过 `/status` 检查生效的配置。不要覆盖组织下发的 managed settings。
+
+### 定位失败阶段
+
+| 阶段 | 排查内容 |
+| --- | --- |
+| 官方 CLI 登录 | 企业账号、SSO、席位及组织是否允许 Claude Code |
+| OAuth 回调 | 回调是否成功到达；是否收到 OAuth error、state 是否匹配 |
+| Token 交换/刷新 | HTTP 状态、错误类型、是否存在 access_token（不要记录值） |
+| TB API 请求 | provider 类型、API base、模型以及 HTTP 状态；API key 不应与订阅 token 混用 |
+| 企业设置 | `/status` 查看生效的 managed settings；`claude doctor` 检查配置 |
+
+若需进一步确认根因，应提供脱敏后的失败阶段、HTTP 状态、错误类型及 TB/Claude Code 版本。不要提供授权码、access token、refresh token、API key 或完整认证请求。
+
+参考：[Claude Code troubleshooting](https://code.claude.com/docs/en/troubleshooting)、[settings precedence](https://code.claude.com/docs/en/settings#settings-precedence)。
