@@ -2337,9 +2337,10 @@ export const handlers = [
     // the mock UI keeps popping the "Connection Lost" dialog.
     http.get('/api/v1/info/health', () => HttpResponse.json({ health: true })),
 
+    // A real dev server reports "dev"; the UI swaps in the build commit.
     http.get('/api/v1/info/version', () => HttpResponse.json({
         success: true,
-        data: { version: 'mock-dev', launch_source: 'npm' },
+        data: { version: 'dev', launch_source: 'npm' },
     })),
 
     // Exercises the update panel / quick-start command panel default-method
@@ -2348,8 +2349,8 @@ export const handlers = [
     http.get('/api/v1/info/version/check', () => HttpResponse.json({
         success: true,
         data: {
-            current_version: 'mock-dev',
-            latest_version: 'mock-dev',
+            current_version: 'dev',
+            latest_version: 'dev',
             has_update: false,
             release_url: 'https://github.com/tingly-dev/tingly-box/releases',
             should_notify: false,
