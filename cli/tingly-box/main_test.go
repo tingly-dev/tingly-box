@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,6 +16,93 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 )
+
+func TestDatabaseExport(t *testing.T) {
+	dir := t.TempDir()
+	source := constant.GetDBFile(dir)
+	if err := os.MkdirAll(filepath.Dir(source), 0700); err != nil {
+		t.Fatal(err)
+	}
+	live, err := sql.Open("sqlite3", source+"?_journal_mode=WAL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer live.Close()
+	tables := []string{"usage_records", "usage_daily", "service_stats", "provider_usage", "provider_usage_history", "custom_data"}
+	if _, err := live.Exec("PRAGMA wal_autocheckpoint = 0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range tables {
+		if _, err := live.Exec("CREATE TABLE " + table + " (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT); INSERT INTO " + table + " (payload) VALUES ('private-usage-marker')"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := live.Exec("UPDATE custom_data SET payload = 'keep'; CREATE TABLE api_tokens (token_id TEXT, last_used_at TEXT); INSERT INTO api_tokens VALUES ('keep', 'private-usage-marker')"); err != nil {
+		t.Fatal(err)
+	}
+
+	am, err := newAppManager(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		flag []string
+		want int
+	}{
+		{name: "full", want: 1},
+		{name: "filtered", flag: []string{"--exclude-usage"}, want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output := filepath.Join(dir, tc.name+".db")
+			run := func() error {
+				_, parser := newTestParser(t)
+				ctx, err := parser.Parse(append([]string{"--config-dir", dir, "db", "export", "-o", output}, tc.flag...))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return ctx.Run(am, command.LaunchSource(""))
+			}
+			if err := run(); err != nil {
+				t.Fatal(err)
+			}
+			if err := run(); err == nil {
+				t.Fatal("export overwrote an existing file")
+			}
+			snapshot, err := sql.Open("sqlite3", output+"?mode=ro")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer snapshot.Close()
+			for _, table := range tables {
+				want := tc.want
+				if table == "custom_data" {
+					want = 1
+				}
+				var got int
+				if err := snapshot.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&got); err != nil || got != want {
+					t.Fatalf("table %s: got %d rows, want %d (err=%v)", table, got, want, err)
+				}
+			}
+			var token string
+			var used sql.NullString
+			if err := snapshot.QueryRow("SELECT token_id, last_used_at FROM api_tokens").Scan(&token, &used); err != nil || token != "keep" || used.Valid != (tc.want == 1) {
+				t.Fatalf("exported token = %q, last used = %v (err=%v)", token, used, err)
+			}
+			raw, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(raw, []byte("private-usage-marker")) != (tc.want == 1) {
+				t.Fatal("unexpected usage marker in the SQLite file")
+			}
+		})
+	}
+	var count int
+	if err := live.QueryRow("SELECT COUNT(*) FROM usage_records").Scan(&count); err != nil || count != 1 || am.Initialized() {
+		t.Fatalf("source usage count = %d, app initialized = %v (err=%v)", count, am.Initialized(), err)
+	}
+}
 
 // TestCommandsThatMustNotOpenTheDatabase pins the process-model rule behind
 // #1912 at the CLI boundary: these commands run against a config dir that

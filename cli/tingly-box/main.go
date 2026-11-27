@@ -47,6 +47,7 @@ type CLI struct {
 	// invocation, never interactive — see provider_cmd.go / rule_cmd.go.
 	Provider command.ProviderCmdKong `kong:"cmd,help='Manage providers (list/add/get/update/delete)'"`
 	Rule     command.RuleCmdKong     `kong:"cmd,help='Manage routing rules (list/add/update/delete/export/import)'"`
+	DB       command.DBCmdKong       `kong:"cmd,name='db',help='Manage database backups'"`
 
 	// Agent commands
 	Agent command.AgentCmdKong `kong:"cmd,help='Agent configuration'"`
