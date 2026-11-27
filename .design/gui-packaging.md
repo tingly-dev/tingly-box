@@ -67,6 +67,23 @@ version, rpm format) without rebuilding. `release-gui.yml` runs it after
 attaching. The build itself
 (including installing the deb and the `ldd` check) stays in `release-gui.yml`.
 
+Native macOS GUI builds force-include `build/darwin/vz_namespace.h` through
+`CGO_CPPFLAGS`. go-vz v3.8.0 and Wails both define the Objective-C class
+`AppDelegate`; the header recognizes go-vz's private include path and renames
+only its delegate to `TinglyVZAppDelegate`. Wails keeps its original delegate,
+and macvm remains enabled. No dependency sources or module-cache files are
+modified. Remove the workaround once upstream go-vz namespaces its class.
+The native Taskfile, `wails:manual` and PR link check apply the flag. For a
+direct `go build` from the repository root, use:
+
+```sh
+CGO_CPPFLAGS="${CGO_CPPFLAGS:-} -include \"$PWD/build/darwin/vz_namespace.h\"" \
+  go build -tags production,private_mac_apis ./gui/wails3
+```
+
+The macOS PR check links the GUI and verifies both distinct delegate classes
+in the resulting binary with `nm`.
+
 ## Naming
 
 Every GUI artifact carries `tingly-box-gui`, never the CLI's `tingly-box`:
