@@ -144,3 +144,26 @@ describe that substitution as billing-equivalent or mark these calls free.
 API reference: <https://api-docs.deepseek.com/zh-cn/guides/search/>.
 Pricing: <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/>.
 Native web tools: <https://api-docs.deepseek.com/zh-cn/guides/web_tools/>.
+
+### Review hardening (2026-11-28)
+
+- Usage reads default to model (`tokens`) events. Web-tool (`requests`) stats
+  are queried separately and displayed as tool calls / estimated CNY spend, not
+  model tokens. Both hourly/daily tiers carry event type as a dimension; old
+  mixed rollups are rebuilt from unchanged raw records on migration.
+- Direct tool endpoints require the global model credential, an enabled Server
+  Tool explicitly selecting DeepSeek, and that tool's chosen provider. A shared
+  per-handler limiter (30 requests/minute, burst 5) covers both operations and
+  every route alias; team/delegated callers cannot use this balance-spending
+  shortcut. This is rate control, not a monetary budget or upstream reconciliation.
+- The same source/tool policy gates discovery, injection and execution. An empty
+  allow list means all tools, as elsewhere in MCP; explicit exclusions still win.
+- Close idle connections only on a per-call owned proxy transport, never the
+  shared default transport. Cap model-facing text at 32 KiB with a UTF-8-safe
+  truncation notice, leaving direct JSON passthrough intact. Explain ignored
+  DeepSeek Fetch `prompt` arguments rather than silently applying no extraction.
+- Unknown discovery is not a missing Serper key. Distinguish request-body size
+  failures (413) from other read failures (400).
+- Keep backend-setting decisions in this canonical `.design/` document rather
+  than duplicating them in a second design note. Screenshots must remain visible
+  in the PR while their hosting is handled separately from runtime changes.
