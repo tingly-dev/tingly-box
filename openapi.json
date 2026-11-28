@@ -6144,8 +6144,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
-        "description": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "summary": "List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "description": "List one directory level of the library (folders first, then files by name); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
         "operationId": "apiV1ProjectsIdLibraryTreeGet",
         "parameters": [
           {
@@ -8844,90 +8844,6 @@
         }
       }
     },
-    "/api/v1/threads/{id}/diff": {
-      "get": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "The thread's changes against its base branch",
-        "description": "The thread's changes against its base branch",
-        "operationId": "apiV1ThreadsIdDiffGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Diff"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/threads/{id}/diff/file": {
-      "get": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "One file of the thread's changes: its patch, left out when it is binary or too large",
-        "description": "One file of the thread's changes: its patch, left out when it is binary or too large",
-        "operationId": "apiV1ThreadsIdDiffFileGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "description": "File path as listed by the diff",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "old_path",
-            "in": "query",
-            "description": "Where a renamed file came from",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/threads/{id}/effort": {
       "put": {
         "tags": [
@@ -9064,8 +8980,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
-        "description": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "summary": "Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message",
+        "description": "Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message",
         "operationId": "apiV1ThreadsIdEventsEidChoosePost",
         "parameters": [
           {
@@ -9286,13 +9202,46 @@
         }
       }
     },
+    "/api/v1/threads/{id}/merge/draft": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them",
+        "description": "The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them",
+        "operationId": "apiV1ThreadsIdMergeDraftGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeDraft"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/messages": {
       "post": {
         "tags": [
           "threads"
         ],
-        "summary": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
-        "description": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "summary": "Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "description": "Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
         "operationId": "apiV1ThreadsIdMessagesPost",
         "parameters": [
           {
@@ -9455,6 +9404,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/prs/{number}/diff": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)",
+        "description": "The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)",
+        "operationId": "apiV1ThreadsIdPrsNumberDiffGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Numeric count",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/prs/{number}/diff/file": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "One file of a PR's changes: its patch, left out when it is binary or too large",
+        "description": "One file of a PR's changes: its patch, left out when it is binary or too large",
+        "operationId": "apiV1ThreadsIdPrsNumberDiffFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Numeric count",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path as listed by the diff",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "old_path",
+            "in": "query",
+            "description": "Where a renamed file came from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
                 }
               }
             }
@@ -10505,6 +10558,20 @@
         "operationId": "apiV1UsageRecordsGet",
         "parameters": [
           {
+            "name": "event_type",
+            "in": "query",
+            "description": "tokens (default) for model usage; requests for web tool usage",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "tokens",
+              "enum": [
+                "tokens",
+                "requests"
+              ]
+            }
+          },
+          {
             "name": "start_time",
             "in": "query",
             "description": "ISO 8601 start time",
@@ -10675,6 +10742,20 @@
         "description": "Returns aggregated usage statistics with flexible grouping and filtering",
         "operationId": "apiV1UsageStatsGet",
         "parameters": [
+          {
+            "name": "event_type",
+            "in": "query",
+            "description": "tokens (default) for model usage; requests for web tool usage",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "tokens",
+              "enum": [
+                "tokens",
+                "requests"
+              ]
+            }
+          },
           {
             "name": "group_by",
             "in": "query",
@@ -10847,6 +10928,20 @@
         "description": "Returns time-series data for usage with configurable intervals",
         "operationId": "apiV1UsageTimeseriesGet",
         "parameters": [
+          {
+            "name": "event_type",
+            "in": "query",
+            "description": "tokens (default) for model usage; requests for web tool usage",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "tokens",
+              "enum": [
+                "tokens",
+                "requests"
+              ]
+            }
+          },
           {
             "name": "interval",
             "in": "query",
@@ -12144,6 +12239,11 @@
             "description": "Field avg_output_tokens",
             "example": 164.2
           },
+          "billable_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field billable_requests"
+          },
           "cache_read_tokens": {
             "type": "integer",
             "format": "int64",
@@ -12193,6 +12293,11 @@
             "format": "int64",
             "description": "Field reasoning_tokens",
             "example": 12000
+          },
+          "request_cost_cny": {
+            "type": "number",
+            "format": "double",
+            "description": "Field request_cost_cny"
           },
           "request_count": {
             "type": "integer",
@@ -12256,6 +12361,8 @@
           "streamed_rate",
           "cache_read_tokens",
           "cache_write_tokens",
+          "billable_requests",
+          "request_cost_cny",
           "reasoning_tokens"
         ]
       },
@@ -12660,13 +12767,7 @@
         "properties": {
           "auto_answer": {
             "type": "string",
-            "description": "Field auto_answer",
-            "enum": [
-              "",
-              "off",
-              "delay",
-              "now"
-            ]
+            "description": "Field auto_answer"
           }
         },
         "required": [
@@ -13114,6 +13215,10 @@
           "annotations": {
             "description": "Field annotations"
           },
+          "backend": {
+            "type": "string",
+            "description": "Field backend"
+          },
           "description": {
             "type": "string",
             "description": "Field description"
@@ -13139,6 +13244,10 @@
           },
           "output_schema": {
             "description": "Field output_schema"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
           },
           "source_id": {
             "type": "string",
@@ -13252,6 +13361,10 @@
       "ChooseRequest": {
         "type": "object",
         "properties": {
+          "custom": {
+            "type": "string",
+            "description": "Field custom"
+          },
           "index": {
             "type": "integer",
             "format": "int64",
@@ -14546,9 +14659,9 @@
             "type": "string",
             "description": "Field base"
           },
-          "branch": {
-            "type": "string",
-            "description": "Field branch"
+          "base_stale": {
+            "type": "boolean",
+            "description": "Field base_stale"
           },
           "deletions": {
             "type": "integer",
@@ -14567,18 +14680,33 @@
             "format": "int64",
             "description": "Field files_omitted"
           },
-          "uncommitted": {
+          "head": {
             "type": "string",
-            "description": "Field uncommitted"
+            "description": "Field head"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          },
+          "unpushed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field unpushed"
           }
         },
         "required": [
+          "number",
           "base",
-          "branch",
+          "head",
+          "source",
           "files",
           "additions",
-          "deletions",
-          "uncommitted"
+          "deletions"
         ]
       },
       "DiffFile": {
@@ -17830,6 +17958,34 @@
           "files"
         ]
       },
+      "MergeDraft": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "number",
+          "source",
+          "title",
+          "body"
+        ]
+      },
       "MergeRequest": {
         "type": "object",
         "properties": {
@@ -19246,10 +19402,10 @@
           },
           "overrideKeys": {
             "type": "array",
+            "description": "Field overrideKeys",
             "items": {
               "type": "string"
-            },
-            "description": "Field overrideKeys"
+            }
           },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
@@ -19283,10 +19439,10 @@
           },
           "overrideKeys": {
             "type": "array",
+            "description": "Explicitly overridden fields. An empty list restores inheritance; omitting the list updates by comparing preferences with the base.",
             "items": {
               "type": "string"
-            },
-            "description": "Explicitly overridden fields. An empty list restores inheritance; omitting the list updates by comparing preferences with the base."
+            }
           },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
@@ -19440,6 +19596,13 @@
             "type": "boolean",
             "description": "Field disable_worktree"
           },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -19488,6 +19651,11 @@
             "type": "boolean",
             "description": "Field starred"
           },
+          "thread_cpu": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_cpu"
+          },
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
@@ -19495,6 +19663,11 @@
           "thread_github_access": {
             "type": "string",
             "description": "Field thread_github_access"
+          },
+          "thread_memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_memory_bytes"
           },
           "thread_model": {
             "type": "string",
@@ -19507,6 +19680,15 @@
           "thread_profile": {
             "type": "string",
             "description": "Field thread_profile"
+          },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
+          "thread_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_tasks"
           },
           "type": {
             "type": "string",
@@ -19532,6 +19714,11 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "thread_sandbox",
+          "thread_memory_bytes",
+          "thread_tasks",
+          "thread_cpu",
+          "github_auto",
           "max_running_threads",
           "paused",
           "starred",
@@ -19548,6 +19735,10 @@
           "coordinator_busy": {
             "type": "boolean",
             "description": "Field coordinator_busy"
+          },
+          "coordinator_insertable": {
+            "type": "boolean",
+            "description": "Field coordinator_insertable"
           },
           "coordinator_queued": {
             "type": "integer",
@@ -19577,6 +19768,7 @@
           "threads",
           "counts",
           "coordinator_busy",
+          "coordinator_insertable",
           "coordinator_queued"
         ]
       },
@@ -19629,12 +19821,20 @@
             "type": "integer",
             "format": "int64",
             "description": "Field max_running_threads_limit"
+          },
+          "sandboxes": {
+            "type": "array",
+            "description": "Field sandboxes",
+            "items": {
+              "$ref": "#/components/schemas/SandboxRuntime"
+            }
           }
         },
         "required": [
           "cli_path",
           "base_url",
-          "max_running_threads_limit"
+          "max_running_threads_limit",
+          "sandboxes"
         ]
       },
       "ProjectSummary": {
@@ -19665,6 +19865,13 @@
           "disable_worktree": {
             "type": "boolean",
             "description": "Field disable_worktree"
+          },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
           },
           "goal": {
             "type": "string",
@@ -19714,6 +19921,11 @@
             "type": "boolean",
             "description": "Field starred"
           },
+          "thread_cpu": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_cpu"
+          },
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
@@ -19721,6 +19933,11 @@
           "thread_github_access": {
             "type": "string",
             "description": "Field thread_github_access"
+          },
+          "thread_memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_memory_bytes"
           },
           "thread_model": {
             "type": "string",
@@ -19733,6 +19950,15 @@
           "thread_profile": {
             "type": "string",
             "description": "Field thread_profile"
+          },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
+          "thread_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_tasks"
           },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
@@ -19761,6 +19987,11 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "thread_sandbox",
+          "thread_memory_bytes",
+          "thread_tasks",
+          "thread_cpu",
+          "github_auto",
           "max_running_threads",
           "paused",
           "starred",
@@ -21227,6 +21458,40 @@
           "data"
         ]
       },
+      "SandboxRuntime": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Field available"
+          },
+          "isolation": {
+            "type": "string",
+            "description": "Field isolation"
+          },
+          "levels": {
+            "type": "object",
+            "description": "Field levels",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          }
+        },
+        "required": [
+          "name",
+          "isolation",
+          "available",
+          "levels"
+        ]
+      },
       "ScanIdesResponse": {
         "type": "object",
         "properties": {
@@ -22597,6 +22862,13 @@
             "format": "int64",
             "description": "Field files_changed"
           },
+          "grants": {
+            "type": "array",
+            "description": "Field grants",
+            "items": {
+              "$ref": "#/components/schemas/ThreadGrant"
+            }
+          },
           "head_branch": {
             "type": "string",
             "description": "Field head_branch"
@@ -22609,6 +22881,10 @@
             "type": "integer",
             "format": "int64",
             "description": "Field input_tokens"
+          },
+          "insertable": {
+            "type": "boolean",
+            "description": "Field insertable"
           },
           "last_report": {
             "type": "string",
@@ -22749,6 +23025,7 @@
           "task",
           "status",
           "running_tasks",
+          "insertable",
           "origin",
           "cwd",
           "profile_override",
@@ -22899,6 +23176,47 @@
           "content",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ThreadGrant": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action"
+          },
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field expires_at"
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field granted_at"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "rule": {
+            "type": "string",
+            "description": "Field rule"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "scope",
+          "granted_at"
         ]
       },
       "ThreadLink": {
@@ -23094,6 +23412,11 @@
             "description": "Field avg_latency_ms",
             "example": 1100
           },
+          "billable_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field billable_requests"
+          },
           "cache_read_tokens": {
             "type": "integer",
             "format": "int64",
@@ -23130,6 +23453,11 @@
             "description": "Field reasoning_tokens",
             "example": 800
           },
+          "request_cost_cny": {
+            "type": "number",
+            "format": "double",
+            "description": "Field request_cost_cny"
+          },
           "request_count": {
             "type": "integer",
             "format": "int64",
@@ -23156,6 +23484,8 @@
           "output_tokens",
           "cache_read_tokens",
           "cache_write_tokens",
+          "billable_requests",
+          "request_cost_cny",
           "reasoning_tokens",
           "error_count",
           "avg_latency_ms"
@@ -23731,6 +24061,13 @@
             "type": "boolean",
             "description": "Field disable_worktree"
           },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -23770,6 +24107,11 @@
             "type": "boolean",
             "description": "Field starred"
           },
+          "thread_cpu": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_cpu"
+          },
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort",
@@ -23789,6 +24131,11 @@
               "allow"
             ]
           },
+          "thread_memory_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_memory_bytes"
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -23806,6 +24153,15 @@
           "thread_profile": {
             "type": "string",
             "description": "Field thread_profile"
+          },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
+          "thread_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field thread_tasks"
           }
         }
       },
@@ -24176,6 +24532,11 @@
       "UsageRecordResponse": {
         "type": "object",
         "properties": {
+          "billable_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field billable_requests"
+          },
           "cache_read_tokens": {
             "type": "integer",
             "format": "int64",
@@ -24188,9 +24549,17 @@
             "description": "Field cache_write_tokens",
             "example": 300
           },
+          "currency": {
+            "type": "string",
+            "description": "Field currency"
+          },
           "error_code": {
             "type": "string",
             "description": "Field error_code"
+          },
+          "event_type": {
+            "type": "string",
+            "description": "Field event_type"
           },
           "id": {
             "type": "integer",
@@ -24236,6 +24605,11 @@
             "format": "int64",
             "description": "Field reasoning_tokens",
             "example": 50
+          },
+          "request_cost_cny": {
+            "type": "number",
+            "format": "double",
+            "description": "Field request_cost_cny"
           },
           "request_model": {
             "type": "string",
@@ -24285,6 +24659,11 @@
             "description": "Field ttft_ms",
             "example": 180
           },
+          "unit_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Field unit_price"
+          },
           "user_id": {
             "type": "string",
             "description": "Field user_id",
@@ -24292,6 +24671,9 @@
           }
         },
         "required": [
+          "event_type",
+          "unit_price",
+          "currency",
           "id",
           "provider_uuid",
           "provider_name",
@@ -24303,6 +24685,8 @@
           "total_tokens",
           "cache_read_tokens",
           "cache_write_tokens",
+          "billable_requests",
+          "request_cost_cny",
           "reasoning_tokens",
           "status",
           "latency_ms",

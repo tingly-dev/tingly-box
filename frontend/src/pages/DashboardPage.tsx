@@ -22,6 +22,7 @@ import { useDashboardData, TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
 import type { TimeRange } from '@/hooks/useDashboardData';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import WebToolUsage from '@/components/dashboard/WebToolUsage';
 
 const DashboardSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -76,6 +77,7 @@ export default function DashboardPage() {
         setAutoRefresh,
         handleRefresh,
         stats,
+        webToolStats,
         timeSeries,
         recordsParams,
         heatmapRefresh,
@@ -170,13 +172,14 @@ export default function DashboardPage() {
                 {t('dashboard.overview.title', { defaultValue: 'Usage Dashboard' })}
             </Box>
             {toolbar}
+            <WebToolUsage stats={webToolStats} />
             {/* Main Content */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {/* Stat Cards Row - 5 cards */}
                 <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                     <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
                         <StatCard
-                            title={t('dashboard.overview.statCards.totalRequests', { defaultValue: 'Total Requests' })}
+                            title={t('dashboard.modelRequests', { defaultValue: 'Model requests' })}
                             value={totalRequests.toLocaleString()}
                             subtitle={t(TIME_RANGE_CONFIG[timeRange].labelKey)}
                             // Volume metric — no health judgment, so keep it neutral.

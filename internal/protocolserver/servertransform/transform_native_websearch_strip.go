@@ -14,7 +14,7 @@ import (
 // from upstream requests when tingly-box's own MCP equivalents are enabled and ready.
 //
 // This prevents the LLM from selecting Anthropic's built-in web tools (which require a
-// Claude Code subscription) when our MCP-backed versions are available via Serper/Jina.
+// Claude Code subscription) when our MCP-backed versions are available via DeepSeek or Serper/Jina.
 type NativeWebSearchStripTransform struct {
 	runtime *runtime.Runtime
 }

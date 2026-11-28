@@ -90,6 +90,7 @@ export function useDashboardData({
     const [refreshing, setRefreshing] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(false);
     const [stats, setStats] = useState<AggregatedStat[]>([]);
+    const [webToolStats, setWebToolStats] = useState<AggregatedStat[]>([]);
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
     const [usageIdentities, setUsageIdentities] = useState<UsageIdentity[]>([
@@ -193,11 +194,12 @@ export function useDashboardData({
             const config = TIME_RANGE_CONFIG[range];
             const params = buildTimeParams(provider, model, user, scenario, range);
 
-            const [statsResult, timeSeriesResult] = await Promise.all([
+            const [statsResult, timeSeriesResult, webToolsResult] = await Promise.all([
                 // limit is the server-side max (1000): the stat-card totals are
                 // summed from these groups, so a low limit silently under-counts.
                 api.getUsageStats({ ...params, group_by: 'model', limit: 1000 }),
                 api.getUsageTimeSeries({ ...params, interval: config.interval }),
+                api.getUsageStats({ ...params, event_type: 'requests', group_by: 'model', limit: 1000 }),
             ]);
 
             // A newer request was issued while this one was in flight —
@@ -206,6 +208,7 @@ export function useDashboardData({
                 return;
             }
 
+            setWebToolStats(webToolsResult?.data || []);
             if (statsResult?.data) {
                 setStats(statsResult.data);
             }
@@ -405,6 +408,7 @@ export function useDashboardData({
         handleRefresh,
         // data
         stats,
+        webToolStats,
         timeSeries,
         recordsParams,
         heatmapRefresh,

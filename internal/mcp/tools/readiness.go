@@ -6,7 +6,8 @@ type ToolReadinessChecker interface {
 	IsReady(env map[string]string) bool
 }
 
-// webSearchReadiness requires SERPER_API_KEY to be set.
+// webSearchReadiness covers the legacy Serper path. The runtime resolves
+// provider-backed DeepSeek readiness before applying this checker.
 type webSearchReadiness struct{}
 
 func (webSearchReadiness) IsReady(env map[string]string) bool {

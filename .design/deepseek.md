@@ -52,3 +52,126 @@ Takeaways:
   protocol difference behind it.
 - Same class of failure in other gateways: LiteLLM #32992, cc-switch
   #7074 / #7400, opencodex #4870, gptme #3846.
+
+## First-party Search and Fetch (#2484)
+
+The built-in `mcp_web_search` and `mcp_web_fetch` tools can use DeepSeek's
+`POST /v1/tools/search` and `POST /v1/tools/fetch` APIs. Enable the desired
+MCP/Server Tools as before; backend selection does not enable a disabled tool
+or change `native_websearch_strip` semantics.
+
+### Credentials and default selection
+
+Hosted calls resolve an **enabled API-key provider** whose OpenAI base (or
+fallback API base) has the exact host `api.deepseek.com`. The key is read on
+each call, never copied into source Env or persisted as a second secret. The
+provider's proxy is respected. Anthropic-only DeepSeek bases are normalized to
+that host's `/v1/tools/...` endpoints.
+
+- Choose Search (`deepseek|serper`) and Fetch (`deepseek|jina`) independently in
+  Web tool settings, backed by `WEB_SEARCH_BACKEND` and `WEB_FETCH_BACKEND`.
+- Each DeepSeek tool selects its own credential through
+  `WEB_SEARCH_PROVIDER_UUID` / `WEB_FETCH_PROVIDER_UUID`. Missing, disabled or
+  invalid selected credentials are unconfigured, never silently replaced.
+- Unset and obsolete `auto` values use the original Serper Search / Jina Fetch
+  defaults. Neither a Serper key nor a newly added DeepSeek account switches
+  another tool's backend. Jina Reader requires no configuration.
+- Direct `/v1/tools/*` passthrough uses the enabled Server Tool’s selected
+  DeepSeek credential, not an unrelated default account.
+- Standalone `mcp-builtin` also accepts `DEEPSEEK_API_KEY` and optional
+  `DEEPSEEK_BASE_URL`. Hosted provider-backed calls run in-process so that
+  credentials stay out of the stdio subprocess and usage is recorded by the
+  gateway. Standalone stdio is not a gateway billing/observability surface.
+
+Search accepts `query`, `count` (1–50; upstream default 10), `need_content`,
+`ori_question`, and the existing domain allow/block lists. By default results
+render `summary`, falling back to `snippet`, rather than full content. Full
+content is opt-in with `need_content=true`. Scores, authority and dates are
+annotated without filtering low-scoring results. `ori_question` is forwarded
+**only if explicitly provided**; conversation messages are never automatically
+sent to search. Fetch accepts `url`; the legacy `prompt` is optional and is
+not sent to DeepSeek. A result notice explicitly says extraction was not applied.
+Model-facing output is capped at 32 KiB with a UTF-8-safe truncation notice;
+direct JSON passthrough is not truncated.
+
+### Gateway API
+
+The owner/global model credential can call `/v1/tools/search` and `/v1/tools/fetch`
+directly, or append `/tools/search` and `/tools/fetch` to their existing
+`/tingly/:scenario[/v1]` base. Bodies and upstream error envelopes are passed
+through without chat/protocol conversion. Only the resolved provider's Bearer
+key is sent upstream. Team-scoped sharing keys cannot use these direct APIs
+to bypass their assigned model/provider routing; delegated enterprise contexts
+are also refused. The corresponding Server Tool must be enabled and explicitly
+select DeepSeek. Root and all scenario aliases share a 30/minute, burst-5
+limiter across both operations (a rate limit, not a monetary budget).
+
+HTTP 408, 429 and 5xx responses are retried at most twice with cancellable
+500 ms / 1 s backoff. Other 4xx responses are not retried. MCP callers receive
+a clear top-up message on 402; direct callers retain the upstream 402 error
+envelope. No cross-vendor fallback is applied.
+
+### Request billing
+
+Verified against the official pricing and Search/Fetch guides on **2026-11-28**:
+the standalone `/v1/tools/search` and `/v1/tools/fetch` APIs used by this
+implementation charge **CNY 0.005 per successful request producing
+results**, independently of `count`. Empty searches, empty fetched content,
+failures and timeouts contribute zero billable requests. One usage event is
+recorded per logical invocation, not per retry:
+
+- `event_type=requests`, model `deepseek-tools/search` or `deepseek-tools/fetch`;
+- `billable_requests`, price snapshot `unit_price=0.005`, `currency=CNY`;
+- `request_cost_cny` is separate from all token counters (which remain zero).
+
+Usage reads default to `event_type=tokens`; `event_type=requests` selects
+web-tool statistics separately. Both rollup tiers include event type in their
+dimensions; pre-dimension caches are rebuilt without changing raw records.
+The measures survive raw queries and daily pre-aggregation, and are exposed
+in stats, time series and request records. The Dashboard displays CNY request
+spend separately from token usage. Existing token records migrate with
+`event_type=tokens` and zero request cost. Provider, latency, error status,
+and available caller/scenario/rule identity are retained for observability.
+
+`request_cost_cny` is a local estimate from the configured unit price and
+observed responses, not an amount reconciled against DeepSeek's account ledger.
+
+Do not confuse Tingly Box's **Server Tools** with **DeepSeek-native server
+tools**. Since **2026-11-18 12:00 Beijing time (UTC+8)**, search and fetch
+triggered inside DeepSeek model calls no longer incur a separate tool fee.
+Their results still enter the model context and are charged as model tokens.
+This applies to DeepSeek's native web tools, Anthropic-compatible `web_search`,
+and Responses `web_search`, not the standalone endpoints used here.
+
+Consequently, a direct tool test can correctly have zero model tokens and a
+nonzero estimated request charge. When a model subsequently consumes those
+results, model tokens are billed separately. Replacing a DeepSeek-native web
+tool with our standalone-backed tool can add a per-request charge; do not
+describe that substitution as billing-equivalent or mark these calls free.
+
+API reference: <https://api-docs.deepseek.com/zh-cn/guides/search/>.
+Pricing: <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/>.
+Native web tools: <https://api-docs.deepseek.com/zh-cn/guides/web_tools/>.
+
+### Review hardening (2026-11-28)
+
+- Usage reads default to model (`tokens`) events. Web-tool (`requests`) stats
+  are queried separately and displayed as tool calls / estimated CNY spend, not
+  model tokens. Both hourly/daily tiers carry event type as a dimension; old
+  mixed rollups are rebuilt from unchanged raw records on migration.
+- Direct tool endpoints require the global model credential, an enabled Server
+  Tool explicitly selecting DeepSeek, and that tool's chosen provider. A shared
+  per-handler limiter (30 requests/minute, burst 5) covers both operations and
+  every route alias; team/delegated callers cannot use this balance-spending
+  shortcut. This is rate control, not a monetary budget or upstream reconciliation.
+- The same source/tool policy gates discovery, injection and execution. An empty
+  allow list means all tools, as elsewhere in MCP; explicit exclusions still win.
+- Close idle connections only on a per-call owned proxy transport, never the
+  shared default transport. Cap model-facing text at 32 KiB with a UTF-8-safe
+  truncation notice, leaving direct JSON passthrough intact. Explain ignored
+  DeepSeek Fetch `prompt` arguments rather than silently applying no extraction.
+- Unknown discovery is not a missing Serper key. Distinguish request-body size
+  failures (413) from other read failures (400).
+- Keep backend-setting decisions in this canonical `.design/` document rather
+  than duplicating them in a second design note. Screenshots must remain visible
+  in the PR while their hosting is handled separately from runtime changes.

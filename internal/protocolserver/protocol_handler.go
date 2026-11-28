@@ -12,7 +12,9 @@ package protocolserver
 
 import (
 	"fmt"
+	"golang.org/x/time/rate"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -118,7 +120,8 @@ type ProtocolHandlerDeps struct {
 // files (openai_*.go, anthropic_*.go, protocol_*.go, etc.) will be moved
 // here in later steps and become methods on *ProtocolHandler.
 type ProtocolHandler struct {
-	deps ProtocolHandlerDeps
+	deps            ProtocolHandlerDeps
+	webtoolsLimiter *rate.Limiter
 
 	// mcpTC caches the stateless MCP chain transforms (see
 	// protocol_transform.go); they depend only on construction-time deps.
@@ -127,7 +130,7 @@ type ProtocolHandler struct {
 
 // NewHandler constructs the AI Model API handler from its dependencies.
 func NewHandler(deps ProtocolHandlerDeps) *ProtocolHandler {
-	return &ProtocolHandler{deps: deps}
+	return &ProtocolHandler{deps: deps, webtoolsLimiter: rate.NewLimiter(rate.Every(2*time.Second), 5)}
 }
 
 // The methods below are thin wrappers wiring the Deps callbacks to the

@@ -32,8 +32,8 @@ describe('built-in sources', () => {
         expect(isServerToolSource({ id: 'server-webtools', transport: 'stdio' })).toBe(true);
         expect(isServerToolSource({ id: 'webtools', transport: 'stdio' })).toBe(false);
         expect(connectionSummary({ id: 'server-webtools', transport: 'stdio', command: '/app/tingly-box' })).toMatchObject({
-            target: 'Serper / Jina Reader',
-            missing: ['searchKey'],
+            target: 'Search → — / Fetch → —',
+            missing: [],
         });
         expect(connectionSummary({ id: 'server-webtools', env: { SERPER_API_KEY: 'configured' } }).missing).toEqual([]);
     });
@@ -56,5 +56,29 @@ describe('built-in sources', () => {
         expect(toolPolicyPatch(advisor, tool, { enabled: true })).toMatchObject({ id: 'advisor', enabled: true });
         expect(toolPolicyPatch(advisor, tool, { enabled: false })).not.toHaveProperty('enabled');
         expect(toolPolicyPatch({ id: 'remote' }, tool, { enabled: true })).not.toHaveProperty('enabled');
+    });
+});
+
+describe('resolved web tool backends', () => {
+    it('does not claim a Serper key is missing when DeepSeek is ready', () => {
+        const source = { id: 'server-webtools' };
+        const tools = [
+            { name: 'mcp_web_search', backend: 'deepseek', ready: true },
+            { name: 'mcp_web_fetch', backend: 'deepseek', ready: true },
+        ] as never;
+        expect(connectionSummary(source, tools)).toMatchObject({ target: 'Search → DeepSeek / Fetch → DeepSeek', missing: [] });
+    });
+    it('uses runtime readiness rather than a saved but unresolved Serper reference', () => {
+        const source = { id: 'server-webtools', env: { SERPER_API_KEY: '${MISSING}' } };
+        const tools = [{ name: 'mcp_web_search', backend: 'serper', ready: false }] as never;
+        expect(connectionSummary(source, tools).missing).toContain('searchKey');
+    });
+});
+
+describe('unknown web tool readiness', () => {
+    it('does not report a missing key before discovery or after discovery fails', () => {
+        for (const backend of ['deepseek', 'serper']) {
+            expect(connectionSummary({ id: 'server-webtools', env: { WEB_SEARCH_BACKEND: backend } }, []).missing).toEqual([]);
+        }
     });
 });

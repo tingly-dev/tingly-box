@@ -1,6 +1,16 @@
 // Usage dashboard and history
 export default {
   "dashboard": {
+    modelRequests: "Model requests",
+    webToolSpend: "Web tool estimated spend",
+    webToolEstimateHint: "Billed per successful request, not tokens. Model usage is shown separately. Estimates use the recorded unit price; actual charges follow the provider bill.",
+    webToolSource: "Provider",
+    webToolOperation: "Tool",
+    webToolCalls: "Calls",
+    webToolBillable: "Billable calls",
+    webToolErrors: "Failed calls",
+    webToolEstimate: "Estimated cost",
+    webToolRequests: '{{count}} billable Search/Fetch requests · excludes token usage',
     "userUsage": {
       "title": "Team usage",
       "subtitle": "See how every registered user is consuming shared AI access.",

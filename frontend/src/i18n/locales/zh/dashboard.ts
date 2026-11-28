@@ -1,6 +1,16 @@
 // Usage dashboard and history
 export default {
   "dashboard": {
+    modelRequests: "模型请求数",
+    webToolSpend: "网页工具预估费用",
+    webToolEstimateHint: "按成功请求次数计费，不按 token 计费；模型用量单独统计。金额按记录单价估算，实际扣费以服务商账单为准。",
+    webToolSource: "提供商",
+    webToolOperation: "工具",
+    webToolCalls: "调用次数",
+    webToolBillable: "计费次数",
+    webToolErrors: "失败次数",
+    webToolEstimate: "预估费用",
+    webToolRequests: '{{count}} 次计费 Search/Fetch 请求 · 不含 token 费用',
     "userUsage": {
       "title": "团队用量",
       "subtitle": "查看每个在册用户如何使用共享的 AI 访问能力。",

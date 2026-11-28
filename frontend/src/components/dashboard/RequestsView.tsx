@@ -33,6 +33,11 @@ import { formatLatency } from '@/utils/formatLatency';
 
 export interface UsageRecord {
     id: number;
+    event_type?: 'tokens' | 'requests';
+    billable_requests?: number;
+    request_cost_cny?: number;
+    unit_price?: number;
+    currency?: string;
     provider_uuid: string;
     provider_name: string;
     model: string;

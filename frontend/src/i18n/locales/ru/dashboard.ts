@@ -1,6 +1,16 @@
 // Usage dashboard and history
 export default {
   "dashboard": {
+    modelRequests: "Запросы моделей",
+    webToolSpend: "Оценка расходов веб-инструментов",
+    webToolEstimateHint: "Оплата за успешный запрос, не за токены. Использование моделей учитывается отдельно. Оценка по записанной цене; фактические расходы определяются счётом провайдера.",
+    webToolSource: "Провайдер",
+    webToolOperation: "Инструмент",
+    webToolCalls: "Вызовы",
+    webToolBillable: "Платные вызовы",
+    webToolErrors: "Ошибки",
+    webToolEstimate: "Оценка стоимости",
+    webToolRequests: '{{count}} платных запросов Search/Fetch · без стоимости токенов',
     "userUsage": {
       "title": "Использование командой",
       "subtitle": "Посмотрите, как каждый зарегистрированный пользователь расходует общий доступ к ИИ.",

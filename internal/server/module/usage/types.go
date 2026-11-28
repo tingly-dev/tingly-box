@@ -6,6 +6,7 @@ package usage
 
 // UsageStatsQuery represents query parameters for usage statistics
 type UsageStatsQuery struct {
+	EventType string `json:"event_type" form:"event_type" description:"tokens (default) for model usage; requests for web tools"`
 	GroupBy   string `json:"group_by" form:"group_by" description:"Aggregation level: model, provider, scenario, rule, user, daily, hourly" example:"model"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
@@ -41,6 +42,8 @@ type AggregatedStat struct {
 	StreamedRate     float64 `json:"streamed_rate" example:"0.885"`
 	CacheReadTokens  int64   `json:"cache_read_tokens" example:"500000"`
 	CacheWriteTokens int64   `json:"cache_write_tokens" example:"75000"`
+	BillableRequests int64   `json:"billable_requests"`
+	RequestCostCNY   float64 `json:"request_cost_cny"`
 	// ReasoningTokens is a subset of OutputTokens (thinking/reasoning
 	// tokens); populated for both OpenAI and Anthropic.
 	ReasoningTokens int64 `json:"reasoning_tokens" example:"12000"`
@@ -62,6 +65,7 @@ type UsageStatsMeta struct {
 
 // TimeSeriesQuery represents query parameters for time-series data
 type TimeSeriesQuery struct {
+	EventType string `json:"event_type" form:"event_type" description:"tokens (default) for model usage; requests for web tools"`
 	Interval  string `json:"interval" form:"interval" description:"Time bucket: minute, hour, day, week" example:"hour"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
@@ -80,6 +84,8 @@ type TimeSeriesData struct {
 	OutputTokens     int64   `json:"output_tokens" example:"20000"`
 	CacheReadTokens  int64   `json:"cache_read_tokens" example:"10000"`
 	CacheWriteTokens int64   `json:"cache_write_tokens" example:"1500"`
+	BillableRequests int64   `json:"billable_requests"`
+	RequestCostCNY   float64 `json:"request_cost_cny"`
 	ReasoningTokens  int64   `json:"reasoning_tokens" example:"800"`
 	ErrorCount       int64   `json:"error_count" example:"0"`
 	AvgLatencyMs     float64 `json:"avg_latency_ms" example:"1100"`
@@ -100,6 +106,7 @@ type TimeSeriesMeta struct {
 
 // UsageRecordsQuery represents query parameters for usage records
 type UsageRecordsQuery struct {
+	EventType string `json:"event_type" form:"event_type" description:"tokens (default) for model usage; requests for web tools"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
 	Provider  string `json:"provider" form:"provider" description:"Filter by provider UUID"`
@@ -113,6 +120,9 @@ type UsageRecordsQuery struct {
 
 // UsageRecordResponse represents a single usage record
 type UsageRecordResponse struct {
+	EventType        string  `json:"event_type"`
+	UnitPrice        float64 `json:"unit_price"`
+	Currency         string  `json:"currency"`
 	ID               uint    `json:"id" example:"1"`
 	ProviderUUID     string  `json:"provider_uuid" example:"uuid-123"`
 	ProviderName     string  `json:"provider_name" example:"openai"`
@@ -127,6 +137,8 @@ type UsageRecordResponse struct {
 	TotalTokens      int     `json:"total_tokens" example:"1500"`
 	CacheReadTokens  int     `json:"cache_read_tokens" example:"2000"`
 	CacheWriteTokens int     `json:"cache_write_tokens" example:"300"`
+	BillableRequests int64   `json:"billable_requests"`
+	RequestCostCNY   float64 `json:"request_cost_cny"`
 	ReasoningTokens  int     `json:"reasoning_tokens" example:"50"`
 	Status           string  `json:"status" example:"success"`
 	ErrorCode        string  `json:"error_code,omitempty"`

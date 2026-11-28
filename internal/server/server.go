@@ -415,6 +415,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
 	server.mcpRuntime.SetClientPool(server.clientPool)
+	deepSeekWebtools := server.newDeepSeekWebtools()
+	server.mcpRuntime.SetDeepSeekWebtools(deepSeekWebtools)
 
 	// Register adviser as virtual tool if configured
 	server.registerAdviserFromConfig()

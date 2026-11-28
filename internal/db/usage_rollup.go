@@ -40,6 +40,8 @@ func mergeBucket(dst map[string]*aggBucket, key string, b aggBucket) {
 	cur.OutputTokens += b.OutputTokens
 	cur.CacheReadTokens += b.CacheReadTokens
 	cur.CacheWriteTokens += b.CacheWriteTokens
+	cur.BillableRequests += b.BillableRequests
+	cur.RequestCostCNY += b.RequestCostCNY
 	cur.ReasoningTokens += b.ReasoningTokens
 	cur.SystemTokens += b.SystemTokens
 	cur.ErrorCount += b.ErrorCount
@@ -126,7 +128,7 @@ func (us *UsageStore) tierStatBuckets(q UsageStatsQuery, tier *rollupTier, from,
 	if q.GroupBy == "scenario" || q.Scenario != "" {
 		// Only reachable without provider/model/user dimensions (see
 		// aggregatedStatsFromRollups).
-		table, filters = tier.scenarioTable, map[string]string{}
+		table, filters = tier.scenarioTable, map[string]string{"event_type": usageEventType(q.EventType)}
 		if q.Scenario != "" {
 			filters["scenario"] = q.Scenario
 		}
@@ -171,6 +173,8 @@ func (us *UsageStore) tierStatBuckets(q UsageStatsQuery, tier *rollupTier, from,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+		COALESCE(SUM(billable_requests), 0) as billable_requests,
+		COALESCE(SUM(request_cost_cny), 0) as request_cost_cny,
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(error_count), 0) as error_count,
@@ -241,15 +245,16 @@ func sortAggBuckets(list []aggBucket, sortBy, sortOrder string) {
 // rollup tiers when the query shape allows it. Returns handled=false to fall
 // back to raw.
 func (us *UsageStore) timeSeriesFromRollups(interval string, start, end time.Time, filters map[string]string) ([]TimeSeriesData, bool, error) {
+	filters = withDefaultUsageEvent(filters)
 	if (interval != "day" && interval != "hour") || start.IsZero() || end.IsZero() {
 		return nil, false, nil
 	}
 	for k := range filters {
 		switch k {
-		case "provider_uuid", "model", "user_id":
+		case "provider_uuid", "model", "user_id", "event_type":
 		case "scenario":
 			// The scenario tables have no other dimension to filter on.
-			if len(filters) > 1 {
+			if len(filters) > 2 {
 				return nil, false, nil
 			}
 		default:
@@ -309,6 +314,8 @@ func seriesFromBuckets(merged map[string]*aggBucket) []TimeSeriesData {
 			OutputTokens:     b.OutputTokens,
 			CacheReadTokens:  b.CacheReadTokens,
 			CacheWriteTokens: b.CacheWriteTokens,
+			BillableRequests: b.BillableRequests,
+			RequestCostCNY:   b.RequestCostCNY,
 			ReasoningTokens:  b.ReasoningTokens,
 			SystemTokens:     b.SystemTokens,
 			ErrorCount:       b.ErrorCount,
@@ -324,6 +331,7 @@ func seriesFromBuckets(merged map[string]*aggBucket) []TimeSeriesData {
 // timeSeriesFromRollups refuse a query that sets them and fall back to the raw
 // table. (scenario lives in the *_scenario tables.)
 var dailyFilterColumns = map[string]struct{}{
+	"event_type":    {},
 	"provider_uuid": {},
 	"provider_name": {},
 	"model":         {},
@@ -348,6 +356,7 @@ func validateDailyFilterColumns(filters map[string]string) error {
 func (q UsageStatsQuery) dailyFilterMap() map[string]string {
 	filters := make(map[string]string, 3)
 	for column, value := range map[string]string{
+		"event_type":    usageEventType(q.EventType),
 		"provider_uuid": q.Provider,
 		"model":         q.Model,
 		"user_id":       q.UserID,
@@ -363,13 +372,14 @@ func (q UsageStatsQuery) dailyFilterMap() map[string]string {
 // are Unix seconds of the bucket start, matching the raw strftime('%s', ...)
 // encoding.
 func (us *UsageStore) tierSeriesBuckets(tier *rollupTier, interval string, from, to time.Time, filters map[string]string) ([]aggBucket, error) {
+	filters = withDefaultUsageEvent(filters)
 	us.mu.RLock()
 	defer us.mu.RUnlock()
 
 	table := tier.table
 	if scenario, ok := filters["scenario"]; ok {
 		// timeSeriesFromRollups only lets scenario through on its own.
-		table, filters = tier.scenarioTable, map[string]string{"scenario": scenario}
+		table, filters = tier.scenarioTable, map[string]string{"scenario": scenario, "event_type": filters["event_type"]}
 	} else if err := validateDailyFilterColumns(filters); err != nil {
 		return nil, err
 	}
@@ -391,6 +401,8 @@ func (us *UsageStore) tierSeriesBuckets(tier *rollupTier, interval string, from,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+		COALESCE(SUM(billable_requests), 0) as billable_requests,
+		COALESCE(SUM(request_cost_cny), 0) as request_cost_cny,
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(error_count), 0) as error_count,

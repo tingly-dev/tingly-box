@@ -13,6 +13,7 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 	router := rt.V1
 	// GET /api/v1/usage/stats - Get aggregated usage statistics
 	router.GET("/usage/stats", h.GetStats,
+		swagger.WithQueryConfig("event_type", swagger.QueryParamConfig{Name: "event_type", Type: "string", Description: "tokens (default) for model usage; requests for web tool usage", Default: "tokens", Enum: []interface{}{"tokens", "requests"}}),
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns aggregated usage statistics with flexible grouping and filtering"),
@@ -107,6 +108,7 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 
 	// GET /api/v1/usage/timeseries - Get time-series usage data
 	router.GET("/usage/timeseries", h.GetTimeSeries,
+		swagger.WithQueryConfig("event_type", swagger.QueryParamConfig{Name: "event_type", Type: "string", Description: "tokens (default) for model usage; requests for web tool usage", Default: "tokens", Enum: []interface{}{"tokens", "requests"}}),
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns time-series data for usage with configurable intervals"),
@@ -162,6 +164,7 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 
 	// GET /api/v1/usage/records - Get individual usage records
 	router.GET("/usage/records", h.GetRecords,
+		swagger.WithQueryConfig("event_type", swagger.QueryParamConfig{Name: "event_type", Type: "string", Description: "tokens (default) for model usage; requests for web tool usage", Default: "tokens", Enum: []interface{}{"tokens", "requests"}}),
 		swagger.WithMiddleware(middleware.Gzip()),
 		swagger.WithTags("usage"),
 		swagger.WithDescription("Returns individual usage records (for debugging/audit)"),
