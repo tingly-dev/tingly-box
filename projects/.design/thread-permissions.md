@@ -2,7 +2,7 @@
 
 > 状态：**§2 已实现**（#2740 后端，用户确认了分组与默认值；§2.6 界面 #2742）；**§3 `request_permission` 已实现**（#2741，见 §3.7 与提案的差异），**§3.8 改为“批准后直接执行”**（用户反馈：批了还得再调、还可能再被拦；取代 §3.1–§3.7 中与之冲突的部分）。
 > 建在 #2734（工具自己弹审批卡：`approval.go`、`Links.authorize`）、#2736（`close`）、#2737（`merge` 的 `head` 与 merge commit）之上。
-> 相关：[github-tools.md](github-tools.md)（工具与边界）、[mcp-tools.md](mcp-tools.md)（工具粒度）、[mcp-tools-coverage.md](mcp-tools-coverage.md)（场景卡点）、项目记忆 `ask-dont-refuse-beyond-boundary`、`mcp-tool-granularity`。
+> 相关：[github-tools.md](github-tools.md)（工具与边界）、[mcp-tools.md](mcp-tools.md)（工具粒度）、[mcp-tools-coverage.md](mcp-tools-coverage.md)（场景卡点）、[`../../.research/agentboot-stop-and-permissions.md`](../../.research/agentboot-stop-and-permissions.md) §2（permission mode 本身的实时下发、收紧与放宽的边界）、项目记忆 `ask-dont-refuse-beyond-boundary`、`mcp-tool-granularity`。
 
 ## 1 问题
 

@@ -102,13 +102,23 @@ func (p *webPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) 
 	return agentboot.AskResponse{Approved: res.approved, Response: res.answer}, nil
 }
 
-// autoApprovePrompter wraps a prompter to auto-approve every permission
-// request (bypassPermissions) while still deferring AskUserQuestion to it —
-// the same split @cc's own executor makes: bypass is unconditional approval
-// of tool use, never of a free-form question.
-type autoApprovePrompter struct{ inner agentboot.Prompter }
+// autoApprovePrompter wraps a prompter to auto-approve permission requests
+// while the session runs in bypassPermissions, still deferring
+// AskUserQuestion to it — the same split @cc's own executor makes: bypass is
+// unconditional approval of tool use, never of a free-form question.
+//
+// The mode is asked for at each request instead of being fixed when the
+// wrapper is built, so tightening a running session's mode takes effect on
+// the next approval of the turn in flight, not only on the next turn.
+type autoApprovePrompter struct {
+	inner agentboot.Prompter
+	mode  func() string
+}
 
-func (p autoApprovePrompter) OnApproval(context.Context, agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+func (p autoApprovePrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	if p.mode != nil && !autoApproves(p.mode()) {
+		return p.inner.OnApproval(ctx, req)
+	}
 	return agentboot.ApprovalResponse{Approved: true}, nil
 }
 func (p autoApprovePrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {

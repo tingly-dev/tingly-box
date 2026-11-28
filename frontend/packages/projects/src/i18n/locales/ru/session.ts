@@ -61,7 +61,7 @@ export const session: PluralDict<typeof en> = {
         agentRecent: 'Последние шаги', agentLatest: 'Последний ответ', agentReport: 'Отчёт',
     },
     composer: {
-        settings: 'Настройки сеанса', placeholder: 'Напишите сообщение…', send: 'Отправить (Enter)', sendShort: 'Отправить', stop: 'Стоп', stopTurn: 'Остановить текущий ход', attach: 'Прикрепить файлы', pastedText: 'Вставленный текст · строк: {{count}}', removeAttachment: 'Убрать {{name}}', attachFailed: 'Не удалось прикрепить файл', keys: 'Enter — отправить · Shift+Enter — новая строка',
+        settings: 'Настройки сеанса', placeholder: 'Напишите сообщение…', send: 'Отправить (Enter)', sendShort: 'Отправить', stop: 'Стоп', stopTurn: 'Остановить текущий ход (фоновые задачи продолжат работать)', attach: 'Прикрепить файлы', pastedText: 'Вставленный текст · строк: {{count}}', removeAttachment: 'Убрать {{name}}', attachFailed: 'Не удалось прикрепить файл', keys: 'Enter — отправить · Shift+Enter — новая строка',
         sendOptions: 'Как отправить', insert: 'Вставить в текущий ход (Enter)', sendNextTurn: 'Отправить после этого хода (Enter)',
         sendInsert: 'Вставить сейчас', sendInsertHint: 'Claude прочтёт на следующем шаге, не останавливаясь (Enter)', sendInsertUnavailable: 'Этот агент читает сообщения только между ходами',
         sendNextTurnLabel: 'Отправить после этого хода', sendNextTurnHint: 'Удерживает сообщение, пока Claude не закончит (Alt+Enter)',

@@ -3,10 +3,12 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -96,17 +98,46 @@ func ValidOutputPath(path, taskID string) bool {
 // clearTasks forgets id's live tasks once the process that ran them is gone,
 // and says so in the transcript: the process leaves no event of its own, and
 // a page that counts the running tasks would show them running until a reload.
+// A ledger line names what the closed process ended with, so a thread opened
+// afterwards still says what was lost and which output files may remain.
 func (e *Engine) clearTasks(id string) {
 	e.mu.Lock()
-	had := len(e.live[id]) > 0
+	lost := append([]TaskBrief(nil), e.live[id]...)
 	delete(e.live, id)
 	e.mu.Unlock()
-	if had && len(e.BackgroundTasks(id)) == 0 {
-		// A restarted process may already have reported its own tasks; the
-		// consumers read the live set, so the event only says "look again".
+	if len(lost) == 0 {
+		return
+	}
+	e.store.Append(id, Entry{Kind: KindSystem, Content: taskLedgerNote(lost), Timestamp: time.Now()})
+	// A restarted process may already have reported its own tasks; the
+	// consumers read the live set, so the event only says "look again".
+	if len(e.BackgroundTasks(id)) == 0 {
 		payload, _ := json.Marshal(TaskEvent{Event: "background_tasks_changed", Tasks: []TaskRef{}})
 		e.store.Append(id, Entry{Kind: KindTask, Payload: payload, Timestamp: time.Now()})
 	}
+}
+
+// taskLedgerNote is the transcript line for background tasks a closed process
+// took with it: what they were, and that their output on disk is all that is
+// left of them.
+func taskLedgerNote(lost []TaskBrief) string {
+	names := make([]string, 0, len(lost))
+	for _, t := range lost {
+		d := t.Description
+		if d == "" {
+			d = t.TaskType
+		}
+		if d == "" {
+			d = "task"
+		}
+		names = append(names, d+" ("+t.TaskID+")")
+	}
+	if len(lost) == 1 {
+		return "A background task was still running when this session's process closed: " + names[0] +
+			". It ended with the process; output already written is still on disk."
+	}
+	return fmt.Sprintf("%d background tasks were still running when this session's process closed: %s. They ended with the process; output already written is still on disk.",
+		len(lost), strings.Join(names, ", "))
 }
 
 // StopTask stops one of id's background tasks. Claude Code reports the
