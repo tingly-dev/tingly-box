@@ -170,7 +170,7 @@ export const project: PluralDict<typeof en> = {
     tree: { loading: 'Загрузка…', emptyFolder: 'Пустая папка', retry: 'Повторить', failed: 'Не удалось загрузить эту папку.' },
     library: {
         intro: 'Добавленные файлы доступны для чтения каждому потоку. Потоки без репозитория сдают сюда свои файлы.',
-        add: 'Добавить файлы', empty: 'Файлов пока нет.', download: 'Скачать', downloadZip: 'Скачать в zip', copyPath: 'Скопировать путь к папке',
+        add: 'Добавить файлы', addHint: 'Добавить файлы (не больше {{limit}} каждый)', uploadTooLarge: '{{name}} — {{size}}, это на {{over}} больше лимита {{limit}}', empty: 'Файлов пока нет.', download: 'Скачать', downloadZip: 'Скачать в zip', copyPath: 'Скопировать путь к папке',
         tree: 'Файлы Библиотеки', tooLarge: 'Файл слишком велик для просмотра.', notPreviewable: 'Этот файл нельзя просмотреть. Скачайте его.',
         previousImage: 'Предыдущее изображение', nextImage: 'Следующее изображение', scratch: 'Временные файлы (TMPDIR)',
         sort: 'Сортировка файлов', sortTimeDesc: 'Сначала новые', sortTimeAsc: 'Сначала старые', sortNameAsc: 'Имя А–Я', sortNameDesc: 'Имя Я–А',

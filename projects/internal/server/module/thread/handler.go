@@ -189,8 +189,8 @@ type MergeRequest struct {
 	Body  string `json:"body,omitempty"`
 }
 
-// maxUpload caps one uploaded file.
-const maxUpload = 200 << 20
+// maxUpload caps one uploaded file; the limit lives once, in the project package.
+const maxUpload = rt.MaxUploadBytes
 
 // Handler is the thread HTTP module.
 type Handler struct {

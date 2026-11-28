@@ -1010,8 +1010,8 @@ func (h *Handler) libraryTree(c *gin.Context) {
 	c.JSON(http.StatusOK, LibraryTreeResponse{Dir: h.svc.Layout.LibraryDir(p.ID), Path: strings.Trim(rel, "/"), Entries: entries})
 }
 
-// maxUpload caps one uploaded library file.
-const maxUpload = 200 << 20
+// maxUpload caps one uploaded library file; the limit lives once, in the project package.
+const maxUpload = rt.MaxUploadBytes
 
 func (h *Handler) uploadLibrary(c *gin.Context) {
 	p, ok := h.project(c)

@@ -3,6 +3,8 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -85,4 +87,41 @@ func TestDownloadNameDropsTheUploadIDOnly(t *testing.T) {
 	} {
 		assert.Equal(t, want, DownloadName(rel), rel)
 	}
+}
+
+// The size check is inclusive at the limit and refuses exactly one byte over
+// (TooLargeError, which the HTTP layer maps to 413), so the web client's
+// precheck — which uses the same boundary — agrees with the server.
+func TestSaveAttachmentLimitBoundary(t *testing.T) {
+	l := Layout{Root: t.TempDir()}
+	require.NoError(t, l.Ensure("p1"))
+
+	a, err := l.SaveAttachment("p1", "edge.bin", strings.NewReader(strings.Repeat("x", 8)), 8)
+	require.NoError(t, err, "a file exactly at the limit is kept")
+	assert.EqualValues(t, 8, a.Size)
+
+	_, err = l.SaveAttachment("p1", "over.bin", strings.NewReader(strings.Repeat("x", 9)), 8)
+	var tooLarge *TooLargeError
+	require.ErrorAs(t, err, &tooLarge)
+	assert.Equal(t, "over.bin", tooLarge.Name)
+	assert.EqualValues(t, 8, tooLarge.Limit)
+}
+
+// The web client refuses an oversized file before uploading it, using a copy
+// of MaxUploadBytes (it cannot read Go constants at runtime). Keep the copy
+// equal: a drift means the UI accepts a file the server then rejects with 413,
+// which is exactly what the precheck exists to prevent.
+func TestWebClientUploadLimitMatchesTheServer(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "frontend", "packages", "projects", "src", "utils", "uploadLimit.ts")
+	src, err := os.ReadFile(path)
+	require.NoError(t, err, "the web client's upload limit file moved; update this test's path")
+
+	m := regexp.MustCompile(`MAX_UPLOAD_BYTES\s*=\s*([0-9]+)\s*<<\s*([0-9]+)`).FindSubmatch(src)
+	require.NotNil(t, m, "uploadLimit.ts must define MAX_UPLOAD_BYTES as a << b")
+
+	shift, err := strconv.Atoi(string(m[2]))
+	require.NoError(t, err)
+	base, err := strconv.Atoi(string(m[1]))
+	require.NoError(t, err)
+	assert.Equal(t, MaxUploadBytes, int64(base)<<shift, "the web client's MAX_UPLOAD_BYTES must match the server's MaxUploadBytes")
 }
