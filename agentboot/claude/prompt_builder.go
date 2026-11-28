@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
 // StreamPromptBuilder helps build stream prompts
@@ -54,6 +56,20 @@ func (b *StreamPromptBuilder) AddUserMessage(content string) error {
 		"message": map[string]interface{}{
 			"role":    "user",
 			"content": content,
+		},
+	}
+	return b.Add(msg)
+}
+
+// AddUserContent adds a user message whose content is text plus content blocks
+// (images), in the wire shape Claude's stream-json input accepts for an array
+// content.
+func (b *StreamPromptBuilder) AddUserContent(prompt string, content []agentboot.ContentBlock) error {
+	msg := map[string]interface{}{
+		"type": SDKUserMessage,
+		"message": map[string]interface{}{
+			"role":    "user",
+			"content": wireContent(prompt, content),
 		},
 	}
 	return b.Add(msg)

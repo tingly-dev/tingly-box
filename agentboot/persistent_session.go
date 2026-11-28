@@ -183,7 +183,14 @@ func (s *persistentSession) TurnOutputSeen() bool {
 // Send encodes and writes the next turn directly onto the shared encoder.
 // The first turn is instead submitted by Runner.Open via the driver's
 // InitialInput channel; Send handles every turn after that.
-func (s *persistentSession) Send(_ context.Context, prompt string) error {
+func (s *persistentSession) Send(ctx context.Context, prompt string) error {
+	return s.SendContent(ctx, prompt, nil)
+}
+
+// SendContent is Send for a turn whose message carries content blocks (text
+// plus images). A transport that cannot encode blocks falls back to the plain
+// prompt.
+func (s *persistentSession) SendContent(_ context.Context, prompt string, content []ContentBlock) error {
 	s.mu.Lock()
 	switch s.state {
 	case SessionStateIdle:
@@ -199,7 +206,12 @@ func (s *persistentSession) Send(_ context.Context, prompt string) error {
 	}
 	s.mu.Unlock()
 
-	msg := s.transport.EncodeUserMessage(prompt)
+	var msg any
+	if enc, ok := s.transport.(ContentEncoder); ok && len(content) > 0 {
+		msg = enc.EncodeUserContent(prompt, content)
+	} else {
+		msg = s.transport.EncodeUserMessage(prompt)
+	}
 	if err := s.encoder.Encode(msg); err != nil {
 		// The write failed (most likely the process already exited); let
 		// the pump's terminate() path be the authority on the session's

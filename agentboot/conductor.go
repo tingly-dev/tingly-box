@@ -113,6 +113,12 @@ func (c *Conductor) Await(ctx context.Context, prompter Prompter) (*Result, erro
 // its background work survive) rather than closing the session; only an
 // agent without interrupt support, or one that ignores it, is closed.
 func (c *Conductor) RunTurn(ctx context.Context, prompt string, prompter Prompter) (*Result, error) {
+	return c.RunTurnContent(ctx, prompt, nil, prompter)
+}
+
+// RunTurnContent is RunTurn for a message that carries content blocks (text
+// plus images); a session that cannot encode them falls back to the prompt.
+func (c *Conductor) RunTurnContent(ctx context.Context, prompt string, content []ContentBlock, prompter Prompter) (*Result, error) {
 	t := &conductedTurn{ctx: ctx, prompter: prompter, outcome: make(chan turnOutcome, 1)}
 	c.mu.Lock()
 	if c.turn != nil {
@@ -123,7 +129,18 @@ func (c *Conductor) RunTurn(ctx context.Context, prompt string, prompter Prompte
 	// turn's events, so none of this turn's events can reach a turn-less
 	// Conductor.
 	c.turn = t
-	err := c.session.Send(ctx, prompt)
+	var err error
+	if len(content) > 0 {
+		if sc, ok := c.session.(interface {
+			SendContent(context.Context, string, []ContentBlock) error
+		}); ok {
+			err = sc.SendContent(ctx, prompt, content)
+		} else {
+			err = c.session.Send(ctx, prompt)
+		}
+	} else {
+		err = c.session.Send(ctx, prompt)
+	}
 	if err != nil {
 		c.turn = nil
 	}

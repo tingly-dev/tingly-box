@@ -149,6 +149,14 @@ type MidTurnInputEncoder interface {
 	EncodeMidTurnMessage(prompt string) any
 }
 
+// ContentEncoder is implemented by transports whose agent takes a user message
+// as content blocks (text plus images). Optional: without it a message with
+// [ExecutionOptions.Content] falls back to its plain text.
+type ContentEncoder interface {
+	// EncodeUserContent returns the wire value for a user turn carrying blocks.
+	EncodeUserContent(prompt string, content []ContentBlock) any
+}
+
 // ControlResponseDecoder is implemented by transports whose agent answers a
 // host-initiated control request with a response event. Optional: without
 // it, [PersistentSession.SetModel] and friends return ErrControlUnsupported.

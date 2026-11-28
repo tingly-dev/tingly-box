@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -116,6 +117,16 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 	opts.SessionID = sessionID
 	opts.Resume = resume
 	opts.PermissionPromptTool = "stdio"
+	if len(opts.Content) > 0 {
+		// Keep the blocks for Retry, which re-sends a turn that never reached
+		// the agent (see lastTurn).
+		e.mu.Lock()
+		if lt, ok := e.lastTurn[sessionID]; ok {
+			lt.content = opts.Content
+			e.lastTurn[sessionID] = lt
+		}
+		e.mu.Unlock()
+	}
 
 	prompter := e.prompterFor(sessionID, webPrompt, opts.PermissionMode)
 
@@ -164,6 +175,9 @@ type lastTurn struct {
 	prompt     string
 	failed     bool
 	outputSeen bool
+	// content is the failed turn's content blocks (an image message), so Retry
+	// can send the same message again when it never reached the agent.
+	content []agentboot.ContentBlock
 }
 
 // settleTurn records the outcome of a turn: a failure arms Retry, a clean
@@ -289,7 +303,7 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 			return nil, false
 		}
 	} else {
-		_, werr = res.c.RunTurn(ctx, prompt, prompter)
+		_, werr = res.c.RunTurnContent(ctx, prompt, opts.Content, prompter)
 		switch {
 		case errors.Is(werr, agentboot.ErrTurnInFlight):
 			// Claude started a turn of its own (a background task just
@@ -393,6 +407,14 @@ func (e *Engine) Retry(id, dir string, launch Launch) bool {
 	prompt, resume := "", true
 	if !failed.outputSeen {
 		prompt, resume = failed.prompt, false
+		if content := failed.content; len(content) > 0 && launch != nil {
+			base := launch
+			launch = func(ctx context.Context) agentboot.ExecutionOptions {
+				opts := base(ctx)
+				opts.Content = content
+				return opts
+			}
+		}
 	} else if launch != nil {
 		base := launch
 		launch = func(ctx context.Context) agentboot.ExecutionOptions {
@@ -746,5 +768,13 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 	mcpHash := sha256.Sum256(mcpConfig)
 	// A changed sandbox (turned on or off, other mounts) needs a new process.
 	sandbox, _ := json.Marshal(opts.Sandbox)
-	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00") + "\x00" + hex.EncodeToString(mcpHash[:]) + "\x00" + string(sandbox)
+	// The built-in tool allowlist and the restricted/safe-mode launch flags are
+	// fixed at launch, so a change to them needs a new process too. Content is
+	// per-message and deliberately not here: an image must not restart it.
+	tools := "default"
+	if opts.Tools != nil {
+		tools = strings.Join(opts.Tools, ",")
+	}
+	launchFlags := tools + "\x00" + strconv.FormatBool(opts.Restricted) + "\x00" + strconv.FormatBool(opts.SafeMode)
+	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00") + "\x00" + hex.EncodeToString(mcpHash[:]) + "\x00" + string(sandbox) + "\x00" + launchFlags
 }

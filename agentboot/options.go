@@ -86,6 +86,21 @@ type ExecutionOptions struct {
 	// Tool filtering (per-execution override)
 	AllowedTools    []string
 	DisallowedTools []string
+	// Tools is the built-in tool allowlist (Claude Code --tools): the only tools
+	// the agent may use. A non-nil empty slice disables every built-in tool; nil
+	// leaves the agent's default set.
+	Tools []string
+	// Restricted confines the file tools to the working directories and drops
+	// the executable tools (Claude Code --restricted).
+	Restricted bool
+	// SafeMode starts without customizations — hooks, skills, plugins, CLAUDE.md,
+	// custom commands/agents and MCP servers (Claude Code --safe-mode).
+	SafeMode bool
+
+	// Content, when non-empty, is the user message as content blocks (text and
+	// images) instead of the plain Prompt string. Only the message of the turn
+	// it is set on uses it; it is never part of the launch signature.
+	Content []ContentBlock
 
 	// MCP servers (per-execution override)
 	MCPServers map[string]interface{}
