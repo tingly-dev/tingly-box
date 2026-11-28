@@ -62,6 +62,14 @@ the loading spinner on the user's button.
 The bot maintains an internal `messageIDMap` (`chatID → last message ID`) so
 that `React` can resolve the target chat from a bare message ID.
 
+## ID routing
+
+Inbound messages store `msg.Chat.ID` as `Recipient.ID` (`adapter.go`), which is
+the same chat id `SendMessage` addresses: a decimal string, negative for groups
+and supergroups. A public chat's `@username` is also a valid Telegram chat id.
+Telegram has no separate user id versus private-chat id — the numeric id is the
+receiver.
+
 ## Capabilities
 
 | Feature | Supported |

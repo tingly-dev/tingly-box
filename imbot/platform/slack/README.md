@@ -60,6 +60,14 @@ For threaded replies the format is extended to
 
 `React`, `EditMessage`, and `DeleteMessage` all parse this format.
 
+## ID routing
+
+Inbound events store `event.Channel` as `Recipient.ID` (`slack.go`); that is
+the conversation `chat.postMessage` addresses. Encoded channel ids start with
+`D` (DM), `C` (public channel) or `G` (private group / mpim). A user id
+(`U…`, or legacy `W…`/`B…`) identifies a person, not a conversation — a DM
+channel must be opened first. The adapter never stores a user id as the chat.
+
 ## Capabilities
 
 | Feature | Supported |

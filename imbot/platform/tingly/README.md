@@ -18,6 +18,11 @@ tingly.Bot
 `React`, `EditMessage`, `DeleteMessage`) is forwarded to the `Transport`.
 Inbound messages are injected into the bot via `Transport.Subscribe`.
 
+## ID routing
+
+`Recipient.ID` is the local transport's chat id (e.g. `chat-1` in `testenv`).
+Any non-empty local id is a chat; there is no platform-specific ID kind.
+
 ## Authentication
 
 **Type:** `none`

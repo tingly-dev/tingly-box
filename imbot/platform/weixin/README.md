@@ -51,6 +51,12 @@ The bot wraps `wechat.WechatBot` from the tingly-dev weixin SDK and connects
 via a **WebSocket** to the configured `baseUrl`. Each bot is associated with a
 single WeChat account identified by `accountID`.
 
+## ID routing
+
+Inbound messages store `msg.To` as `Recipient.ID` (`adapter.go`) — the other
+party's user id, which is what a reply is sent to. Group chats use the
+chatroom id (`…@chatroom`). The SDK currently reports direct chats only.
+
 ## Capabilities
 
 | Feature | Supported |

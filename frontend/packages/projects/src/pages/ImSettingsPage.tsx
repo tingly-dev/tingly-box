@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { MoveChatDialog } from '../components/im/MoveChatDialog';
 import { PlatformMark, usePlatformLabel } from '../components/im/PlatformMark';
 import { chatKey, imDestination, useChannelBindings, useImChats, useProjectDirectory } from '../components/im/useImBindings';
+import { classifyImId, isBindable } from '../components/im/imIdKind';
 import { ChatBubble } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectsHost, type ImBot, type ImChat } from '../host/ProjectsHost';
@@ -99,13 +100,14 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                         <Typography color="text.secondary" sx={{ px: 2, py: 2, fontSize: fontSizes.base }}>{t('im.settings.noChats')}</Typography>
                                     ) : (
                                         <TableContainer>
-                                            <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 560, '& td, & th': { borderColor: 'divider' }, '& tbody tr:last-of-type td': { borderBottom: 0 } }}>
+                                            <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 640, '& td, & th': { borderColor: 'divider' }, '& tbody tr:last-of-type td': { borderBottom: 0 } }}>
                                                 <TableHead>
                                                     <TableRow>
-                                                        <TableCell sx={{ pl: 2, width: '42%' }}>{t('im.settings.chat')}</TableCell>
-                                                        <TableCell sx={{ width: '28%' }}>{t('im.settings.boundTo')}</TableCell>
-                                                        <TableCell sx={{ width: '16%' }}>{t('im.settings.status')}</TableCell>
-                                                        <TableCell align="right" sx={{ pr: 2, width: '14%' }}><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('im.settings.action')}</Box></TableCell>
+                                                        <TableCell sx={{ pl: 2, width: '38%' }}>{t('im.settings.chat')}</TableCell>
+                                                        <TableCell sx={{ width: '13%' }}>{t('im.settings.type')}</TableCell>
+                                                        <TableCell sx={{ width: '23%' }}>{t('im.settings.boundTo')}</TableCell>
+                                                        <TableCell sx={{ width: '14%' }}>{t('im.settings.status')}</TableCell>
+                                                        <TableCell align="right" sx={{ pr: 2, width: '12%' }}><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('im.settings.action')}</Box></TableCell>
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
@@ -113,10 +115,26 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                         const b = byChat.get(chatKey(c.platform, c.chatId));
                                                         const place = b ? directory.get(b.project_id) : undefined;
                                                         const destination = imDestination(b, place, paths);
+                                                        // The raw overview keeps every entity, including ones the bind
+                                                        // selector leaves out, so an invalid id can be diagnosed here.
+                                                        const id = classifyImId(c.platform, c.kind, c.chatId);
+                                                        const canBind = isBindable(id);
+                                                        // An id that can never be a receiver is not "waiting to pair":
+                                                        // say it is not bindable rather than showing a pairing state.
+                                                        const status = !canBind && c.state !== 'blocked' ? 'im.settings.statusUnbindable' : c.state === 'ok' ? 'im.settings.statusOk' : c.state === 'blocked' ? 'im.settings.statusBlocked' : 'im.settings.statusUnpaired';
+                                                        const statusColor = !canBind && c.state !== 'blocked' ? 'text.disabled' : STATE_COLOR[c.state];
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
                                                                     <ImChatLabel platform={c.platform} chatId={c.chatId} kind={c.kind} alias={c.alias} copy />
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t(id.typeKey)}</Typography>
+                                                                    {id.reasonKey && (
+                                                                        <Typography sx={{ fontSize: fontSizes.sm, lineHeight: 1.35, color: id.class === 'unknown' ? 'warning.main' : 'text.disabled' }}>
+                                                                            {t(id.reasonKey)}
+                                                                        </Typography>
+                                                                    )}
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {b?.project_id ? (
@@ -135,14 +153,16 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                                 </TableCell>
                                                                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                                                                     <Typography component="span" sx={{ fontSize: fontSizes.base, display: 'inline-flex', alignItems: 'center', gap: 0.75, color: 'text.secondary' }}>
-                                                                        <Dot color={STATE_COLOR[c.state]} />
-                                                                        {t(c.state === 'ok' ? 'im.settings.statusOk' : c.state === 'blocked' ? 'im.settings.statusBlocked' : 'im.settings.statusUnpaired')}
+                                                                        <Dot color={statusColor} />
+                                                                        {t(status)}
                                                                     </Typography>
                                                                 </TableCell>
                                                                 <TableCell align="right" sx={{ pr: 2 }}>
                                                                     <Button
                                                                         size="small" variant={b ? 'outlined' : 'contained'} color={b ? 'inherit' : 'primary'}
-                                                                        disabled={c.state === 'blocked'}
+                                                                        // An unbound row whose id is not a receiver cannot be offered for
+                                                                        // binding; a bound one keeps Move so the row is not a dead end.
+                                                                        disabled={c.state === 'blocked' || (!b && !canBind)}
                                                                         aria-label={b ? t('im.settings.rebindLabel', { chat: c.title }) : undefined}
                                                                         onClick={() => setMoving(c)}
                                                                     >

@@ -68,6 +68,15 @@ When a chatbot message arrives, DingTalk includes a per-conversation
 (`conversationID → webhookURL`) so that replies can be routed back to the
 correct conversation without a separate target-resolution call.
 
+## ID routing
+
+Inbound chatbot events store `ConversationId` (`cid…`) as `Recipient.ID`
+(`adapter.go`), and that conversation id is the send target, resolved through
+the session webhook map above (`dingtalk.go`). `SenderStaffId` is a person,
+kept only as the sender — this bot replies into a conversation, not to a staff
+id. Without a received message there is no known webhook, so a stored
+conversation cannot be sent to until the bot hears from it again.
+
 ## Capabilities
 
 | Feature | Supported |

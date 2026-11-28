@@ -62,6 +62,14 @@ Incoming messages are parsed from Meta's
 [`MessageEvent`](whatsapp.go) structure which wraps the standard webhook
 payload format (`object → entry[].changes[].value.messages[]`).
 
+## ID routing
+
+Inbound messages store `msg.From` as `Recipient.ID` (`whatsapp.go`), a
+WhatsApp `wa_id` (phone number). `SendMessage` posts `phone_number: target`, so
+a phone number or `…@s.whatsapp.net` is a valid target. A group JID
+(`…@g.us`) is not supported by this send path; the adapter only handles direct
+text today.
+
 ## Capabilities
 
 | Feature | Supported |
