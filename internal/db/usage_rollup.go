@@ -12,19 +12,12 @@ import (
 // Reads served from the rollup tiers (see usage_rollup_plan.go for the
 // segment plan and usage_rollup_build.go for how buckets get built).
 
-// rollupSegmentRange returns the inclusive raw-scan bounds of a segment. Bounds
-// that are the caller's own are passed through untouched; derived ones are
-// converted to server-local so the driver formats them with the offset the
-// records were stored with.
+// rollupSegmentRange returns the inclusive raw-scan bounds of a segment, in
+// UTC so they are formatted with the offset the records were stored with
+// (storage is UTC — see prepareUsageRecord). withinTimeRange normalizes again,
+// so this is belt-and-braces for callers that bind the raw SQL directly.
 func rollupSegmentRange(seg rollupSegment, start, end time.Time) (time.Time, time.Time) {
-	from, to := seg.from, seg.to
-	if !from.Equal(start) {
-		from = from.In(time.Local)
-	}
-	if !to.Equal(end) {
-		to = to.In(time.Local)
-	}
-	return from, to
+	return seg.from.UTC(), seg.to.UTC()
 }
 
 // mergeBucket adds b into dst under key.

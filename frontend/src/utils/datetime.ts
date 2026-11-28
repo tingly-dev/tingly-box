@@ -1,5 +1,9 @@
-// Format date to local ISO string (with timezone offset).
-// Backend stores local time, so we send local time with timezone offset.
+// Format a Date as an ISO string carrying an explicit local timezone offset
+// (e.g. 2026-11-26T00:00:00+08:00). Dashboard windows such as "today" are built
+// from the user's local midnight, so they stay in the browser's zone; the
+// backend normalizes every bound to UTC before comparing it against the
+// UTC-stored timestamp column, so the offset here never needs to match the
+// server's zone.
 export const toLocalISOString = (date: Date): string => {
     const tzOffset = -date.getTimezoneOffset();
     const sign = tzOffset >= 0 ? '+' : '-';

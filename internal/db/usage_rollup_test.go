@@ -107,9 +107,9 @@ func statsEqual(g, w AggregatedStat) bool {
 }
 
 // hourWindows are windows of every shape the planner handles, relative to now.
-// Bounds are server-local, as in production: usage_records.timestamp is a
-// string compared lexicographically, so a bound in another zone would make the
-// raw reference scan itself inexact.
+// The store normalizes bounds to UTC internally, so the zone these carry only
+// matters for the planner's wall-clock shapes; the raw reference scan binds the
+// same instants.
 func hourWindows(now time.Time) map[string][2]time.Time {
 	top := now.Truncate(time.Hour)
 	utcMidnight := utcDayStart(now).In(time.Local)

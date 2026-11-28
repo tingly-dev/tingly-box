@@ -3,6 +3,7 @@ package usage
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -442,4 +443,51 @@ func TestReasoningTokensSurviveHandlerConversion(t *testing.T) {
 		}
 		assert.Contains(t, w.Body.String(), `"reasoning_tokens":30`)
 	})
+}
+
+// TestUsageAPIUTCWindowFromLocalBrowser is the API-level counterpart of the
+// #2797 regression: a UTC server, a UTC+8 browser asking for its "today" window
+// (local midnight → 01:58), and the JSON that comes back. The record must be
+// found and echoed with an explicit UTC timestamp.
+func TestUsageAPIUTCWindowFromLocalBrowser(t *testing.T) {
+	sm, err := db.NewStoreManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreManager failed: %v", err)
+	}
+	defer sm.Close()
+	store := sm.Usage()
+
+	// 2026-11-26 01:58 in UTC+8 == 2026-11-25 17:58 UTC.
+	instant := time.Date(2026, 11, 25, 17, 58, 0, 0, time.UTC)
+	if err := store.RecordUsage(&db.UsageRecord{
+		ProviderUUID: "prov-1",
+		ProviderName: "openai",
+		Model:        "gpt-5.1",
+		Scenario:     "default",
+		UserID:       "admin",
+		Timestamp:    instant,
+		InputTokens:  100,
+		Status:       "success",
+	}); err != nil {
+		t.Fatalf("RecordUsage failed: %v", err)
+	}
+
+	handler := NewHandler(store)
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/usage/records", handler.GetRecords)
+
+	// The browser's local "today" window, carrying its +08:00 offset.
+	start := url.QueryEscape("2026-11-26T00:00:00+08:00")
+	end := url.QueryEscape("2026-11-26T01:58:00+08:00")
+	req, _ := http.NewRequest("GET", "/usage/records?start_time="+start+"&end_time="+end, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	body := w.Body.String()
+	assert.Contains(t, body, `"total":1`, "the record inside the browser's local day must be returned")
+	assert.Contains(t, body, `"timestamp":"2026-11-25T17:58:00Z"`, "record timestamps are serialized as UTC")
 }

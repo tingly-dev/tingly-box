@@ -169,7 +169,7 @@ The stats response is `{ meta, data }`; `data` contains additive counts plus der
 
 `status` values stored by usage tracking are `success` or `error`, matching the By Request filter. The public query type also documents `partial`, so any new producer or filter must be checked against the values actually persisted.
 
-All frontend time bounds are local ISO strings with an explicit timezone offset. The SQLite path stores and compares server-local time strings, so sending UTC-only bounds can shift the intended range.
+Time is stored and compared in UTC. `usage_records.timestamp` is UTC text: the store normalizes every write with `.UTC()`, and a startup migration (`normalizeUsageTimestampsToUTC`) rewrites rows from older builds that stamped the server's local offset. The dashboard builds its windows in the browser's zone ("today" = local midnight → now) and serializes them with that explicit offset; the backend converts every bound to UTC before comparing it against the UTC column, so the browser and the server need not share a timezone. Responses emit UTC RFC3339 (`…Z`), and the frontend renders every instant in the browser's `Intl` locale and zone. Rollup bucket keys and `date(timestamp)` grouping are UTC. The normative rules behind these choices are in [time-and-timezone.md](time-and-timezone.md).
 
 ### Surface-specific calls
 

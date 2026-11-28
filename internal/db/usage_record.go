@@ -21,15 +21,18 @@ import (
 // each extra index is paid on every proxied request's INSERT (see
 // droppedUsageIndexes for the ones removed from existing databases).
 type UsageRecord struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
-	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
-	ProviderName string    `gorm:"column:provider_name;not null"`
-	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
-	Scenario     string    `gorm:"column:scenario;not null"`
-	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
-	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
-	TeamID       string    `gorm:"column:team_id;index:idx_team;not null;default:''"`
-	RequestModel string    `gorm:"column:request_model"`
+	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	ProviderUUID string `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
+	ProviderName string `gorm:"column:provider_name;not null"`
+	Model        string `gorm:"column:model;index:idx_provider_model;not null"`
+	Scenario     string `gorm:"column:scenario;not null"`
+	RuleUUID     string `gorm:"column:rule_uuid;index:idx_rule"`
+	UserID       string `gorm:"column:user_id;index:idx_user;not null;default:''"`
+	TeamID       string `gorm:"column:team_id;index:idx_team;not null;default:''"`
+	RequestModel string `gorm:"column:request_model"`
+	// Timestamp is always stored in UTC. The column is TEXT and range queries
+	// compare it lexicographically, so a non-UTC offset would misorder it
+	// against UTC bounds (see prepareUsageRecord / withinTimeRange).
 	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
 	OutputTokens int       `gorm:"column:output_tokens;not null"`
@@ -243,7 +246,31 @@ func migrateUsageTables(db *gorm.DB) error {
 	if err := db.AutoMigrate(&UsageRecord{}, &UsageHourlyRecord{}, &UsageHourlyScenarioRecord{}, &UsageDailyRecord{}, &UsageDailyScenarioRecord{}); err != nil {
 		return fmt.Errorf("failed to migrate usage database: %w", err)
 	}
+	if err := normalizeUsageTimestampsToUTC(db); err != nil {
+		return fmt.Errorf("failed to normalize usage timestamps to UTC: %w", err)
+	}
 	return nil
+}
+
+// normalizeUsageTimestampsToUTC rewrites usage_records.timestamp values written
+// by older builds, which stamped records with the server's local offset
+// (`time.Now()`) instead of UTC. The column is TEXT and range queries compare
+// it lexicographically, so a stored `+08:00` row and a UTC bound disagree even
+// when the instants are in order. SQLite's strftime parses the existing offset
+// and re-emits the same instant in UTC, so the migration is lossless (sub-ms
+// precision is truncated to ms, which usage timestamps never rely on) and
+// idempotent: rows already ending in `+00:00` are skipped.
+//
+// Rows with an unparseable value are left untouched rather than nulled.
+func normalizeUsageTimestampsToUTC(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&UsageRecord{}) {
+		return nil
+	}
+	return db.Exec(`
+		UPDATE usage_records
+		SET timestamp = strftime('%Y-%m-%d %H:%M:%f+00:00', timestamp)
+		WHERE timestamp NOT LIKE '%+00:00'
+		  AND strftime('%Y-%m-%d %H:%M:%f+00:00', timestamp) IS NOT NULL`).Error
 }
 
 // droppedUsageIndexes are usage_records indexes that earlier versions created
@@ -322,8 +349,16 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 // database -- split out so RecordRequestOutcome can create it in the same
 // transaction as a StatsStore write.
 func prepareUsageRecord(record *UsageRecord) {
+	// Storage is UTC. usage_records.timestamp is TEXT and every range query
+	// compares it lexicographically (SQLite has no native datetime type), so a
+	// row and a bound carrying different UTC offsets misorder even when their
+	// instants are in order. Keeping both sides in UTC is what makes the text
+	// comparison agree with time. See normalizeUsageTimestampsToUTC for rows
+	// written by older builds.
 	if record.Timestamp.IsZero() {
-		record.Timestamp = time.Now()
+		record.Timestamp = time.Now().UTC()
+	} else {
+		record.Timestamp = record.Timestamp.UTC()
 	}
 	// Total tokens is the sum of all token types
 	record.TotalTokens = record.InputTokens + record.OutputTokens
@@ -394,13 +429,18 @@ type AggregatedStat struct {
 // GetRecords, GetPerformanceSummary) cannot drift apart.
 
 // withinTimeRange narrows to [start, end]. A zero bound is left open.
+//
+// Bounds are converted to UTC before binding because timestamp values are
+// stored as UTC TEXT and compared lexicographically; binding an instant in the
+// caller's zone (e.g. the browser's +08:00) would compare offsets as text and
+// drop rows that are actually inside the range.
 func withinTimeRange(start, end time.Time) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if !start.IsZero() {
-			db = db.Where("timestamp >= ?", start)
+			db = db.Where("timestamp >= ?", start.UTC())
 		}
 		if !end.IsZero() {
-			db = db.Where("timestamp <= ?", end)
+			db = db.Where("timestamp <= ?", end.UTC())
 		}
 		return db
 	}
@@ -922,7 +962,7 @@ func (us *UsageStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	// One transaction: every rollup table must lose the same buckets, or the
 	// one that kept them would never rebuild them.
 	err := us.db.Transaction(func(tx *gorm.DB) error {
-		res := tx.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
+		res := tx.Where("timestamp < ?", cutoffDate.UTC()).Delete(&UsageRecord{})
 		if res.Error != nil {
 			return res.Error
 		}

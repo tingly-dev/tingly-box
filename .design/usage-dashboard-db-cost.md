@@ -179,8 +179,17 @@ Costs to know:
   5 ms during a cold 365-day build on 300k records, the worst write wait was
   ~450 ms with 7-day runs and ~110 ms (mean 30 ms) with 1-day runs, for ~10%
   more build time.
-- **Mixed-offset timestamps.** `usage_records.timestamp` is text with the
-  writer's UTC offset and ranges compare lexicographically; the build pads the
-  scan by `dstScanPad` (2 h) for DST. A row written with a timestamp in
-  another zone than the server's (an import) can be missed by the build and by
-  raw scans alike; production writes use `time.Now()`.
+- **Time is UTC end to end.** `usage_records.timestamp` is stored as UTC text
+  (`prepareUsageRecord` normalizes every write; `normalizeUsageTimestampsToUTC`
+  rewrites—in place and idempotently—rows from older builds that stamped the
+  server's local offset). Range bounds are converted to UTC before binding, so
+  the lexicographic comparison agrees with the instant whatever zone the
+  browser sends. The build still pads its raw scan by `dstScanPad` (2 h) as a
+  safety margin. Hour and day bucket keys, and `date(timestamp)` grouping, are
+  UTC.
+- **Windows are browser-local, day buckets are UTC.** `today`/`yesterday` and
+  the multi-day windows are aligned to the browser's local midnight, while
+  `group_by=daily` / `interval=day` buckets are UTC days (the tiers cannot be
+  rekeyed without a `tz` parameter). Whole-hour offsets mostly line up; a
+  multi-day chart's first and last bars can cover a partial UTC day at the
+  window edges. Following the user's zone for day buckets is a follow-up.
