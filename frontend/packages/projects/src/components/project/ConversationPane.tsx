@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Chip, Collapse, Paper, TextField, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { ConfirmDialog } from '@tingly/ui';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
@@ -12,7 +13,7 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { useTranscriptHost } from '../../transcript/context';
-import { Check, PlayArrow, Settings } from '../icons';
+import { Check, Settings } from '../icons';
 import { DisclosureRow } from '../common/Disclosure';
 import { LoadEarlier } from './LoadEarlier';
 import { NumberedTitle, ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
@@ -111,17 +112,69 @@ export function ThreadUpdateRow({ message, onOpen }: { message: TranscriptEntry;
     );
 }
 
+interface ProposalAction {
+    /** The action the service runs: start, dismiss, start_all, dismiss_all, or its own id. */
+    id: string;
+    /** The button's words; empty uses the card's own words for a built-in action. */
+    label?: string;
+    style?: 'primary' | 'default' | 'danger';
+    /** item acts on one proposal (the default); card acts on all of them. */
+    scope?: 'item' | 'card';
+}
+
 interface Suggestion {
     title: string;
     task: string;
     repo?: string;
     thread_id?: string;
+    /** Declined by the user; the proposal is left out of the card. */
+    dismissed?: boolean;
+    /** A newer instruction made the plan stale; still startable, shown weak. */
+    superseded?: boolean;
 }
 
-function SuggestionsCard({ message, threads, onStart, onOpen, onTasks, disabled }: {
+/** A proposal card as the service sends it: its words and its action set. */
+interface SuggestionsPayload {
+    suggestions: Suggestion[];
+    title?: string;
+    intent?: string;
+    /** Omitted keeps the built-in actions; an explicit empty list offers none. */
+    actions?: ProposalAction[];
+}
+
+/**
+ * The built-in action set, used when the payload names none. Labels are the
+ * frontend's words (they need the language); a service-driven action brings
+ * its own label.
+ */
+const DEFAULT_ACTIONS: ProposalAction[] = [
+    { id: 'start', style: 'primary', scope: 'item' },
+    { id: 'dismiss', style: 'default', scope: 'item' },
+    { id: 'start_all', style: 'primary', scope: 'card' },
+    { id: 'dismiss_all', style: 'default', scope: 'card' },
+];
+
+function actionLabel(a: ProposalAction, t: TFunction, count: number): string {
+    if (a.label) return a.label;
+    switch (a.id) {
+        case 'start': return t('conversation.start');
+        case 'dismiss': return t('conversation.dismiss');
+        case 'start_all': return t('conversation.startAll', { count });
+        case 'dismiss_all': return t('conversation.dismissAll', { count });
+        default: return a.id;
+    }
+}
+
+/**
+ * Threads the coordinator (or a service) proposed: the same card as a
+ * decision, with a row per proposal and the actions its payload names. A
+ * dismissed proposal stays gone; a superseded one keeps its row, weak and
+ * labelled expired, so it can still be started or dismissed.
+ */
+function SuggestionsCard({ message, threads, onAction, onOpen, onTasks, disabled }: {
     message: TranscriptEntry;
     threads: Map<string, Thread>;
-    onStart: (messageId: string, indexes: number[]) => Promise<void>;
+    onAction: (messageId: string, action: string, indexes: number[]) => Promise<void>;
     onOpen: (id: string) => void;
     /** Opens a suggested thread's running tasks from its count pill. */
     onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
@@ -129,39 +182,96 @@ function SuggestionsCard({ message, threads, onStart, onOpen, onTasks, disabled 
 }) {
     const { t } = useTranslation('projects');
     const [busy, setBusy] = useState(false);
-    const suggestions = parse<{ suggestions: Suggestion[] }>(message.payload)?.suggestions ?? [];
-    const remaining = suggestions.filter((s) => !s.thread_id).length;
-    const start = async (indexes: number[]) => {
+    const [confirm, setConfirm] = useState<{ indexes: number[]; title?: string } | null>(null);
+    const pl = parse<SuggestionsPayload>(message.payload);
+    const suggestions = pl?.suggestions ?? [];
+    const actions = pl?.actions ?? DEFAULT_ACTIONS;
+    const visible = suggestions.map((s, i) => ({ s, i })).filter(({ s }) => !s.dismissed);
+    // Proposals still offerable: started and dismissed ones are not.
+    const remaining = visible.filter(({ s }) => !s.thread_id).length;
+    const itemActions = actions.filter((a) => (a.scope ?? 'item') !== 'card');
+    const cardActions = actions.filter((a) => a.scope === 'card').filter((a) => (a.id === 'start_all' || a.id === 'dismiss_all' ? remaining > 1 : true));
+    if (visible.length === 0) return null;
+    const run = async (a: ProposalAction, indexes: number[], title?: string) => {
+        if (a.id === 'dismiss' || a.id === 'dismiss_all') {
+            setConfirm({ indexes, title });
+            return;
+        }
         setBusy(true);
         try {
-            await onStart(message.id!, indexes);
+            await onAction(message.id!, a.id, indexes);
         } finally {
             setBusy(false);
         }
     };
+    const dismiss = async () => {
+        if (!confirm) return;
+        setBusy(true);
+        try {
+            await onAction(message.id!, 'dismiss', confirm.indexes);
+        } finally {
+            setBusy(false);
+            setConfirm(null);
+        }
+    };
+    const button = (a: ProposalAction, indexes: number[], title?: string, label?: string) => {
+        const words = label ?? actionLabel(a, t, remaining);
+        return (
+            <Button
+                key={`${a.id}:${title ?? 'all'}`}
+                size="small"
+                variant={a.style === 'primary' ? 'contained' : 'outlined'}
+                color={a.style === 'danger' ? 'error' : a.style === 'default' ? 'inherit' : 'primary'}
+                disabled={busy || disabled}
+                aria-label={title ? `${words}: ${title}` : words}
+                onClick={() => void run(a, indexes, title)}
+            >
+                {words}
+            </Button>
+        );
+    };
     return (
-        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }}>
-            <Typography variant="overline" color="text.secondary">{t('conversation.suggested')}</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
-                {suggestions.map((s, i) => {
+        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }} data-testid="suggestions-card">
+            <Typography variant="overline" color="text.secondary">{pl?.title || t('conversation.suggested')}</Typography>
+            {pl?.intent && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, whiteSpace: 'pre-wrap' }}>{pl.intent}</Typography>}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 1 }}>
+                {visible.map(({ s, i }) => {
                     const th = s.thread_id ? threads.get(s.thread_id) : undefined;
                     if (th) return <ThreadCard key={i} thread={th} onOpen={onOpen} onTasks={onTasks} />;
+                    const expired = !!s.superseded;
                     return (
-                        <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.25, borderRadius: radius.row, bgcolor: 'action.hover' }}>
+                        <Box key={i} data-testid={`proposal-row-${i}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', opacity: expired ? 0.55 : 1 }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>{s.title}</Typography>
+                                <Typography sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>
+                                    {s.title}
+                                    {expired && <Chip size="small" label={t('conversation.expired')} sx={{ height: 18 }} />}
+                                </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.task}</Typography>
                             </Box>
-                            <Button size="small" startIcon={<PlayArrow />} disabled={busy || disabled} onClick={() => void start([i])}>{t('conversation.start')}</Button>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                {itemActions.map((a) => button(a, [i], s.title))}
+                            </Box>
                         </Box>
                     );
                 })}
+                {cardActions.length > 0 && (
+                    <Box data-testid="proposal-card-actions" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.25 }}>
+                        {cardActions.map((a) => button(a, []))}
+                    </Box>
+                )}
             </Box>
-            {remaining > 1 && (
-                <Button variant="contained" size="small" sx={{ mt: 1.25 }} disabled={busy || disabled} onClick={() => void start([])}>
-                    {t('conversation.startAll', { count: remaining })}
-                </Button>
-            )}
+            <ConfirmDialog
+                open={confirm !== null}
+                title={t('conversation.dismissConfirmTitle')}
+                description={confirm?.indexes.length === 0
+                    ? t('conversation.dismissAllConfirm', { count: remaining })
+                    : t('conversation.dismissConfirm', { title: confirm?.title ?? '' })}
+                confirmLabel={t('conversation.dismiss')}
+                cancelLabel={t('conversation.customCancel')}
+                loading={busy}
+                onClose={() => setConfirm(null)}
+                onConfirm={() => void dismiss()}
+            />
         </Paper>
     );
 }
@@ -261,7 +371,7 @@ function DecisionCard({ message, threads, onChoose, onOpen, disabled }: {
     const words = text.trim();
     const sendCustom = () => { if (words && !busy && !disabled) void choose(-1, words); };
     return (
-        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }}>
+        <Paper variant="outlined" sx={{ borderRadius: radius.card, p: 1.5 }} data-testid="decision-card">
             <Typography variant="overline" color="text.secondary">{t('conversation.decision')}</Typography>
             <DecisionSource d={d} threads={threads} onOpen={onOpen} />
             <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>{d.question}</Typography>
@@ -271,7 +381,7 @@ function DecisionCard({ message, threads, onChoose, onOpen, disabled }: {
                     const picked = answered && d.chosen === i;
                     const recommended = !answered && d.recommended === i;
                     return (
-                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', opacity: answered && !picked ? 0.55 : 1 }}>
+                        <Box key={i} data-testid={`decision-option-${i}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', opacity: answered && !picked ? 0.55 : 1 }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                 <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>
                                     {o.label}
@@ -356,7 +466,8 @@ interface Props {
     onOpenThread: (id: string) => void;
     /** Opens a thread's running tasks from its card's count pill. */
     onOpenTasks?: (threads: Thread[], anchor: HTMLElement) => void;
-    onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
+    /** Runs an action a proposal card names (start/dismiss/custom) on its proposals; empty indexes means all. */
+    onCardAction: (messageId: string, action: string, indexes: number[]) => Promise<void>;
     /** custom is set (index -1) when the user answers in their own words. */
     onChooseDecision: (messageId: string, index: number, custom?: string) => Promise<void>;
     /** Interrupts the running coordinator turn, like a thread's stop. */
@@ -366,7 +477,7 @@ interface Props {
     onFocused?: () => void;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, insertable = true, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop, focusEventId, onFocused }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, insertable = true, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onCardAction, onChooseDecision, onStop, focusEventId, onFocused }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -402,7 +513,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                 );
             }
             case 'suggestions':
-                return <SuggestionsCard message={message} threads={threads} onStart={onStartSuggestions} onOpen={onOpenThread} onTasks={onOpenTasks} disabled={disabled} />;
+                return <SuggestionsCard message={message} threads={threads} onAction={onCardAction} onOpen={onOpenThread} onTasks={onOpenTasks} disabled={disabled} />;
             case 'decision':
                 return <DecisionCard message={message} threads={threads} onChoose={onChooseDecision} onOpen={onOpenThread} disabled={disabled} />;
             case 'thread_update':
@@ -417,7 +528,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
             default:
                 return null;
         }
-    }, [threads, disabled, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, t]);
+    }, [threads, disabled, onOpenThread, onOpenTasks, onCardAction, onChooseDecision, t]);
     // A user message's files, fetched against the project like a thread's.
     const attachments = useMemo<AttachmentsComponent>(() => ({ items, align, captions }) => <AttachmentChips owner={{ projectId }} items={items} align={align} captions={captions} />, [projectId]);
 

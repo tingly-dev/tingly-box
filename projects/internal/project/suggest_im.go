@@ -77,7 +77,7 @@ func (c *Coordinator) pendingSuggestions(threadID, eventID string) (db.ThreadEve
 		return db.ThreadEvent{}, nil, false
 	}
 	for _, s := range pl.Suggestions {
-		if s.ThreadID == "" {
+		if s.ThreadID == "" && !s.Dismissed && !s.Superseded {
 			return *m, pl.Suggestions, true
 		}
 	}
@@ -98,7 +98,7 @@ func (r *Relay) suggestions(e db.ThreadEvent) {
 	var lines []string
 	choices := []agent.Choice{{Value: choiceStartAll, Label: "Start all"}}
 	for i, s := range pl.Suggestions {
-		if s.ThreadID != "" {
+		if s.ThreadID != "" || s.Dismissed || s.Superseded {
 			continue
 		}
 		line := fmt.Sprintf("%d. %s", i+1, s.Title)

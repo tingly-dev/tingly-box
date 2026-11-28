@@ -29,7 +29,7 @@ const sent = (name: string, caption = ''): ThreadEvent => ({
 });
 const props = (messages: ThreadEvent[]): ComponentProps<typeof ConversationPane> => ({
     projectId: 'p', threadId: 'coordinator', messages, threads: new Map(), busy: false, disabled: false,
-    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
+    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onCardAction: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
 });
 const show = (messages: ThreadEvent[]) => render(<MemoryRouter><ProjectsHostProvider host={{ paths: { list: '/projects', project: (id) => `/projects/${id}`, folder: () => '/folders' } }}><ConversationPane {...props(messages)} /></ProjectsHostProvider></MemoryRouter>);
 

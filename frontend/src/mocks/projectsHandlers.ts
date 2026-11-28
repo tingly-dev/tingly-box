@@ -265,6 +265,14 @@ const messages = [
     // A card answered in the user's own words.
     msg('m10b', 'decision', '', 2.2, { question: 'Cut the release branch today?', options: [{ label: 'Cut it now' }, { label: 'Wait for the freeze' }], recommended: 1, custom: 'Cut it after the Redis PR merges, then tag.' }),
     msg('m11', 'decision', '', 2, { question: 'Resolve the conflicts of the Redis PR with main?', thread_id: 't-cache', thread_seq: 2, thread_title: 'Cache idempotency keys in Redis', number: 214, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The branch is two commits behind and CI was green before.' }),
+    // A proposal card with one thread: the plain default actions.
+    msg('m12', 'suggestions', '', 1.8, { title: 'Next step', intent: 'One thread to finish the pool work while the Redis PR lands.', suggestions: [{ title: 'Add the pool saturation alert', task: 'Alert when the pool waits longer than 50 ms at peak, with a runbook link.' }] }),
+    // Two proposals: start/dismiss one, or the whole card.
+    msg('m13', 'suggestions', '', 1.6, { suggestions: [{ title: 'Backfill the Redis cache', task: 'Warm idempotency keys from the last 24h so the first request after deploy is not a miss.' }, { title: 'Document the retry budget', task: 'Add a short section to the SDK README with the token-bucket defaults.' }] }),
+    // A card a service drove itself: its own words, and its own extra action.
+    msg('m14', 'suggestions', '', 1.4, { title: 'Release checklist', intent: 'Cut 2.4 after the Redis PR merges.', suggestions: [{ title: 'Prepare the 2.4 release', task: 'Collect the merged PRs, write the changelog and tag the release branch.' }, { title: 'Run the migration drill', task: 'Rehearse the Postgres 17 cutover in staging and note the timings.' }], actions: [{ id: 'start', style: 'primary', scope: 'item' }, { id: 'dismiss', style: 'default', scope: 'item' }, { id: 'remember', label: 'Remember this plan', style: 'default', scope: 'card' }] }),
+    // An instruction arrived after this card: its proposals are expired.
+    msg('m15', 'suggestions', '', 1.2, { suggestions: [{ title: 'Tune the pool for 8 cores', task: 'Size the pool from the current peak, as asked before the plan changed.', superseded: true }, { title: 'Add a latency SLO dashboard', task: 'One Grafana row per route with the p99 target.', superseded: true }] }),
 ]
 
 const library = [
@@ -493,6 +501,19 @@ export const projectsHandlers = [
         return main ? HttpResponse.json({ ...thread({ id: main.main_thread_id!, title: main.name, status: 'working', task: '' }), agent: 'llm' }) : HttpResponse.json({ error: 'thread not found' }, { status: 404 })
     }),
     http.post('/api/v1/threads/:tid/events/:eid/start', () => HttpResponse.json(messages[2])),
+    // A proposal card's actions: dismiss records the declined proposals, as the server does.
+    http.post('/api/v1/threads/:tid/events/:eid/action', async ({ params, request }) => {
+        const e = messages.find((x) => x.id === params.eid) as (typeof messages)[number] | undefined
+        if (!e) return HttpResponse.json({ error: 'event not found' }, { status: 404 })
+        const body = (await request.json()) as { action: string; indexes?: number[] }
+        if (e.kind === 'suggestions' && e.payload && (body.action === 'dismiss' || body.action === 'dismiss_all')) {
+            const pl = JSON.parse(e.payload) as { suggestions: { thread_id?: string; dismissed?: boolean }[] }
+            const picked = body.indexes ?? []
+            pl.suggestions = pl.suggestions.map((s, i) => (((picked.length === 0 || picked.includes(i)) && !s.thread_id) ? { ...s, dismissed: true } : s))
+            ;(e as { payload?: string }).payload = JSON.stringify(pl)
+        }
+        return HttpResponse.json(e)
+    }),
     http.put('/api/v1/threads/:tid/profile', async ({ params, request }) => {
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
