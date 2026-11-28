@@ -96,6 +96,15 @@ describe('conversation presentation', () => {
         expect(writeText).toHaveBeenCalledWith('const value = 1;');
     });
 
+    it('copies code from the coordinator conversation too (the transcript gets the shared code block)', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        vi.stubGlobal('isSecureContext', true);
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+        show(props([event('assistant', '```go\nfmt.Println("x")\n```')]));
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'common.copy' })));
+        expect(writeText).toHaveBeenCalledWith('fmt.Println("x")');
+    });
+
     it('preserves attachment-only messages, IM provenance and the live-turn line', () => {
         show({ ...props([
             event('user', '', { source: 'im', source_platform: 'telegram', source_chat_id: 'chat', payload: JSON.stringify({ attachments: [{ name: 'log.txt', path: 'uploads/log.txt', type: 'text/plain', size: 32 }] }) }),

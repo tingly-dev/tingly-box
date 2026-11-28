@@ -6,6 +6,8 @@ export const workspace = {
         copy: 'Copy', copied: 'Copied', more: 'More', star: 'Star', unstar: 'Unstar', retry: 'Retry',
         tokensApprox: '≈ {{value}} tokens', turnOn: 'Turn on', turnOff: 'Turn off',
     },
+    // A Markdown table's card: its label and copy action (components/MarkdownTable.tsx).
+    markdown: { table: 'Table', copyTable: 'Copy table' },
     // Desktop notifications while the tab is in the background (notifications/engine.ts).
     notifications: {
         waiting: 'Waits on your input',

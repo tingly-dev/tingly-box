@@ -1,5 +1,6 @@
 import XMarkdown, {type ComponentProps} from '@ant-design/x-markdown';
 import {Box} from '@mui/material';
+import {TableBlock} from '../components/MarkdownTable';
 import {fontMono} from '@tingly/ui/theme/fonts';
 import {memo, type ReactNode} from 'react';
 import {Children, isValidElement} from 'react';
@@ -49,7 +50,11 @@ const Code = ({block, lang, children}: ComponentProps) => {
 // would only add a second frame.
 const Pre = ({children}: ComponentProps) => <>{children}</>;
 
-const components = {code: Code, pre: Pre};
+// A table gets the same copyable card in both parsers; TableBlock draws the
+// <table> itself, so it takes the processed thead/tbody as children.
+const Table = ({children}: ComponentProps) => <TableBlock>{children}</TableBlock>;
+
+const components = {code: Code, pre: Pre, table: Table};
 const config = {...breaksConfig, ...autolinkBoundaryConfig};
 
 // Markdown renders an agent's reply. Raw HTML in the output is shown as text,

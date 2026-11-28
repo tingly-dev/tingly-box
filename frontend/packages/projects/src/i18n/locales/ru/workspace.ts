@@ -7,6 +7,8 @@ export const workspace: PluralDict<typeof en> = {
         copy: 'Копировать', copied: 'Скопировано', more: 'Ещё', star: 'В избранное', unstar: 'Убрать из избранного', retry: 'Повторить',
         tokensApprox: '≈ {{value}} токенов', turnOn: 'Включить', turnOff: 'Выключить',
     },
+    // Карточка таблицы Markdown: подпись и действие копирования (components/MarkdownTable.tsx).
+    markdown: { table: 'Таблица', copyTable: 'Копировать таблицу' },
     notifications: {
         waiting: 'Ждёт вашего ответа',
         failed: 'Ход завершился ошибкой',
