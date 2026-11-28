@@ -38,6 +38,18 @@ const (
 
 const DBFileName = "tingly.db" // Unified SQLite database file
 
+// Readiness handshake headers on GET /api/v1/info/health.
+//
+// The instance header lets a launcher prove the health response came from the
+// server it just started, not from an older instance that is still shutting
+// down and answering on the same port. The service header lets it reject an
+// unrelated process sitting on the port.
+const (
+	HealthServiceHeader  = "X-Tingly-Service"
+	HealthInstanceHeader = "X-Tingly-Instance"
+	HealthServiceName    = "tingly-box"
+)
+
 // Token speed-based routing defaults
 const (
 	DefaultMinSpeedSamples   = 5    // Minimum samples required before making speed-based decisions

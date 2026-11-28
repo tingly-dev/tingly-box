@@ -7,36 +7,48 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 // Handler carries the minimal server state needed to serve /info/* endpoints.
 type Handler struct {
-	version      string
-	configFile   string
-	configDir    string
-	launchSource string
+	version       string
+	configFile    string
+	configDir     string
+	launchSource  string
+	instanceToken string
 }
 
 // NewHandler creates a Handler. launchSource is how this process was itself
 // invoked (see server.WithLaunchSource) — known once at boot, never detected
-// or persisted.
-func NewHandler(version, configFile, configDir, launchSource string) *Handler {
+// or persisted. instanceToken, when non-empty, is echoed on the health
+// endpoint so a launcher can tell this instance from an older one still
+// answering on the same port (see server.WithInstanceToken).
+func NewHandler(version, configFile, configDir, launchSource, instanceToken string) *Handler {
 	return &Handler{
-		version:      version,
-		configFile:   configFile,
-		configDir:    configDir,
-		launchSource: launchSource,
+		version:       version,
+		configFile:    configFile,
+		configDir:     configDir,
+		launchSource:  launchSource,
+		instanceToken: instanceToken,
 	}
 }
 
 // --- handlers ---------------------------------------------------------------
 
 // GetHealthInfo is a lightweight health check that can be called frequently.
+// It also carries the instance handshake headers: the launcher that started
+// this process requires its token back before it will announce the URL.
 func (h *Handler) GetHealthInfo(c *gin.Context) {
+	c.Header(constant.HealthServiceHeader, constant.HealthServiceName)
+	if h.instanceToken != "" {
+		c.Header(constant.HealthInstanceHeader, h.instanceToken)
+	}
 	c.JSON(http.StatusOK, HealthInfoResponse{
 		Health:  true,
 		Status:  "healthy",
-		Service: "tingly-box",
+		Service: constant.HealthServiceName,
 	})
 }
 

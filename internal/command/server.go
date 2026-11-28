@@ -65,6 +65,12 @@ type StartCmdKong struct {
 	Daemon               bool   `kong:"flag,name='daemon',default='true',negatable,help='Run in the background (default; pass --no-daemon for foreground)'"`
 	LogFile              string `kong:"flag,name='log-file',help='Log file path'"`
 	EnableShortcut       bool   `kong:"flag,name='shortcut',help='Also create/refresh a desktop shortcut for next time'"`
+	// StartTimeout caps how long this launcher waits for the server's health
+	// endpoint. 0 uses TINGLY_BOX_START_TIMEOUT or the built-in default.
+	StartTimeout time.Duration `kong:"flag,name='start-timeout',help='Max wait for the server health endpoint (default 60s, or $TINGLY_BOX_START_TIMEOUT)'"`
+	// Wait keeps waiting past StartTimeout while the server is still
+	// starting, instead of reporting "still starting" and exiting.
+	Wait bool `kong:"flag,name='wait',help='Keep waiting past --start-timeout while the server is still starting'"`
 }
 
 // resolveOptions converts the parsed Kong flags into resolved server options.
@@ -80,6 +86,8 @@ func (s *StartCmdKong) resolveOptions(appConfig *appconfig.AppConfig, portOverri
 		EnableStyleTransform: s.EnableStyleTransform,
 		Daemon:               s.Daemon,
 		LogFile:              s.LogFile,
+		StartTimeout:         s.StartTimeout,
+		KeepWaiting:          s.Wait,
 	})
 }
 
@@ -163,7 +171,7 @@ func (r *RestartCmdKong) Run(appManager *app.AppManager, source LaunchSource) er
 	if wasRunning {
 		fmt.Println("Stopping current server...")
 		if err := stopServerWithFileLock(fileLock); err != nil {
-			return fmt.Errorf("failed to stop server: %w", err)
+			return fmt.Errorf("failed to stop the running server; it may still be serving — %w", err)
 		}
 		fmt.Println("Server stopped successfully")
 	} else {
@@ -177,7 +185,13 @@ func (r *RestartCmdKong) Run(appManager *app.AppManager, source LaunchSource) er
 	}
 
 	opts := r.resolveOptions(appManager.AppConfig(), restartPort)
-	return startServer(appManager, opts, source)
+	err := startServer(appManager, opts, source)
+	if err != nil && wasRunning {
+		// The old server is already gone, so there is nothing to roll back to;
+		// say so plainly instead of leaving the user thinking something is up.
+		return fmt.Errorf("the previous server was stopped, but the new one failed to start — no server is running now. Fix the cause and run 'tingly-box start': %w", err)
+	}
+	return err
 }
 
 // OpenCmdKong opens the web UI
@@ -361,6 +375,52 @@ const (
 	webUITpl      = "http://localhost:%d/"
 	webUILoginTpl = "http://localhost:%d/login/%s"
 )
+
+// instanceTokenEnv carries the readiness instance token from a daemon parent
+// to its re-exec'd child. The child echoes it on its health endpoint, and the
+// parent requires it back, so a restart cannot mistake a still-dying old
+// server on the same port for the new one.
+const instanceTokenEnv = "_TINGLY_BOX_INSTANCE_TOKEN"
+
+// Bounds for stopping a running server. The graceful phase gives the server
+// time to close its listener (and MCP sources) after SIGTERM; the force phase
+// is the last resort before stop reports that the process would not die.
+// Variables, not constants, so tests can shorten them.
+var (
+	stopGracePeriod = 10 * time.Second
+	stopForcePeriod = 5 * time.Second
+)
+
+const stopPollInterval = 150 * time.Millisecond
+
+// waitLockReleased polls until the single-instance lock is released or the
+// timeout elapses. The OS releases a flock when the holder dies, so this is
+// also the process-exited signal.
+func waitLockReleased(fileLock *lock.FileLock, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if !fileLock.IsLocked() {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(stopPollInterval)
+	}
+}
+
+// finishStop cleans up a server's runtime files and, when the port is known,
+// waits for the socket to be released so an immediate restart can re-bind
+// without a race.
+func finishStop(fileLock *lock.FileLock, port int) error {
+	_ = fileLock.RemoveRuntimeFiles()
+	if port > 0 {
+		if err := network.WaitForPortAvailable(port, 3*time.Second); err != nil {
+			return fmt.Errorf("server stopped but port %d is still not available: %w", port, err)
+		}
+	}
+	return nil
+}
 
 // BannerConfig holds configuration for banner display
 type BannerConfig struct {
@@ -546,8 +606,14 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 		}
 		fmt.Printf("Server is already running on port %d%s\n", runningPort, versionNote)
 		// The lock is held from before the listener is up, so "running" alone
-		// does not mean the URL works: confirm it before showing it.
-		return confirmStarted(readiness.ProbeURL(opts.Host, runningPort), nil, startReadyTimeout, logFile, func() {
+		// does not mean the URL works: confirm it before showing it. No token
+		// here — we did not start this instance; any healthy tingly-box will do.
+		return startWait{
+			ProbeURL:    readiness.ProbeURL(opts.Host, runningPort),
+			Timeout:     opts.StartTimeout,
+			KeepWaiting: opts.KeepWaiting,
+			LogPath:     logFile,
+		}.confirm(func() {
 			printBanner(BannerConfig{
 				Port:         runningPort,
 				Host:         opts.Host,
@@ -564,21 +630,34 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 		})
 	}
 
+	// Readiness identity: a background launcher generates a fresh token for the
+	// child it is about to spawn (via the environment); a server process (the
+	// re-exec'd daemon child or a foreground run) adopts the token it was
+	// given, or makes its own for a direct foreground start.
+	instanceToken := os.Getenv(instanceTokenEnv)
+	daemonLauncher := opts.Daemon && !daemon.IsDaemonProcess()
+	if daemonLauncher || instanceToken == "" {
+		instanceToken = readiness.NewInstanceToken()
+	}
+
 	// Check if port is available (AFTER checking if our server is already running).
 	// A short bounded wait (rather than a single instant check) tolerates the
 	// moment right after a just-stopped previous server's process exits, when
 	// the OS may not have released the socket yet — this matters for
 	// `restart`, which stops the old server and immediately reuses its port.
 	if err := network.WaitForPortAvailable(port, 3*time.Second); err != nil {
-		return fmt.Errorf("port %d is already in use by another process", port)
+		if probe := readiness.ProbeURL(opts.Host, port); readiness.PortIsListening(probe) {
+			return fmt.Errorf("cannot start on port %d: another process is already listening there (not this Tingly Box — its lock is free). Stop it or choose another port with --port", port)
+		}
+		return fmt.Errorf("cannot start on port %d: %w", port, err)
 	}
 
 	// Background launch: this process only spawns the detached server and
 	// waits for it. It deliberately holds no lock — the child takes the
 	// single-instance lock itself — and prints access info only once the
 	// child answers its health endpoint (or reports why it did not).
-	if opts.Daemon && !daemon.IsDaemonProcess() {
-		return launchDaemon(opts, port, logFile, appConfig)
+	if daemonLauncher {
+		return launchDaemon(opts, port, logFile, appConfig, instanceToken)
 	}
 
 	// Acquire lock before starting server
@@ -613,6 +692,7 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 		server.WithProjectsDir(opts.ProjectsDir),
 		server.WithMultiLogger(multiLogger),
 		server.WithLaunchSource(string(source)),
+		server.WithInstanceToken(instanceToken),
 	)
 
 	for _, hook := range hooks {
@@ -664,7 +744,14 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 	if !opts.Daemon {
 		ready = make(chan error, 1)
 		go func() {
-			ready <- confirmStarted(readiness.ProbeURL(opts.Host, port), startFailed, startReadyTimeout, logFile, func() {
+			ready <- startWait{
+				ProbeURL:    readiness.ProbeURL(opts.Host, port),
+				Token:       instanceToken,
+				Exited:      startFailed,
+				Timeout:     opts.StartTimeout,
+				KeepWaiting: opts.KeepWaiting,
+				LogPath:     logFile,
+			}.confirm(func() {
 				printBanner(BannerConfig{
 					Port:         port,
 					Host:         opts.Host,
@@ -704,18 +791,33 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 // answers, so `start` never shows a URL that cannot be opened yet; if the
 // child dies or never comes up the error says so and points at the log, and
 // the command exits non-zero instead.
-func launchDaemon(opts options.StartServerOptions, port int, logFile string, appConfig *appconfig.AppConfig) error {
+//
+// token is a fresh per-launch readiness token: the child echoes it on the
+// health endpoint and this parent requires it back, so an older instance that
+// is still shutting down on the same port can never be mistaken for the child.
+func launchDaemon(opts options.StartServerOptions, port int, logFile string, appConfig *appconfig.AppConfig, token string) error {
 	fmt.Printf("Starting server on port %d...\n", port)
 
 	// Pin the resolved port so the re-exec'd child binds the same port instead
 	// of re-resolving from its own args (which omit a preserved/config port
 	// and would drift to the default).
-	exited, err := daemon.Spawn("--port", strconv.Itoa(port))
+	child, err := daemon.SpawnProcess(
+		[]string{instanceTokenEnv + "=" + token},
+		"--port", strconv.Itoa(port),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to daemonize: %w", err)
 	}
 
-	return confirmStarted(readiness.ProbeURL(opts.Host, port), exited, startReadyTimeout, logFile, func() {
+	return startWait{
+		ProbeURL:    readiness.ProbeURL(opts.Host, port),
+		Token:       token,
+		Exited:      child.Exited,
+		Timeout:     opts.StartTimeout,
+		KeepWaiting: opts.KeepWaiting,
+		LogPath:     logFile,
+		PID:         child.PID,
+	}.confirm(func() {
 		printBanner(BannerConfig{
 			Port:         port,
 			Host:         opts.Host,

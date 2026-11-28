@@ -109,15 +109,11 @@ func (s *Server) Start(port int) error {
 		serverError <- s.httpServer.ListenAndServe()
 	}()
 
-	// Instead of a fixed 100ms sleep, we poll the port
-	if err := waitForPort(addr, 2*time.Second); err != nil {
-		// Check if the server goroutine already caught a "port in use" error
-		select {
-		case e := <-serverError:
-			return e
-		default:
-			return fmt.Errorf("timeout: server did not start on %s: %v", addr, err)
-		}
+	// Instead of a fixed 100ms sleep, we poll the port. The wait also watches
+	// ListenAndServe's error channel so a bind failure (port taken, bad host)
+	// returns immediately instead of after the poll ceiling.
+	if err := waitForPortOrError(addr, serverError, 2*time.Second); err != nil {
+		return err
 	}
 
 	// Server is up: only now tell the user where it is. Printing the URL (or
@@ -146,18 +142,29 @@ func (s *Server) Start(port int) error {
 	return <-serverError
 }
 
-// Helper: Polls the port to ensure it's open before browser opens
-func waitForPort(addr string, timeout time.Duration) error {
+// Helper: Polls the port to ensure it's open before browser opens, and returns
+// the ListenAndServe error as soon as it arrives so a bind failure is reported
+// at once rather than after the poll ceiling.
+func waitForPortOrError(addr string, serverError <-chan error, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	var lastErr error
+	for {
 		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
 		if err == nil {
 			conn.Close()
 			return nil
 		}
+		lastErr = err
+		select {
+		case e := <-serverError:
+			return e
+		default:
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("timeout: server did not start on %s: %v", addr, lastErr)
+		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return fmt.Errorf("port %s not reachable", addr)
 }
 
 // GetRouter returns the Gin engine for testing purposes

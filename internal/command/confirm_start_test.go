@@ -4,6 +4,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/command/readiness"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 // freePort returns a port nothing is listening on right now.
@@ -31,6 +35,7 @@ func serveHealthAfter(t *testing.T, port int, delay time.Duration) <-chan time.T
 	bound := make(chan time.Time, 1)
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == readiness.HealthPath {
+			w.Header().Set(constant.HealthServiceHeader, constant.HealthServiceName)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -52,19 +57,23 @@ func serveHealthAfter(t *testing.T, port int, delay time.Duration) <-chan time.T
 // The access info (URL, token) must not be announced while the server is still
 // starting: with a delayed listener, announce runs only after the listener is
 // bound and answering.
-func TestConfirmStartedAnnouncesOnlyAfterReady(t *testing.T) {
+func TestConfirmAnnouncesOnlyAfterReady(t *testing.T) {
 	port := freePort(t)
 	bound := serveHealthAfter(t, port, 400*time.Millisecond)
 
 	var mu sync.Mutex
 	var announcedAt time.Time
-	err := confirmStarted(readiness.ProbeURL("127.0.0.1", port), nil, 5*time.Second, "/tmp/x.log", func() {
+	err := startWait{
+		ProbeURL: readiness.ProbeURL("127.0.0.1", port),
+		Timeout:  5 * time.Second,
+		LogPath:  filepath.Join(t.TempDir(), "x.log"),
+	}.confirm(func() {
 		mu.Lock()
 		announcedAt = time.Now()
 		mu.Unlock()
 	})
 	if err != nil {
-		t.Fatalf("confirmStarted: %v", err)
+		t.Fatalf("confirm: %v", err)
 	}
 
 	mu.Lock()
@@ -82,12 +91,21 @@ func TestConfirmStartedAnnouncesOnlyAfterReady(t *testing.T) {
 	}
 }
 
-// A server that never comes up must produce an error carrying the log path and
-// must not announce anything.
-func TestConfirmStartedTimeoutDoesNotAnnounce(t *testing.T) {
+// A server that never comes up must produce a "still starting" error carrying
+// the log path, and must not announce anything.
+func TestConfirmTimeoutReportsStillStarting(t *testing.T) {
 	port := freePort(t)
+	logPath := filepath.Join(t.TempDir(), "tb.log")
+	if err := os.WriteFile(logPath, []byte("line one\nline two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	announced := false
-	err := confirmStarted(readiness.ProbeURL("127.0.0.1", port), nil, 300*time.Millisecond, "/var/log/tb.log", func() { announced = true })
+	err := startWait{
+		ProbeURL: readiness.ProbeURL("127.0.0.1", port),
+		Timeout:  300 * time.Millisecond,
+		LogPath:  logPath,
+		PID:      4242,
+	}.confirm(func() { announced = true })
 	if err == nil {
 		t.Fatal("expected a timeout error")
 	}
@@ -98,21 +116,39 @@ func TestConfirmStartedTimeoutDoesNotAnnounce(t *testing.T) {
 	if !errors.As(err, &timeout) {
 		t.Errorf("error %v does not wrap a TimeoutError", err)
 	}
-	if !strings.Contains(err.Error(), "/var/log/tb.log") {
-		t.Errorf("error should point at the log file, got: %v", err)
+	msg := err.Error()
+	for _, want := range []string{"still starting", logPath, "4242", "line two"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should contain %q, got: %v", want, msg)
+		}
 	}
 }
 
 // A process that dies during startup fails the launch right away (well before
-// the timeout) and reports why.
-func TestConfirmStartedEarlyExitFailsFast(t *testing.T) {
+// the timeout) and reports the exit code and recent log.
+func TestConfirmEarlyExitFailsFastWithLogTail(t *testing.T) {
 	port := freePort(t)
+	cmd := exec.Command("sh", "-c", "exit 3")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waitErr := cmd.Wait()
 	exited := make(chan error, 1)
-	exited <- errors.New("exit status 1")
+	exited <- waitErr
+
+	logPath := filepath.Join(t.TempDir(), "tb.log")
+	if err := os.WriteFile(logPath, []byte("boot: migrating\nboot: fatal: boom\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	announced := false
 	start := time.Now()
-	err := confirmStarted(readiness.ProbeURL("127.0.0.1", port), exited, time.Minute, "/var/log/tb.log", func() { announced = true })
+	err := startWait{
+		ProbeURL: readiness.ProbeURL("127.0.0.1", port),
+		Exited:   exited,
+		Timeout:  time.Minute,
+		LogPath:  logPath,
+	}.confirm(func() { announced = true })
 	if err == nil {
 		t.Fatal("expected an error for a server that exited early")
 	}
@@ -126,21 +162,121 @@ func TestConfirmStartedEarlyExitFailsFast(t *testing.T) {
 	if !errors.As(err, &ex) {
 		t.Errorf("error %v does not wrap an ExitedError", err)
 	}
-	if msg := err.Error(); !strings.Contains(msg, "exit status 1") || !strings.Contains(msg, "/var/log/tb.log") {
-		t.Errorf("error should carry the exit status and log path, got: %v", err)
+	msg := err.Error()
+	for _, want := range []string{"exit code 3", logPath, "boot: fatal: boom"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should contain %q, got: %v", want, msg)
+		}
 	}
 }
 
-func TestProbeURL(t *testing.T) {
-	for host, want := range map[string]string{
-		"":          "http://localhost:12580/api/v1/info/health",
-		"0.0.0.0":   "http://localhost:12580/api/v1/info/health",
-		"localhost": "http://localhost:12580/api/v1/info/health",
-		"10.1.2.3":  "http://10.1.2.3:12580/api/v1/info/health",
-		"::1":       "http://[::1]:12580/api/v1/info/health",
-	} {
-		if got := readiness.ProbeURL(host, 12580); got != want {
-			t.Errorf("ProbeURL(%q) = %q, want %q", host, got, want)
+// With KeepWaiting, a slow start past the initial timeout keeps waiting until
+// the server actually becomes ready instead of failing.
+func TestConfirmKeepWaitingPastTimeout(t *testing.T) {
+	port := freePort(t)
+	ready := make(chan struct{})
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-ready:
+			w.Header().Set(constant.HealthServiceHeader, constant.HealthServiceName)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusServiceUnavailable)
 		}
+	})}
+	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = srv.Close()
+		_ = l.Close()
+	})
+	go func() { _ = srv.Serve(l) }()
+
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		close(ready)
+	}()
+
+	announced := false
+	err = startWait{
+		ProbeURL:    readiness.ProbeURL("127.0.0.1", port),
+		Timeout:     150 * time.Millisecond,
+		KeepWaiting: true,
+		LogPath:     filepath.Join(t.TempDir(), "tb.log"),
+	}.confirm(func() { announced = true })
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if !announced {
+		t.Fatal("never announced after the server became ready")
+	}
+}
+
+// The instance token comes from the environment for a daemon child; a restart
+// passes a fresh one so an old instance cannot satisfy the probe.
+func TestConfirmRejectsOldInstanceOnRestart(t *testing.T) {
+	port := freePort(t)
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(constant.HealthServiceHeader, constant.HealthServiceName)
+		w.Header().Set(constant.HealthInstanceHeader, "old")
+		w.WriteHeader(http.StatusOK)
+	})}
+	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = srv.Close()
+		_ = l.Close()
+	})
+	go func() { _ = srv.Serve(l) }()
+
+	err = startWait{
+		ProbeURL: readiness.ProbeURL("127.0.0.1", port),
+		Token:    "new",
+		Timeout:  300 * time.Millisecond,
+		LogPath:  filepath.Join(t.TempDir(), "tb.log"),
+	}.confirm(func() { t.Fatal("announced an old instance") })
+	if err == nil {
+		t.Fatal("expected the old instance to be rejected")
+	}
+	if !strings.Contains(err.Error(), "not from the instance") {
+		t.Errorf("error should name the instance mismatch, got: %v", err)
+	}
+}
+
+func TestResolveStartTimeout(t *testing.T) {
+	t.Setenv(startTimeoutEnv, "")
+	if got := resolveStartTimeout(0); got != defaultStartReadyTimeout {
+		t.Errorf("default = %v, want %v", got, defaultStartReadyTimeout)
+	}
+	if got := resolveStartTimeout(7 * time.Second); got != 7*time.Second {
+		t.Errorf("flag = %v, want 7s", got)
+	}
+	t.Setenv(startTimeoutEnv, "90s")
+	if got := resolveStartTimeout(0); got != 90*time.Second {
+		t.Errorf("env = %v, want 90s", got)
+	}
+	t.Setenv(startTimeoutEnv, "not-a-duration")
+	if got := resolveStartTimeout(0); got != defaultStartReadyTimeout {
+		t.Errorf("bad env = %v, want default", got)
+	}
+}
+
+func TestLogTail(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.log")
+	if err := os.WriteFile(path, []byte("a\nb\nc\nd\ne\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tail := logTail(path, 3)
+	want := []string{"c", "d", "e"}
+	if strings.Join(tail, ",") != strings.Join(want, ",") {
+		t.Errorf("tail = %v, want %v", tail, want)
+	}
+	if got := logTail(filepath.Join(dir, "missing.log"), 3); got != nil {
+		t.Errorf("missing file tail = %v, want nil", got)
 	}
 }

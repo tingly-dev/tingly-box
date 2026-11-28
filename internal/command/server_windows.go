@@ -5,7 +5,6 @@ package command
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/lock"
 )
@@ -21,36 +20,37 @@ func stopProcessGracefully(process *os.Process) error {
 	return nil
 }
 
-// stopServerWithFileLock stops the running server using the file lock (Windows version)
+// stopServerWithFileLock stops the running server using the file lock (Windows version).
+//
+// Bounded end to end: TerminateProcess, then wait up to stopForcePeriod for
+// the lock to be released. If it is still held, report an explicit error
+// rather than claiming the server stopped.
 func stopServerWithFileLock(fileLock *lock.FileLock) error {
+	if !fileLock.IsLocked() {
+		_ = fileLock.RemoveRuntimeFiles()
+		return nil
+	}
+
 	// Get PID from lock file
 	pid, err := fileLock.GetPID()
 	if err != nil {
-		return fmt.Errorf("lock file does not exist or is invalid: %w", err)
+		return fmt.Errorf("server holds the lock but its PID is unreadable (%v); stop it manually", err)
 	}
+	port, _ := fileLock.ReadPort()
 
 	// Find the process
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to find process: %w", err)
+		return fmt.Errorf("failed to find server process %d: %w", pid, err)
 	}
 
 	// Kill the process (Windows uses TerminateProcess internally)
 	if err := stopProcessGracefully(process); err != nil {
-		return fmt.Errorf("failed to stop process: %w", err)
+		return fmt.Errorf("failed to stop server process %d: %w", pid, err)
 	}
 
-	// Wait for process to exit and lock to be released
-	for i := 0; i < 5; i++ { // Wait up to 5 seconds
-		if !fileLock.IsLocked() {
-			// TerminateProcess gives the server no chance to clean up its
-			// runtime files, so remove them from the stopping side.
-			_ = fileLock.RemoveRuntimeFiles()
-			return nil
-		}
-		time.Sleep(1 * time.Second)
+	if waitLockReleased(fileLock, stopForcePeriod) {
+		return finishStop(fileLock, port)
 	}
-
-	// If lock is still held after process kill, something is wrong
-	return fmt.Errorf("process was killed but lock file is still held")
+	return fmt.Errorf("server process %d still holds the lock %s after being killed; stop it manually", pid, fileLock.GetLockFilePath())
 }
