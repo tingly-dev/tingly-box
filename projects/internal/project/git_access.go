@@ -13,10 +13,12 @@ const permissionModeAuto = "auto"
 // to approve (the denial never reaches the approval prompt):
 //
 //   - pushing the thread's own branch is allowed, so it never asks;
-//   - the commands that publish or land work on the user's behalf (a pull
-//     request, an issue, a merge), and pushes the thread has no business
-//     making by hand (to the base branch, forced, deleting), always ask, so
-//     the user can tap Allow in the chat or the web. The thread's route for
+//   - every gh command asks, so none is left to the classifier: at the
+//     approval prompt the ones a Projects tool does are refused with the tool
+//     to use, other reads run, and the rest (writes no tool does) are a card
+//     the user can tap Allow on in the chat or the web (see gh_commands.go);
+//   - pushes the thread has no business making by hand (to the base branch,
+//     forced, deleting) always ask. The thread's route for
 //     any other branch and for a rebased one is create_pr (head, force): it
 //     pushes what is the thread's own and puts the rest to the user itself,
 //     as an approval card, since a permission rule cannot see a tool's
@@ -39,9 +41,7 @@ func grantAutoGit(doc map[string]any, p *db.Project, t *db.Thread) {
 		addRules(perms, "allow", allow...)
 	}
 	ask := []string{
-		"Bash(gh pr create)", "Bash(gh pr create *)",
-		"Bash(gh pr merge)", "Bash(gh pr merge *)",
-		"Bash(gh issue create)", "Bash(gh issue create *)",
+		"Bash(gh)", "Bash(gh *)",
 		"Bash(git push --force *)", "Bash(git push -f *)", "Bash(git push --force-with-lease *)",
 		"Bash(git push * --force*)", "Bash(git push * -f)", "Bash(git push --delete *)", "Bash(git push * --delete *)",
 	}
@@ -83,8 +83,8 @@ func githubToolRule(tool string) string { return builtinToolsRule + "__" + tool 
 // (Links.gate), which can name what the call does and holds in every
 // permission mode. A rule on the tool's name would only add a second card.
 //
-// Nothing here touches the Bash rules: `gh pr create`, `gh pr merge` and
-// `gh issue create` stay on the ask list of grantAutoGit.
+// Nothing here touches the Bash rules: gh stays on the ask list of
+// grantAutoGit.
 func grantBuiltinTools(doc map[string]any, _ *db.Project) {
 	grantNativeChannel(doc)
 	addRules(permissionsOf(doc), "allow", builtinToolsRule)

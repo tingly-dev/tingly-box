@@ -48,9 +48,48 @@ type GitHubItem struct {
 	MergeState string
 	// Checks break an open PR's CI down.
 	Checks *db.LinkChecks
+	// Detail is what a read brings besides the record; nil from the other calls.
+	Detail *GitHubDetail
 	// Rate is what GitHub said about the caller's request budget in the same
 	// answer; zero when the answer did not carry it.
 	Rate GitHubRate
+}
+
+// GitHubDetail is what people said about an item and, for a PR, what it
+// changes: what view shows so a model has no need to read with gh. Nothing
+// stores it.
+type GitHubDetail struct {
+	// Comments are the last readComments, oldest first, of CommentCount.
+	Comments     []GitHubNote
+	CommentCount int
+	// The rest describe a PR. ReviewDecision is approved, changes requested or
+	// review required; empty when the repository asks for no review.
+	ReviewDecision string
+	// Reviews are each reviewer's latest review, State its verdict.
+	Reviews []GitHubNote
+	// Threads are the unresolved review threads among the first readThreads
+	// (each by its first comment, with Path and Line), of ThreadCount.
+	Threads     []GitHubNote
+	ThreadCount int
+	Commits     int
+	HeadSHA     string
+	HeadTitle   string
+	// Files are the first readFiles changed files, with no patch.
+	Files                              []GitHubFile
+	ChangedFiles, Additions, Deletions int
+}
+
+// GitHubNote is a comment, a review or a review thread's first comment.
+type GitHubNote struct {
+	Author, Body string
+	At           time.Time
+	// State is a review's verdict (approved, changes requested, commented, …).
+	State string
+	// Path and Line place a review thread; Outdated is set when the code it is
+	// on has changed since.
+	Path     string
+	Line     int
+	Outdated bool
 }
 
 // GitHubRate is the request budget GitHub reports: how many points are left
@@ -377,17 +416,25 @@ func (g ghCLI) Close(ctx context.Context, r GitHubRepo, number int) (GitHubItem,
 	return out.item(), err
 }
 
-// readQuery is the whole of a read: the item, for a PR its head commit's
+// readQuery is the whole of a read: the item and its last comments, for a PR
+// its reviews, unresolved review threads, changed files and head commit's
 // checks, and the request budget, in one request that costs one point. (Three
 // REST requests used to do this for a PR, and two for an item of unknown kind.)
+// The page sizes are readComments, readReviews, readThreads and readFiles.
 const readQuery = `query($owner:String!,$name:String!,$number:Int!){
   rateLimit{remaining resetAt}
   repository(owner:$owner,name:$name){
     issueOrPullRequest(number:$number){
       __typename
-      ... on Issue{number url title body state author{login}}
+      ... on Issue{number url title body state author{login}
+        comments(last:5){totalCount nodes{author{login} body createdAt}}}
       ... on PullRequest{number url title body state author{login} isDraft headRefName baseRefName mergeable mergeStateStatus
-        commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){totalCount nodes{
+        reviewDecision additions deletions changedFiles
+        comments(last:5){totalCount nodes{author{login} body createdAt}}
+        latestReviews(first:10){nodes{author{login} state body submittedAt}}
+        reviewThreads(first:50){totalCount nodes{isResolved isOutdated path line comments(first:1){nodes{author{login} body createdAt}}}}
+        files(first:30){nodes{path additions deletions changeType}}
+        commits(last:1){totalCount nodes{commit{oid messageHeadline statusCheckRollup{state contexts(first:100){totalCount nodes{
           __typename
           ... on CheckRun{name status conclusion detailsUrl}
           ... on StatusContext{context state targetUrl}
@@ -396,6 +443,41 @@ const readQuery = `query($owner:String!,$name:String!,$number:Int!){
     }
   }
 }`
+
+// How much of an item a read brings: the sizes of readQuery's pages.
+const (
+	readComments = 5
+	readReviews  = 10
+	readThreads  = 50
+	readFiles    = 30
+)
+
+type gqlNote struct {
+	Author *struct {
+		Login string `json:"login"`
+	} `json:"author"`
+	Body        string    `json:"body"`
+	CreatedAt   time.Time `json:"createdAt"`
+	State       string    `json:"state"`
+	SubmittedAt time.Time `json:"submittedAt"`
+}
+
+func (n gqlNote) note() GitHubNote {
+	out := GitHubNote{Body: n.Body, At: n.CreatedAt, State: gqlWord(n.State)}
+	if n.Author != nil {
+		out.Author = n.Author.Login
+	}
+	if out.At.IsZero() {
+		out.At = n.SubmittedAt
+	}
+	return out
+}
+
+// gqlWord is a GraphQL enum value as words: CHANGES_REQUESTED is "changes
+// requested".
+func gqlWord(s string) string {
+	return strings.ReplaceAll(strings.ToLower(s), "_", " ")
+}
 
 type gqlContext struct {
 	Typename   string `json:"__typename"`
@@ -430,10 +512,44 @@ type gqlRead struct {
 				BaseRefName      string `json:"baseRefName"`
 				Mergeable        string `json:"mergeable"`
 				MergeStateStatus string `json:"mergeStateStatus"`
-				Commits          struct {
+				ReviewDecision   string `json:"reviewDecision"`
+				Additions        int    `json:"additions"`
+				Deletions        int    `json:"deletions"`
+				ChangedFiles     int    `json:"changedFiles"`
+				Comments         struct {
+					TotalCount int       `json:"totalCount"`
+					Nodes      []gqlNote `json:"nodes"`
+				} `json:"comments"`
+				LatestReviews struct {
+					Nodes []gqlNote `json:"nodes"`
+				} `json:"latestReviews"`
+				ReviewThreads struct {
+					TotalCount int `json:"totalCount"`
+					Nodes      []struct {
+						IsResolved bool   `json:"isResolved"`
+						IsOutdated bool   `json:"isOutdated"`
+						Path       string `json:"path"`
+						Line       int    `json:"line"`
+						Comments   struct {
+							Nodes []gqlNote `json:"nodes"`
+						} `json:"comments"`
+					} `json:"nodes"`
+				} `json:"reviewThreads"`
+				Files struct {
 					Nodes []struct {
+						Path       string `json:"path"`
+						Additions  int    `json:"additions"`
+						Deletions  int    `json:"deletions"`
+						ChangeType string `json:"changeType"`
+					} `json:"nodes"`
+				} `json:"files"`
+				Commits struct {
+					TotalCount int `json:"totalCount"`
+					Nodes      []struct {
 						Commit struct {
-							Rollup *struct {
+							OID             string `json:"oid"`
+							MessageHeadline string `json:"messageHeadline"`
+							Rollup          *struct {
 								State    string `json:"state"`
 								Contexts struct {
 									TotalCount int          `json:"totalCount"`
@@ -463,10 +579,39 @@ func (g ghCLI) Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, 
 	if n.Author != nil {
 		it.Author = n.Author.Login
 	}
+	d := &GitHubDetail{CommentCount: n.Comments.TotalCount}
+	it.Detail = d
+	for _, c := range n.Comments.Nodes {
+		d.Comments = append(d.Comments, c.note())
+	}
 	if !it.IsPR {
 		return it, nil
 	}
 	it.Draft, it.Head, it.Base = n.IsDraft, n.HeadRefName, n.BaseRefName
+	d.ReviewDecision = gqlWord(n.ReviewDecision)
+	d.Additions, d.Deletions, d.ChangedFiles = n.Additions, n.Deletions, n.ChangedFiles
+	for _, r := range n.LatestReviews.Nodes {
+		d.Reviews = append(d.Reviews, r.note())
+	}
+	d.ThreadCount = n.ReviewThreads.TotalCount
+	for _, th := range n.ReviewThreads.Nodes {
+		if th.IsResolved {
+			continue
+		}
+		var note GitHubNote
+		if len(th.Comments.Nodes) > 0 {
+			note = th.Comments.Nodes[0].note()
+		}
+		note.Path, note.Line, note.Outdated = th.Path, th.Line, th.IsOutdated
+		d.Threads = append(d.Threads, note)
+	}
+	for _, f := range n.Files.Nodes {
+		d.Files = append(d.Files, GitHubFile{Path: f.Path, Status: gqlWord(f.ChangeType), Additions: f.Additions, Deletions: f.Deletions})
+	}
+	d.Commits = n.Commits.TotalCount
+	if len(n.Commits.Nodes) > 0 {
+		d.HeadSHA, d.HeadTitle = n.Commits.Nodes[0].Commit.OID, n.Commits.Nodes[0].Commit.MessageHeadline
+	}
 	if it.State != "open" {
 		return it, nil
 	}

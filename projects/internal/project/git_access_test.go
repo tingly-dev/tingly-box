@@ -36,7 +36,7 @@ func TestAutoModeThreadMayPushItsOwnBranchAndAsksToPublish(t *testing.T) {
 			assert.Contains(t, a, th.Branch, "only the thread's own branch is pre-approved: %s", a)
 		}
 	}
-	for _, want := range []string{"Bash(gh pr create *)", "Bash(gh pr merge *)", "Bash(gh issue create *)", "Bash(git push --force *)", "Bash(git push origin main)"} {
+	for _, want := range []string{"Bash(gh)", "Bash(gh *)", "Bash(git push --force *)", "Bash(git push origin main)"} {
 		assert.Contains(t, ask, want)
 	}
 	assert.NotContains(t, ask, "Bash(git push *)", "a blanket ask would override the own-branch allow")
@@ -74,14 +74,14 @@ func TestSwitchingToAutoModeRefreshesThreadSettingsOnNextTurn(t *testing.T) {
 
 	allow, ask := settingsPerms(t, f.threads.layout.SettingsFile(f.project.ID, th.ID))
 	assert.Contains(t, allow, "Bash(git push origin "+th.Branch+")")
-	assert.Contains(t, ask, "Bash(gh pr create *)")
+	assert.Contains(t, ask, "Bash(gh *)")
 }
 
 func TestGrantAutoGitKeepsTheHostsRulesAndSkipsUnsafeBranches(t *testing.T) {
 	p := &db.Project{ThreadPermissionMode: "auto"}
 	doc := map[string]any{"permissions": map[string]any{
 		"allow": []any{"Bash(make test)"},
-		"ask":   []any{"AskUserQuestion", "Bash(gh pr create *)"},
+		"ask":   []any{"AskUserQuestion", "Bash(gh *)"},
 	}}
 	grantAutoGit(doc, p, &db.Thread{Branch: "tp/a b)", BaseBranch: "main"})
 	perms := doc["permissions"].(map[string]any)
@@ -90,7 +90,7 @@ func TestGrantAutoGitKeepsTheHostsRulesAndSkipsUnsafeBranches(t *testing.T) {
 	assert.Equal(t, "AskUserQuestion", ask[0])
 	count := 0
 	for _, a := range ask {
-		if a == "Bash(gh pr create *)" {
+		if a == "Bash(gh *)" {
 			count++
 		}
 	}
@@ -118,7 +118,7 @@ func TestWriteSettingsLeavesAnUnchangedFileAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, os.SameFile(before, changed), "new content replaces the file in one rename")
 	_, ask := settingsPerms(t, path)
-	assert.Contains(t, ask, "Bash(gh pr create *)")
+	assert.Contains(t, ask, "Bash(gh *)")
 	entries, err := os.ReadDir(filepath.Dir(path))
 	require.NoError(t, err)
 	for _, e := range entries {

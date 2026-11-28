@@ -204,8 +204,8 @@ func TestBuiltinToolPermissionRules(t *testing.T) {
 	// The Bash commands keep asking whatever the project says.
 	doc := map[string]any{}
 	grantAutoGit(doc, &db.Project{GitHubAuto: GitHubGroups, ThreadPermissionMode: "auto"}, &db.Thread{Branch: "tp/x", BaseBranch: "main"})
-	assert.Contains(t, permissionsOf(doc)["ask"], "Bash(gh pr create *)")
-	assert.Contains(t, permissionsOf(doc)["ask"], "Bash(gh pr merge *)")
+	assert.Contains(t, permissionsOf(doc)["ask"], "Bash(gh *)")
+	assert.Contains(t, permissionsOf(doc)["ask"], "Bash(gh)")
 }
 
 func TestThreadSettingsFileAllowsTheProjectsTools(t *testing.T) {

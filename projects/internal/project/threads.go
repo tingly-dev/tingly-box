@@ -2346,6 +2346,17 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 	if p.m.builtinToolAllowed(p.threadID, req.ToolName) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
 	}
+	if req.ToolName == "Bash" {
+		// Decided here like SendMessage: a gh command a tool does is refused
+		// with the tool to use, and a gh read runs as the classifier would let it.
+		cmd, _ := req.Input["command"].(string)
+		switch v, why := classifyGh(cmd); {
+		case v == ghSteer:
+			return agentboot.ApprovalResponse{Approved: false, Reason: why}, nil
+		case v == ghRead && p.m.threadInAutoMode(p.threadID):
+			return agentboot.ApprovalResponse{Approved: true}, nil
+		}
+	}
 	key, scopable := allowKey(req.ToolName, req.Input)
 	if scopable && p.m.isAllowed(p.threadID, key) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
@@ -2371,6 +2382,20 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 		}
 	}
 	return agentboot.ApprovalResponse{Approved: ans.Allow, Reason: reason}, nil
+}
+
+// threadInAutoMode is whether the thread's turns run in auto mode, where its gh
+// reads would pass the classifier and only ask because of grantAutoGit.
+func (m *Threads) threadInAutoMode(threadID string) bool {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return false
+	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return false
+	}
+	return threadPermissionMode(p, t) == permissionModeAuto
 }
 
 // builtinToolAllowed is the answer for a Projects tool that reached the
