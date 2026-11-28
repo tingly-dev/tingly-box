@@ -117,7 +117,8 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			c.pending = append(c.pending, c.roleChunk())
 		}
 		c.accumulated.WriteString(evt.Delta)
-		c.pending = append(c.pending, c.textChunk(evt.Delta))
+		logprobs := protocol.ChatChoiceLogprobsFromJSON(evt.JSON.Logprobs.Raw())
+		c.pending = append(c.pending, c.textChunk(evt.Delta, logprobs))
 
 	case "response.output_text.done":
 		// handled in response.completed
@@ -240,7 +241,7 @@ func (c *responsesToChatConverter) emitCompletedOutput(output []responses.Respon
 						c.pending = append(c.pending, c.roleChunk())
 					}
 					c.accumulated.WriteString(content.Text)
-					c.pending = append(c.pending, c.textChunk(content.Text))
+					c.pending = append(c.pending, c.textChunk(content.Text, protocol.ChatChoiceLogprobsFromContent(content.Logprobs)))
 				}
 			}
 		case "function_call":
@@ -286,8 +287,12 @@ func (c *responsesToChatConverter) roleChunk() wire.ChatStreamChunk {
 	return c.newChunk(wire.ChatStreamDelta{Role: "assistant"}, nil)
 }
 
-func (c *responsesToChatConverter) textChunk(delta string) wire.ChatStreamChunk {
-	return c.newChunk(wire.ChatStreamDelta{Content: delta}, nil)
+func (c *responsesToChatConverter) textChunk(delta string, logprobs map[string]any) wire.ChatStreamChunk {
+	chunk := c.newChunk(wire.ChatStreamDelta{Content: delta}, nil)
+	if logprobs != nil {
+		chunk.Choices[0].Logprobs = logprobs
+	}
+	return chunk
 }
 
 func (c *responsesToChatConverter) toolCallStartChunk(index int, id, name string) wire.ChatStreamChunk {

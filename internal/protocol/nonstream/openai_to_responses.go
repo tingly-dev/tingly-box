@@ -55,18 +55,22 @@ func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actu
 
 	output := []wire.ResponsesOutputItemWire{}
 	if messageContent != "" {
+		contentPart := wire.ResponsesContentPartWire{
+			// The real Responses API always includes annotations on
+			// output_text; strict clients (AI SDK zod) require them.
+			Type: "output_text", Text: messageContent, Annotations: []any{},
+		}
+		if len(resp.Choices) > 0 {
+			contentPart.Logprobs = protocol.LogprobsAsWire(resp.Choices[0].Logprobs.Content)
+		}
 		output = append(output, wire.ResponsesOutputItemWire{
 			// The real Responses API always assigns output items an id;
 			// strict clients (AI SDK zod) require it.
-			ID:     ids.Message(),
-			Type:   "message",
-			Role:   "assistant",
-			Status: itemStatus,
-			Content: []wire.ResponsesContentPartWire{
-				// The real Responses API always includes annotations on
-				// output_text; strict clients (AI SDK zod) require it.
-				{Type: "output_text", Text: messageContent, Annotations: []any{}},
-			},
+			ID:      ids.Message(),
+			Type:    "message",
+			Role:    "assistant",
+			Status:  itemStatus,
+			Content: []wire.ResponsesContentPartWire{contentPart},
 		})
 	}
 	if len(resp.Choices) > 0 {
@@ -90,13 +94,14 @@ func ConvertChatToResponsesWire(resp *openai.ChatCompletion, responseModel, actu
 	usageWire := usage.ToResponsesUsageWire(usage.FromOpenAIChatCompletion(resp.Usage))
 
 	result := wire.ResponsesWireResponse{
-		ID:        ids.Response(),
-		Object:    "response",
-		CreatedAt: time.Now().Unix(),
-		Model:     model,
-		Status:    status,
-		Output:    output,
-		Usage:     usageWire,
+		ID:                ids.Response(),
+		Object:            "response",
+		CreatedAt:         time.Now().Unix(),
+		Model:             model,
+		Status:            status,
+		Output:            output,
+		Usage:             usageWire,
+		SystemFingerprint: resp.SystemFingerprint,
 	}
 	if incompleteReason != "" {
 		result.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{

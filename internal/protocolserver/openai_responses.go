@@ -202,6 +202,9 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 		ph.FailAttemptSetup(c, err)
 		return
 	}
+	if rejectUnsupportedLogprobs(c, plan.Target, logprobsRequestedResponses(req.ResponseNewParams)) {
+		return
+	}
 	req.Model = responses.ResponsesModel(actualModel)
 
 	reqCtx, err := ph.TransformOpenAIResponses(c, req, plan, isStreaming, scenarioType)

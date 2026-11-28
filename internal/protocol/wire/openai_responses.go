@@ -82,6 +82,13 @@ type ResponsesWireResponse struct {
 	CompletedAt       int64                           `json:"completed_at,omitempty"`
 	IncompleteDetails *ResponsesIncompleteDetailsWire `json:"incomplete_details"`
 	Error             interface{}                     `json:"error"` // always null: failures surface as error events or HTTP errors
+	// SystemFingerprint carries the upstream Chat Completions backend
+	// fingerprint when this Responses answer was converted from a Chat
+	// upstream. The Responses API has no field of its own for it; emitting it
+	// here keeps the value available to fingerprint tooling instead of losing
+	// it at the protocol boundary. Unset (and omitted) for Responses upstreams,
+	// which never report one.
+	SystemFingerprint string `json:"system_fingerprint,omitempty"`
 }
 
 // ToMap converts the typed response contract to the legacy map surface used by
@@ -183,6 +190,11 @@ type ResponsesContentPartWire struct {
 	Type        string        `json:"type"`
 	Text        string        `json:"text,omitempty"`
 	Annotations []interface{} `json:"annotations,omitempty"`
+	// Logprobs carries output_text token log probabilities when the upstream
+	// reported them (a Chat upstream converted to Responses, or a Responses
+	// upstream asked with include=message.output_text.logprobs). Omitted when
+	// absent so a non-logprobs answer keeps its minimal shape.
+	Logprobs []interface{} `json:"logprobs,omitempty"`
 }
 
 // MarshalJSON ensures output_text parts always carry "text" and
@@ -197,6 +209,9 @@ func (p ResponsesContentPartWire) MarshalJSON() ([]byte, error) {
 		} else {
 			m["annotations"] = []interface{}{}
 		}
+		if len(p.Logprobs) > 0 {
+			m["logprobs"] = p.Logprobs
+		}
 		return json.Marshal(m)
 	}
 	if p.Text != "" {
@@ -204,6 +219,9 @@ func (p ResponsesContentPartWire) MarshalJSON() ([]byte, error) {
 	}
 	if p.Annotations != nil {
 		m["annotations"] = p.Annotations
+	}
+	if len(p.Logprobs) > 0 {
+		m["logprobs"] = p.Logprobs
 	}
 	return json.Marshal(m)
 }

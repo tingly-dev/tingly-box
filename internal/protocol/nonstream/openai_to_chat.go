@@ -15,6 +15,7 @@ type responsesToChatNonStreamState struct {
 	content   strings.Builder
 	refusal   strings.Builder
 	toolCalls []wire.ChatCompletionToolCallWire
+	logprobs  []responses.ResponseOutputTextLogprob
 }
 
 // HandleResponsesToOpenAIChat writes a Responses API response as OpenAI Chat format.
@@ -64,6 +65,7 @@ func ConvertResponsesToOpenAIChat(rs *responses.Response, responseModel string) 
 			Index:        0,
 			Message:      message,
 			FinishReason: mapResponsesFinishReason(rs, len(state.toolCalls) > 0),
+			Logprobs:     protocol.ChatChoiceLogprobsFromContent(state.logprobs),
 		}},
 		Usage:       usage,
 		ServiceTier: protocol.ChatServiceTierFromResponses(rs.ServiceTier),
@@ -86,6 +88,7 @@ func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChat
 				switch contentItem.Type {
 				case "output_text", "text":
 					state.content.WriteString(contentItem.Text)
+					state.logprobs = append(state.logprobs, contentItem.Logprobs...)
 				case "refusal":
 					state.refusal.WriteString(contentItem.Refusal)
 				}

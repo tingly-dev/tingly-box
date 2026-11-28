@@ -45,6 +45,13 @@ type chatToResponsesConverter struct {
 	hasUsage          bool
 	completedSent     bool
 	finishReason      string
+	// systemFingerprint is the upstream Chat backend fingerprint, carried on
+	// every synthesized Responses lifecycle object (the Responses protocol has
+	// no field of its own for it; see wire.ResponsesWireResponse).
+	systemFingerprint string
+	// accumulatedLogprobs collects per-delta logprobs for the terminal
+	// output_text.done event and the final message item.
+	accumulatedLogprobs []any
 
 	// pending is an internal queue of events to yield one-by-one
 	pending []wire.ResponsesEvent
@@ -143,6 +150,13 @@ func (c *chatToResponsesConverter) Usage() *protocol.TokenUsage {
 // processChunk handles a single upstream ChatCompletionChunk and appends
 // zero or more Responses API events to c.pending.
 func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChunk) {
+	// The Chat upstream reports its backend fingerprint on (at least) the first
+	// chunk; capture it before emitting response.created so every lifecycle
+	// object carries it.
+	if chunk.SystemFingerprint != "" {
+		c.systemFingerprint = chunk.SystemFingerprint
+	}
+
 	// Emit response.created / response.in_progress on first chunk
 	c.emitCreated()
 
@@ -168,6 +182,8 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 			c.hasTextItem = true
 		}
 		c.accumulatedText.WriteString(choice.Delta.Content)
+		deltaLogprobs := protocol.LogprobsAsWire(choice.Logprobs.Content)
+		c.accumulatedLogprobs = append(c.accumulatedLogprobs, deltaLogprobs...)
 		c.pending = append(c.pending, wire.ResponsesOutputTextDeltaEvent{
 			Type:           "response.output_text.delta",
 			SequenceNumber: c.nextSeq(),
@@ -175,7 +191,7 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 			OutputIndex:    c.textOutputIndex,
 			ContentIndex:   0,
 			Delta:          choice.Delta.Content,
-			Logprobs:       []interface{}{},
+			Logprobs:       deltaLogprobs,
 		})
 	}
 
@@ -265,7 +281,7 @@ func (c *chatToResponsesConverter) emitCompletionEvents() {
 			OutputIndex:    c.textOutputIndex,
 			ContentIndex:   0,
 			Text:           text,
-			Logprobs:       []interface{}{},
+			Logprobs:       c.accumulatedLogprobs,
 		})
 		c.pending = append(c.pending, wire.ResponsesContentPartDoneEvent{
 			Type:           "response.content_part.done",
@@ -277,13 +293,16 @@ func (c *chatToResponsesConverter) emitCompletionEvents() {
 				Type:        "output_text",
 				Text:        text,
 				Annotations: []interface{}{},
+				Logprobs:    c.accumulatedLogprobs,
 			},
 		})
+		item := newResponsesMessageItem(c.textItemID, "completed", text)
+		item.Content[0].Logprobs = c.accumulatedLogprobs
 		c.pending = append(c.pending, wire.ResponsesOutputItemDoneEvent{
 			Type:           "response.output_item.done",
 			SequenceNumber: c.nextSeq(),
 			OutputIndex:    c.textOutputIndex,
-			Item:           newResponsesMessageItem(c.textItemID, "completed", text),
+			Item:           item,
 		})
 	}
 
@@ -410,13 +429,14 @@ func (c *chatToResponsesConverter) wireResponse(status string, output []wire.Res
 		output = []wire.ResponsesOutputItemWire{}
 	}
 	return wire.ResponsesWireResponse{
-		ID:        c.responseID,
-		Object:    "response",
-		CreatedAt: c.createdAt,
-		Status:    status,
-		Output:    output,
-		Usage:     protocolusage.ToResponsesUsageWire(c.Usage()),
-		Model:     c.responseModel,
+		ID:                c.responseID,
+		Object:            "response",
+		CreatedAt:         c.createdAt,
+		Status:            status,
+		Output:            output,
+		Usage:             protocolusage.ToResponsesUsageWire(c.Usage()),
+		Model:             c.responseModel,
+		SystemFingerprint: c.systemFingerprint,
 	}
 }
 
