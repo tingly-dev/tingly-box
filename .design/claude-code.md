@@ -10,6 +10,7 @@ share an implementation contract.
 | [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude OAuth wire identity, `claude_code_version`, headers, betas and billing hash | Implemented profiles; limits and upgrade checklist in the document |
 | [claude-code-config.md](./claude-code-config.md) | Quick Config, model slots and generated client settings | Current design |
 | [claude-profile-mcp.md](./claude-profile-mcp.md) | Tingly Box MCP for Claude Code profiles (`--mcp-config`, MCP token, no injection) | Partly built; Projects launches next |
+| [`.research/claude-code/`](../.research/claude-code/README.md) | Per-release analyses of the official CLI (latest: 2.1.328) with gap lists against our OAuth and request handling | Research, one file per version |
 
 The original session sections §1–§7 now live in `claude-code-session.md`;
-the original compatibility sections §B0–§B8 live in `claude-code-oauth-compat.md`.
+the original compatibility sections §B0–§B9 live in `claude-code-oauth-compat.md`.

@@ -69,12 +69,12 @@ func TestVendorTransform_AnthropicBeta_ClaudeCodeVersionSelectsNativeIdentity(t 
 		Request:  req,
 		Extra:    map[string]interface{}{"device": "dev", "user_id": "acct"},
 	}
-	require.NoError(t, NewClaudeCodeVersionTransform(typ.ClaudeCodeVersion2_1_280).Apply(ctx))
+	require.NoError(t, NewClaudeCodeVersionTransform(typ.ClaudeCodeVersion2_1_328).Apply(ctx))
 	require.NoError(t, vt.Apply(ctx))
 
 	out := ctx.Request.(*anthropic.BetaMessageNewParams)
 	require.NotEmpty(t, out.System)
-	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;", out.System[0].Text)
+	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;", out.System[0].Text)
 	assert.Contains(t, out.Metadata.UserID.String(), `"device_id":"dev"`)
 }
 
@@ -140,7 +140,7 @@ func TestVendorTransform_AnthropicBeta_APIKeyOnAnthropicHostCarriesNoIdentity(t 
 		Request:  req,
 		Extra:    map[string]interface{}{"device": "dev", "user_id": "acct"},
 	}
-	require.NoError(t, NewClaudeCodeVersionTransform(typ.ClaudeCodeVersion2_1_280).Apply(ctx))
+	require.NoError(t, NewClaudeCodeVersionTransform(typ.ClaudeCodeVersion2_1_328).Apply(ctx))
 	require.NoError(t, vt.Apply(ctx))
 
 	out := ctx.Request.(*anthropic.BetaMessageNewParams)

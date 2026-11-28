@@ -6,7 +6,7 @@ func TestResolveClaudeCodeVersion(t *testing.T) {
 	for in, want := range map[string]string{
 		ClaudeCodeVersionDefault: ClaudeCodeVersionLatest,
 		ClaudeCodeVersionLegacy:  ClaudeCodeVersionLegacy,
-		ClaudeCodeVersion2_1_280: ClaudeCodeVersion2_1_280,
+		ClaudeCodeVersion2_1_328: ClaudeCodeVersion2_1_328,
 		"9.9.9":                  ClaudeCodeVersionLatest,
 	} {
 		if got := ResolveClaudeCodeVersion(in); got != want {

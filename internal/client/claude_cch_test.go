@@ -183,7 +183,7 @@ func TestClaudeClient_CCHOnTheWire(t *testing.T) {
 	c := newTestClaudeClient(t, ctx, srv.URL)
 	req := betaRequestWithMetadata()
 	req.System = []anthropic.BetaTextBlockParam{
-		{Text: "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;"},
+		{Text: "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;"},
 		{Text: "<system-reminder>You are Claude Code & friends</system-reminder>"},
 	}
 	_, err := c.BetaMessagesNew(ctx, req)
@@ -206,7 +206,7 @@ func TestClaudeClient_CCHOnTheWire(t *testing.T) {
 // conversation comes first on the wire; only the billing header's
 // placeholder may be patched.
 func TestRewriteClaudeCodeCCH_IgnoresPlaceholderInContent(t *testing.T) {
-	body := `{"max_tokens":1,"messages":[{"content":[{"text":"please read cch=00000; here","type":"text"}],"role":"user"}],"model":"m","system":[{"text":"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;","type":"text"}]}`
+	body := `{"max_tokens":1,"messages":[{"content":[{"text":"please read cch=00000; here","type":"text"}],"role":"user"}],"model":"m","system":[{"text":"x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;","type":"text"}]}`
 	out, cch, ok := rewriteClaudeCodeCCH([]byte(body))
 	require.True(t, ok)
 	assert.Contains(t, string(out), "please read cch=00000; here", "conversation content untouched")

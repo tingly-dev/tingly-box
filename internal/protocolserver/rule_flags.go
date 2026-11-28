@@ -1,6 +1,7 @@
 package protocolserver
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -247,6 +248,18 @@ func ResolveRuleFlagsWithScenario(
 
 const claudeXAppBackground = "cli-bg" // x-app of a background session
 
+// claudeBodyExtrasKey carries the inbound body members the typed params drop
+// from the decoder to applyClaudeCodeClientHints.
+const claudeBodyExtrasKey = "claude_code_body_extras"
+
+// stashClaudeCodeBodyExtras remembers the Claude Code body members the SDK's
+// typed params cannot carry, for replay on the Claude OAuth chain.
+func stashClaudeCodeBodyExtras(c *gin.Context, body []byte) {
+	if extras := typ.ExtractClaudeCodeBodyExtras(body); len(extras) > 0 {
+		c.Set(claudeBodyExtrasKey, extras)
+	}
+}
+
 // applyClaudeCodeClientHints attaches the inbound Claude Code headers to the
 // request context (typ.GetClaudeCodeClientHints).
 func applyClaudeCodeClientHints(c *gin.Context) {
@@ -254,11 +267,16 @@ func applyClaudeCodeClientHints(c *gin.Context) {
 		return
 	}
 	hints := typ.ClaudeCodeClientHints{
-		AgentID:           strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
-		ParentAgentID:     strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
-		RequestClass:      strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
-		AgentType:         strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
-		BackgroundSession: strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
+		AgentID:                strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
+		ParentAgentID:          strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
+		RequestClass:           strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
+		AgentType:              strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
+		BackgroundSession:      strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
+		FirstPartyRequestClass: strings.TrimSpace(c.GetHeader("x-claude-1p-request-class")),
+		PromptID:               strings.TrimSpace(c.GetHeader("x-claude-code-prompt-id")),
+	}
+	if v, ok := c.Get(claudeBodyExtrasKey); ok {
+		hints.BodyExtras, _ = v.(map[string]json.RawMessage)
 	}
 	for _, v := range c.Request.Header.Values("anthropic-beta") {
 		for _, flag := range strings.Split(v, ",") {

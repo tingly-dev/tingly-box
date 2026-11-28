@@ -17,7 +17,7 @@ POST /v1/messages
   "model": "virtual-model-error"
 }
 --- client response (status 429)
-{"error":{"message":"Failed to forward request: POST \"REDACTED\": 429 Too Many Requests {\"error\":{\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"},\"type\":\"error\"}","type":"api_error"}}
+{"error":{"message":"Failed to forward request: POST \"REDACTED\": 429 Too Many Requests {\"error\":{\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"},\"type\":\"error\"}","type":"api_error"},"type":"error"}
 
 === error stream=true
 --- upstream request
@@ -60,7 +60,7 @@ POST /v1/messages
   "model": "virtual-model-error-500"
 }
 --- client response (status 500)
-{"error":{"message":"Failed to forward request: POST \"REDACTED\": 500 Internal Server Error {\"error\":{\"message\":\"simulated upstream error\",\"type\":\"api_error\"},\"type\":\"error\"}","type":"api_error"}}
+{"error":{"message":"Failed to forward request: POST \"REDACTED\": 500 Internal Server Error {\"error\":{\"message\":\"simulated upstream error\",\"type\":\"api_error\"},\"type\":\"error\"}","type":"api_error"},"type":"error"}
 
 === error-500 stream=true
 --- upstream request
@@ -103,7 +103,7 @@ POST /v1/messages
   "model": "virtual-model-error-auth-401"
 }
 --- client response (status 401)
-{"error":{"message":"Failed to forward request: POST \"REDACTED\": 401 Unauthorized {\"error\":{\"message\":\"authentication failed\",\"type\":\"authentication_error\"},\"type\":\"error\"}","type":"api_error"}}
+{"error":{"message":"Failed to forward request: POST \"REDACTED\": 401 Unauthorized {\"error\":{\"message\":\"authentication failed\",\"type\":\"authentication_error\"},\"type\":\"error\"}","type":"api_error"},"type":"error"}
 
 === error-auth-401 stream=true
 --- upstream request

@@ -338,10 +338,10 @@ type RuleFlags struct {
 const (
 	ClaudeCodeVersionDefault = ""        // follows ClaudeCodeVersionLatest
 	ClaudeCodeVersionLegacy  = "2.1.86"  // legacy emulation
-	ClaudeCodeVersion2_1_280 = "2.1.280" // native client profile
+	ClaudeCodeVersion2_1_328 = "2.1.328" // native client profile
 	// ClaudeCodeVersionLatest is the profile Anthropic currently accepts and
 	// the one ClaudeCodeVersionDefault resolves to.
-	ClaudeCodeVersionLatest = ClaudeCodeVersion2_1_280
+	ClaudeCodeVersionLatest = ClaudeCodeVersion2_1_328
 )
 
 // ResolveClaudeCodeVersion maps a configured claude_code_version to the
@@ -349,7 +349,7 @@ const (
 // default (latest); only an explicit "2.1.86" selects the legacy emulation.
 func ResolveClaudeCodeVersion(v string) string {
 	switch v {
-	case ClaudeCodeVersionLegacy, ClaudeCodeVersion2_1_280:
+	case ClaudeCodeVersionLegacy, ClaudeCodeVersion2_1_328:
 		return v
 	default:
 		return ClaudeCodeVersionLatest
@@ -359,7 +359,7 @@ func ResolveClaudeCodeVersion(v string) string {
 // ClaudeCodeVersionEnabled reports whether a resolved version selects a
 // native profile (anything but legacy or unset).
 func ClaudeCodeVersionEnabled(v string) bool {
-	return v == ClaudeCodeVersion2_1_280
+	return v == ClaudeCodeVersion2_1_328
 }
 
 // IsZero reports whether no flag is set at all. RuleFlags stopped being
