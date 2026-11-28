@@ -133,14 +133,23 @@ the title is empty
 error=true
 no thread "zzzz" in this project
 == resolve_thread {"thread_id":"T15(short)"}
+error=true
+not resolved: a turn or a background task is running; no merged PR of this thread's branch is recorded. Pass the id of the user's message that asks to resolve it in cite, or ask the user
+== resolve_thread {"cite":["nope"],"thread_id":"T15(short)"}
+error=true
+cite "nope" is not one of the user's own recent messages
+== resolve_thread {"cite":["E19(short)"],"thread_id":"T15(short)"}
 error=false
-resolved
+resolved; its running turn was stopped
+== resolve_thread {"cite":["E19(short)"],"thread_id":"T15(short)"}
+error=false
+already resolved
 == resolve_thread {"thread_id":"zzzz"}
 error=true
 no thread "zzzz" in this project
 == message_thread {"message":"one more thing","thread_id":"T15(short)"}
 error=true
-the thread is resolved; reopen it first
+the thread is resolved; call reopen_thread first if the same work continues, or start a new thread for new work
 == get_thread {"thread_id":"T15(short)"}
 error=false
 <event source="thread" kind="get_thread" trust="relay">
@@ -150,6 +159,21 @@ last report:
 recent transcript:
 [E17(short) user] do the second thing
 </event>
+== reopen_thread {"cite":["nope"],"thread_id":"T15(short)"}
+error=true
+cite "nope" is not one of the user's own recent messages
+== reopen_thread {"thread_id":"zzzz"}
+error=true
+no thread "zzzz" in this project
+== reopen_thread {"thread_id":"T15(short)"}
+error=false
+reopened; the thread is now idle
+== reopen_thread {"thread_id":"T15(short)"}
+error=false
+already open; the thread is idle
+== resolve_thread {"cite":["E19(short)"],"thread_id":"T15(short)"}
+error=false
+resolved
 == list_threads {"status":"resolved"}
 error=false
 <event source="history" kind="list_threads" trust="relay">
@@ -196,7 +220,7 @@ error=true
 topic is required: it names the memory file
 == send_file {"caption":"Here","path":"<data>/<uuid>/library/report.txt"}
 error=false
-{"message_id":"E27"}
+{"message_id":"E29"}
 == send_file {"path":"<data>/<uuid>/library/missing.txt"}
 error=true
 lstat <data>/<uuid>/library/missing.txt: no such file or directory

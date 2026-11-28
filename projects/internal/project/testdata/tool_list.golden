@@ -8,7 +8,7 @@
   description: List a directory in this project's library or memory. Use library or memory as the root path.
   schema: {"properties":{"path":{"description":"Path in the project's library or memory","type":"string"}},"required":["path"],"type":"object"}
 [coordinator] list_threads
-  description: List the project's threads, including old and archived ones the thread table in your prompt leaves out. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.
+  description: List the project's threads, including the old ones the thread table in your prompt leaves out. Archived threads are not listed. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.
   schema: {"properties":{"contains":{"description":"Optional. Only threads whose title, task or last report contains this text.","type":"string"},"limit":{"description":"How many threads, up to 40. Default 20.","type":"integer"},"status":{"description":"Optional. Only threads with this status, e.g. working, waiting, ready, resolved.","type":"string"}},"type":"object"}
 [coordinator] message_thread
   description: Send a message to an existing thread (follow-up work, an answer to its question). While the thread works, it is added to the running turn and read at the thread's next step (so it can change course); an idle thread starts a turn on it.
@@ -31,12 +31,15 @@
 [coordinator] rename_thread
   description: Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.
   schema: {"properties":{"thread_id":{"description":"The thread: its number (#3), or its id or 8-character prefix.","type":"string"},"title":{"description":"New title: starts with a verb that names the goal, three to six words, no ids or paths.","type":"string"}},"required":["thread_id","title"],"type":"object"}
+[coordinator] reopen_thread
+  description: Reopen a resolved thread so it takes messages again; its branch, PR and history are as they were. An open thread is left as it is.
+  schema: {"additionalProperties":false,"properties":{"cite":{"description":"Optional. Ids (msg attribute) of the user's messages that ask for it.","items":{"type":"string"},"type":"array"},"thread_id":{"description":"The thread: its number (#3), or its id or prefix.","type":"string"}},"required":["thread_id"],"type":"object"}
 [coordinator] request_decision
   description: Ask the user to pick one option on a card, when a choice changes their goal or a step cannot be undone. Ask once: two to four options, one recommended; do not repeat the question in text. Meanwhile keep working on the recommended option unless that step cannot be undone.
   schema: {"properties":{"context":{"description":"Background the user needs to choose. Optional.","type":"string"},"number":{"description":"The PR or issue number.","type":"integer"},"options":{"items":{"properties":{"consequence":{"description":"What happens if chosen, one sentence.","type":"string"},"label":{"description":"The option, a few words.","type":"string"}},"required":["label"],"type":"object"},"maxItems":4,"minItems":2,"type":"array"},"question":{"description":"The question, verb first, in about twelve words.","type":"string"},"reason":{"description":"Why you recommend it, one sentence.","type":"string"},"recommended":{"description":"Index of the recommended option, from 0.","type":"integer"},"thread_id":{"description":"The thread (#3 or id).","type":"string"}},"required":["question","options","recommended"],"type":"object"}
 [coordinator] resolve_thread
-  description: Mark a thread resolved (done). Only when the user asks for it: a merged PR alone does not mean the thread is done.
-  schema: {"properties":{"thread_id":{"description":"The thread: its number (#3), or its id or prefix.","type":"string"}},"required":["thread_id"],"type":"object"}
+  description: Mark a thread resolved (done), only when the user asks: pass their message id in cite. Without cite, only a resting thread whose PR is merged with nothing left is resolved; the error says what is missing.
+  schema: {"additionalProperties":false,"properties":{"cite":{"description":"Ids (msg attribute) of the user's messages that ask for it.","items":{"type":"string"},"type":"array"},"thread_id":{"description":"The thread: its number (#3), or its id or prefix.","type":"string"}},"required":["thread_id"],"type":"object"}
 [coordinator] send_file
   description: Publish a file to this conversation so the user can see it. <guidance>
   schema: {"additionalProperties":false,"properties":{"caption":{"description":"Optional description shown with the file","type":"string"},"path":{"description":"Path to the file to publish in this conversation","type":"string"}},"required":["path"],"type":"object"}

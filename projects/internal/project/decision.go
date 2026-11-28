@@ -207,6 +207,7 @@ func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
 		if err != nil {
 			return err
 		}
+		threads = visibleThreads(threads)
 		for i := range threads {
 			if threads[i].ID == p.MainThreadID || linkKind(threads[i].Links, d.Number) == "" {
 				continue

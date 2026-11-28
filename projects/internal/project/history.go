@@ -174,12 +174,13 @@ func (c *Coordinator) readConversation(p *db.Project, a readArgs) (string, error
 }
 
 // listThreads lists the project's threads, newest activity first, including
-// the old and archived ones the thread table leaves out.
+// the old ones the thread table leaves out. Archived threads are the user's to manage and are not listed.
 func (c *Coordinator) listThreads(p *db.Project, status, contains string, limit int) (string, error) {
 	threads, err := c.store.ListThreads(p.ID)
 	if err != nil {
 		return "", err
 	}
+	threads = visibleThreads(threads)
 	c.threads.Annotate(threads)
 	if limit <= 0 {
 		limit = readItems
