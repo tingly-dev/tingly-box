@@ -4,8 +4,12 @@ import type { SubagentSteps } from '../transcript';
 
 /** How many of the latest events a thread opens with; older ones load on request. */
 export const TAIL = 200;
-/** Threads whose transcript is kept for going back to them. */
-const CACHE_MAX = 20;
+/**
+ * Ceilings on the transcripts kept for going back to them: how many threads,
+ * and how many events across all of them. Past either, the least recently
+ * used thread goes first; the one being written is always kept.
+ */
+export const cacheLimits = { threads: 20, events: 8000 };
 
 interface Transcript {
     /**
@@ -43,7 +47,14 @@ const cache = new Map<string, Transcript>();
 function remember(threadId: string, t: Transcript) {
     cache.delete(threadId);
     cache.set(threadId, t);
-    if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
+    let events = 0;
+    for (const v of cache.values()) events += v.events.length;
+    // Least recently used first; the one just written is last, so it stays.
+    while (cache.size > 1 && (cache.size > cacheLimits.threads || events > cacheLimits.events)) {
+        const oldest = cache.keys().next().value!;
+        events -= cache.get(oldest)!.events.length;
+        cache.delete(oldest);
+    }
 }
 
 /** For tests. */
@@ -72,8 +83,10 @@ export function mergeEvents(list: ThreadEvent[], incoming: ThreadEvent[]): Threa
     let added = false;
     for (const e of incoming) {
         const i = index.get(e.id);
-        if (i !== undefined) next[i] = e;
-        else if (time(e.created_at) >= start) {
+        if (i !== undefined) {
+            // A live frame can arrive out of order: keep the later write.
+            if (time(e.updated_at ?? e.created_at) >= time(next[i].updated_at ?? next[i].created_at)) next[i] = e;
+        } else if (time(e.created_at) >= start) {
             index.set(e.id, next.length);
             next.push(e);
             added = true;
@@ -89,6 +102,21 @@ function cursor(events: ThreadEvent[]): string | undefined {
     for (const e of events) max = Math.max(max, time(e.updated_at ?? e.created_at));
     // Millisecond precision rounds down; since is inclusive, so nothing is missed.
     return Number.isFinite(max) ? new Date(max).toISOString() : undefined;
+}
+
+/**
+ * The latest-written loaded event, which a `since` read from the cursor must
+ * return while it still exists. If it does not, the kept transcript was reset
+ * on the server and cannot be caught up incrementally.
+ */
+function anchor(events: ThreadEvent[]): string | undefined {
+    let max = -Infinity;
+    let id: string | undefined;
+    for (const e of events) {
+        const t = time(e.updated_at ?? e.created_at);
+        if (t >= max) { max = t; id = e.id; }
+    }
+    return id;
 }
 
 /** Events read in pages that may overlap what is loaded: added once each, in created order. */
@@ -134,16 +162,27 @@ export function useTranscript(threadId: string) {
         if (!id) return;
         const have = cache.get(id);
         const since = have && cursor(have.events);
-        if (since) {
+        if (have && since) {
+            const mark = anchor(have.events);
             const r = await fetchEvents(id, { since });
+            if (mark && !r.events.some((e) => e.id === mark)) {
+                // The event the kept transcript had caught up to is gone: the
+                // server reset the transcript, so the window cannot be trusted.
+                const fresh = await fetchEvents(id, { limit: TAIL });
+                if (id !== current.current) return;
+                const pending = early.current.filter((e) => e.thread_id === id);
+                early.current = [];
+                update(id, () => ({ events: mergeEvents(fresh.events, pending), more: fresh.more, agents: {} }));
+                return;
+            }
             update(id, (t) => t && { ...t, events: mergeEvents(t.events, r.events) });
-        } else {
-            const r = await fetchEvents(id, { limit: TAIL });
-            if (id !== current.current) return;
-            const pending = early.current.filter((e) => e.thread_id === id);
-            early.current = [];
-            update(id, (t) => ({ events: mergeEvents(mergeEvents(r.events, t?.events ?? []), pending), more: r.more, agents: t?.agents ?? {} }));
+            return;
         }
+        const r = await fetchEvents(id, { limit: TAIL });
+        if (id !== current.current) return;
+        const pending = early.current.filter((e) => e.thread_id === id);
+        early.current = [];
+        update(id, (t) => ({ events: mergeEvents(mergeEvents(r.events, t?.events ?? []), pending), more: r.more, agents: t?.agents ?? {} }));
     }, [update]);
 
     /** Loads the page before the first loaded event. */

@@ -40,6 +40,9 @@ import type { TranscriptEntry } from '../../transcript';
 
 const mono = { fontFamily: fontMono } as const;
 
+/** The tools whose calls build the agent's progress list (the checklist). */
+const PROGRESS_TOOLS = 'TodoWrite,TaskCreate,TaskUpdate,TaskList,TaskGet';
+
 /** Facts about a thread on one line, separated by dots; empty ones drop out. */
 function MetaLine({ items }: { items: React.ReactNode[] }) {
     const shown = items.filter(Boolean);
@@ -216,16 +219,15 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const galleryFiles = useMemo(() => blockAttachments(blocks), [blocks]);
 
     // Load the older progress calls separately so a long conversation's
-    // paginated transcript does not lose its current checklist.
+    // paginated transcript does not lose its current checklist. Only these
+    // tools' calls and results come back, not the transcript's tool output.
     const [progressHistory, setProgressHistory] = useState<{threadId: string; events: ThreadEvent[]} | null>(null);
     useEffect(() => {
         if (!threadId || !more) return;
         let active = true;
-        unwrap(api.GET('/api/v1/threads/{id}/events', {params: {path: {id: threadId}}})).then((r) => {
+        unwrap(api.GET('/api/v1/threads/{id}/events', {params: {path: {id: threadId}, query: {tools: PROGRESS_TOOLS}}})).then((r) => {
             if (!active) return;
-            const names = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet']);
-            const ids = new Set(r.events.filter((e) => !e.parent && e.kind === 'tool_use' && names.has(e.content)).map((e) => e.request_id));
-            setProgressHistory({threadId, events: r.events.filter((e) => !e.parent && ((e.kind === 'tool_use' && names.has(e.content)) || (e.kind === 'tool_result' && ids.has(e.request_id))))});
+            setProgressHistory({threadId, events: r.events});
         }).catch(() => { /* The loaded transcript still supplies current progress. */ });
         return () => { active = false; };
     }, [threadId, more]);

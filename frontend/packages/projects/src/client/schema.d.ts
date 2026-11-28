@@ -4258,6 +4258,8 @@ export interface operations {
                 call?: string;
                 /** @description RFC 3339 time: every event added or changed at or after it (its updated_at), subagent steps included; parent, limit, before and from do not apply */
                 since?: string;
+                /** @description Comma-separated tool names: only the conversation's calls of those tools and their results, in order; a long thread's checklist without its whole transcript; other options do not apply */
+                tools?: string;
             };
             header?: never;
             path: {

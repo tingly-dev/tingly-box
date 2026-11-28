@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ThreadEvent } from '../client';
-import { forgetTranscripts, mergeEvents, TAIL, useTranscript } from './useTranscript';
+import { cacheLimits, forgetTranscripts, mergeEvents, TAIL, useTranscript } from './useTranscript';
 
 const m = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('../client', async (actual) => ({ ...(await actual<typeof import('../client')>()), api: { GET: m.get } }));
@@ -14,7 +14,11 @@ const answer = (events: ThreadEvent[], more = false) => ({ data: { events, more 
 const queries = () => m.get.mock.calls.map(([, o]) => (o as { params: { query: Record<string, unknown> } }).params.query);
 
 beforeEach(() => m.get.mockReset());
-afterEach(() => forgetTranscripts());
+afterEach(() => {
+    forgetTranscripts();
+    cacheLimits.threads = 20;
+    cacheLimits.events = 8000;
+});
 
 describe('mergeEvents', () => {
     it('replaces by id, adds new ones in created order, and never adds one older than the window', () => {
@@ -22,6 +26,14 @@ describe('mergeEvents', () => {
         const out = mergeEvents(list, [ev('a', 1), { ...ev('c', 3), content: 'changed' }, ev('d', 4), ev('bb', 2.5)]);
         expect(out.map((e) => e.id)).toEqual(['b', 'bb', 'c', 'd']);
         expect(out[2].content).toBe('changed');
+    });
+    it('keeps the later write when a live frame arrives out of order', () => {
+        const written = { ...ev('c', 3), content: 'new', updated_at: ev('x', 9).created_at };
+        const after = mergeEvents([ev('c', 3)], [written]);
+        expect(after[0].content).toBe('new');
+        // The same event's older frame, arriving late, must not undo it.
+        const again = mergeEvents(after, [ev('c', 3)]);
+        expect(again[0].content).toBe('new');
     });
 });
 
@@ -43,12 +55,45 @@ describe('useTranscript', () => {
         m.get.mockResolvedValueOnce(answer([], false));
         rerender({ id: 't2' });
         await waitFor(() => expect(m.get).toHaveBeenCalledTimes(3));
-        m.get.mockResolvedValueOnce(answer([{ ...ev('b', 2), content: 'answered', updated_at: ev('x', 9).created_at }, ev('e', 5)]));
+        m.get.mockResolvedValueOnce(answer([{ ...ev('b', 2), content: 'answered', updated_at: ev('x', 9).created_at }, ev('d', 4), ev('e', 5)]));
         rerender({ id: 't1' });
         expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd']);
         await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd', 'e']));
         expect(result.current.events?.[1].content).toBe('answered');
         expect(queries()[3]).toEqual({ since: ev('d', 4).updated_at });
+    });
+
+    it('reads the latest page afresh when the kept transcript no longer matches the server', async () => {
+        m.get.mockResolvedValueOnce(answer([ev('a', 1), ev('b', 2)], true));
+        const { result } = renderHook(() => useTranscript('t1'));
+        await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b']));
+
+        // `since` leaves out 'b', the event the cache was caught up to: the
+        // transcript was reset, so the window is read again instead of merged.
+        m.get.mockResolvedValueOnce(answer([ev('z', 9)], false));
+        m.get.mockResolvedValueOnce(answer([ev('n', 8)], false));
+        await act(() => result.current.catchUp());
+        expect(queries()).toEqual([{ limit: TAIL }, { since: ev('b', 2).updated_at }, { limit: TAIL }]);
+        expect(result.current.events?.map((e) => e.id)).toEqual(['n']);
+        expect(result.current.more).toBe(false);
+    });
+
+    it('drops the least recently used transcript past the cache budget', async () => {
+        cacheLimits.events = 3;
+        m.get.mockResolvedValueOnce(answer([ev('a', 1, 't1'), ev('b', 2, 't1')], false));
+        const { result, rerender } = renderHook(({ id }) => useTranscript(id), { initialProps: { id: 't1' } });
+        await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b']));
+
+        // t2's two events push the total over the budget: t1 goes first.
+        m.get.mockResolvedValueOnce(answer([ev('c', 1, 't2'), ev('d', 2, 't2')], false));
+        rerender({ id: 't2' });
+        await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['c', 'd']));
+
+        // Back to t1: evicted, so a full page is read, not `since`.
+        m.get.mockResolvedValueOnce(answer([ev('a', 1, 't1'), ev('b', 2, 't1')], false));
+        rerender({ id: 't1' });
+        await waitFor(() => expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'b']));
+        expect(queries().at(-1)).toEqual({ limit: TAIL });
     });
 
     it('keeps a live entry that arrives before the first read lands', async () => {
