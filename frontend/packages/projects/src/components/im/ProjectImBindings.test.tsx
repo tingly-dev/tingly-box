@@ -6,13 +6,13 @@ import { ProjectsHostProvider, type ImChat, type ProjectsHost } from '../../host
 import { ProjectImTags, useProjectIm } from './ProjectImBindings';
 
 const m = vi.hoisted(() => ({ list: vi.fn(), bind: vi.fn(), unbind: vi.fn(), get: vi.fn(), notify: vi.fn() }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key) }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key), i18n: { language: 'en' } }) }));
 vi.mock('../../client/channelBindings', () => ({ listChannelBindings: m.list, bindChannel: m.bind, unbindChannel: m.unbind }));
 vi.mock('../../client', async (actual) => ({ ...(await actual<typeof import('../../client')>()), api: { GET: m.get } }));
 
 // A project's chats are bound to its main thread, named m<project>.
 const binding = (id: string, chat_id: string, chat_title: string, project_id: string): ChannelBinding => ({
-    id, platform: 'telegram', bot_uuid: 'b1', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false,
+    id, platform: 'telegram', bot_uuid: 'b1', chat_id, chat_title, project_id, thread_id: `m${project_id}`, created_at: '', updated_at: '', verbose: false, muted: false,
 });
 
 const summary = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, name, type: 'project', main_thread_id: `m${id}`, threads: { waiting: 0, working: 0, ready: 0, idle: 0, resolved: 0 }, ...over });
@@ -52,6 +52,13 @@ afterEach(() => {
 });
 
 describe('project IM bindings', () => {
+    it('marks a muted chat on its tag and keeps it bound', async () => {
+        m.list.mockResolvedValue([{ ...binding('cb1', 'tg:1', 'yz', 'p1'), muted: true }]);
+        show(host([chat('tg:1', 'yz')]));
+        expect(await screen.findByText('yz')).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'im.mute.indefinite' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /im\.tags\.unbind/ })).toBeInTheDocument();
+    });
     it('keeps a project binding visible when the chat focuses a project thread', async () => {
         m.list.mockResolvedValue([{ ...binding('focused', 'tg:1', 'yz', 'p1'), thread_id: 'worker-1', target_project_id: 'p1' }]);
         show(host([chat('tg:1', 'yz')]));

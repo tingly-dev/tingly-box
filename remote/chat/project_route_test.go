@@ -294,12 +294,12 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 
 	chat := alice.OpenDM(harness.Setting.UUID)
 	router.bind(chat.ChatID)
-	for _, text := range []string{"/stop", "/clear", "/new", "/new fix the login bug", "/stop #2", "/session", "/session 3", "/status", "/verbose on", "/yolo", "/compact", "/compact keep the API notes"} {
+	for _, text := range []string{"/stop", "/clear", "/new", "/new fix the login bug", "/stop #2", "/session", "/session 3", "/status", "/verbose on", "/yolo", "/compact", "/compact keep the API notes", "/mute 8h", "/unmute"} {
 		chat.Drain()
 		chat.SendText(text)
 		chat.WaitText(3*time.Second).AssertContains(t, "project did ")
 	}
-	assert.Equal(t, []string{"stop:", "clear:", "new:", "new:fix the login bug", "stop:#2", "session:", "session:3", "status:", "verbose:on", "yolo:", "compact:", "compact:keep the API notes"}, router.commands())
+	assert.Equal(t, []string{"stop:", "clear:", "new:", "new:fix the login bug", "stop:#2", "session:", "session:3", "status:", "verbose:on", "yolo:", "compact:", "compact:keep the API notes", "mute:8h", "unmute:"}, router.commands())
 	assert.Empty(t, router.inbound(), "commands are not sent as messages")
 
 	chat.Drain()
@@ -316,7 +316,7 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 	chat.SendText("stop")
 	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
 	assert.Equal(t, "stop", router.inbound()[0].Text)
-	assert.Len(t, router.commands(), 12, "nothing else ran a command")
+	assert.Len(t, router.commands(), 14, "nothing else ran a command")
 }
 
 // A press on a Projects prompt's button goes to the project with the chat it

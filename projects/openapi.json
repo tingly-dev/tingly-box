@@ -505,6 +505,50 @@
         }
       }
     },
+    "/api/v1/projects/channel-bindings/{id}/mute": {
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Mute a bound IM chat (nothing is sent to it, its messages still arrive), until a time or until unmuted; or unmute it. The binding stays.",
+        "description": "Mute a bound IM chat (nothing is sent to it, its messages still arrive), until a time or until unmuted; or unmute it. The binding stays.",
+        "operationId": "apiV1ProjectsChannel-bindingsIdMutePut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MuteChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelBinding"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/directories": {
       "post": {
         "tags": [
@@ -3275,6 +3319,15 @@
             "type": "string",
             "description": "Field id"
           },
+          "muted": {
+            "type": "boolean",
+            "description": "Field muted"
+          },
+          "muted_until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field muted_until"
+          },
           "platform": {
             "type": "string",
             "description": "Field platform"
@@ -3321,6 +3374,7 @@
           "chat_title",
           "thread_id",
           "verbose",
+          "muted",
           "project_id",
           "created_at",
           "updated_at"
@@ -4397,6 +4451,23 @@
         },
         "required": [
           "models"
+        ]
+      },
+      "MuteChannelRequest": {
+        "type": "object",
+        "properties": {
+          "muted": {
+            "type": "boolean",
+            "description": "Field muted"
+          },
+          "muted_until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field muted_until"
+          }
+        },
+        "required": [
+          "muted"
         ]
       },
       "OKResponse": {

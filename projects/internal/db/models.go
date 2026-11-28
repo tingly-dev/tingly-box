@@ -412,6 +412,12 @@ type ChannelBinding struct {
 	// Verbose makes the chat also hear each step of its thread's turns (what
 	// it says between tool calls, and each call), not only the reply.
 	Verbose bool `gorm:"not null;default:false" json:"verbose"`
+	// Muted silences the chat while keeping it bound: nothing is sent to it
+	// (replies, reports, requests, files), and what it sends still reaches
+	// its thread. MutedUntil, when set, ends it then; without it the chat
+	// stays muted until unmuted. A mute that has run out reads as unmuted.
+	Muted      bool       `gorm:"not null;default:false" json:"muted"`
+	MutedUntil *time.Time `json:"muted_until,omitempty"`
 	// ProjectID is the thread's project, filled in when read.
 	ProjectID   string    `gorm:"->;-:migration" json:"project_id"`
 	FocusTitle  string    `gorm:"->;-:migration" json:"focus_title,omitempty"`
@@ -421,6 +427,18 @@ type ChannelBinding struct {
 	TargetSeq   int       `gorm:"->;-:migration" json:"target_seq,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// MutedAt reports whether the chat is muted at now.
+func (b *ChannelBinding) MutedAt(now time.Time) bool {
+	return b.Muted && (b.MutedUntil == nil || now.Before(*b.MutedUntil))
+}
+
+// settleMute clears a mute that has run out, so a read never shows one.
+func (b *ChannelBinding) settleMute(now time.Time) {
+	if !b.MutedAt(now) {
+		b.Muted, b.MutedUntil = false, nil
+	}
 }
 
 // EventRole is the role a conversation event plays in the coordinator's

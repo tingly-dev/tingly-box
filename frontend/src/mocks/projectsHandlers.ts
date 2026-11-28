@@ -379,7 +379,7 @@ const sessionEvents = (s: (typeof sessions)[number]) => {
 // latency project's main thread and a Telegram group on Docs'. The chat ids match the Remote
 // mocks (handlers.ts: bots/:bot/chats and /groups). Held in memory, so binding
 // and unbinding work within a mock session.
-type Binding = { id: string; platform: string; chat_id: string; bot_uuid?: string; chat_title: string; project_id: string; thread_id: string; created_at: string; updated_at: string }
+type Binding = { id: string; platform: string; chat_id: string; bot_uuid?: string; chat_title: string; project_id: string; thread_id: string; muted?: boolean; muted_until?: string; created_at: string; updated_at: string }
 const bindings: Binding[] = [
     { id: 'cb-1', platform: 'telegram', chat_id: 'telegram:123456789', chat_title: 'Alice (ops)', project_id: 'p-latency', thread_id: 'main-p-latency', created_at: ago(60 * 30), updated_at: ago(60 * 30) },
     { id: 'cb-2', platform: 'telegram', chat_id: 'telegram:-10024681012', chat_title: 'Release Crew', project_id: 'p-docs', thread_id: 'main-p-docs', created_at: ago(60 * 48), updated_at: ago(60 * 48) },
@@ -429,6 +429,19 @@ export const projectsHandlers = [
         }
         const b: Binding = { id: `cb-${Date.now()}`, platform: body.platform, chat_id: body.chat_id, bot_uuid: body.bot_uuid, chat_title: mockChatTitles[body.chat_id] ?? body.chat_id, project_id, thread_id, created_at: now, updated_at: now }
         bindings.push(b)
+        return HttpResponse.json(b)
+    }),
+    // Muting keeps the binding; only what is sent to the chat stops.
+    http.put('/api/v1/projects/channel-bindings/:id/mute', async ({ params, request }) => {
+        const b = bindings.find((x) => x.id === params.id)
+        if (!b) return HttpResponse.json({ error: 'binding not found' }, { status: 404 })
+        const body = (await request.json()) as { muted: boolean; muted_until?: string }
+        if (body.muted && body.muted_until && Date.parse(body.muted_until) <= Date.now()) {
+            return HttpResponse.json({ error: 'muted_until must be in the future' }, { status: 400 })
+        }
+        b.muted = body.muted
+        b.muted_until = body.muted ? body.muted_until : undefined
+        b.updated_at = ago(0)
         return HttpResponse.json(b)
     }),
     http.delete('/api/v1/projects/channel-bindings/:id', ({ params }) => {

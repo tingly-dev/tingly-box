@@ -6,9 +6,10 @@ import { useTranslation } from 'react-i18next';
 import type { ChannelBinding } from '../../client/channelBindings';
 import { useNotify } from '../../hooks/useNotify';
 import { useProjectsHost, type ImChat } from '../../host/ProjectsHost';
-import { Add, Close } from '../icons';
+import { Add, BellOff, Close } from '../icons';
 import { BindChatDialog } from './BindChatDialog';
 import { ImChatLabel, useImChatText } from './ImChatLabel';
+import { useMuteText } from './MuteControl';
 import { useChannelBindings, useImChats, useProjectDirectory } from './useImBindings';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -102,16 +103,24 @@ export function useProjectIm(target: ImTarget | null): ProjectIm | null {
     };
 }
 
-/** One bound chat: platform mark, name, and × to unbind. */
+/** One bound chat: platform mark, name, a bell-off while muted, and × to unbind. */
 function Tag({ binding, onUnbind }: { binding: ChannelBinding; onUnbind: () => void }) {
     const { t } = useTranslation('projects');
     const chatText = useImChatText();
+    const muted = useMuteText()(binding);
     const title = chatText({ platform: binding.platform, chatId: binding.chat_id, alias: binding.chat_title, botUuid: binding.bot_uuid });
     return (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, height: 26, pl: 1, pr: 0.25, borderRadius: radius.pill, border: 1, borderColor: 'divider', bgcolor: 'action.hover', minWidth: 0, maxWidth: 260 }}>
-            <Box title={title} sx={{ minWidth: 0, fontSize: fontSizes.sm, fontWeight: 500, display: 'flex' }}>
+            <Box title={title} sx={{ minWidth: 0, fontSize: fontSizes.sm, fontWeight: 500, display: 'flex', opacity: muted ? 0.6 : 1 }}>
                 <ImChatLabel platform={binding.platform} chatId={binding.chat_id} alias={binding.chat_title} botUuid={binding.bot_uuid} compact />
             </Box>
+            {muted && (
+                <Tooltip title={muted}>
+                    <Box component="span" role="img" aria-label={muted} sx={{ display: 'inline-flex', flexShrink: 0, color: 'text.secondary' }}>
+                        <BellOff sx={{ fontSize: 14 }} />
+                    </Box>
+                </Tooltip>
+            )}
             <Tooltip title={t('im.tags.unbind', { chat: title })}>
                 <IconButton size="small" onClick={onUnbind} aria-label={t('im.tags.unbind', { chat: title })} sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                     <Close sx={{ fontSize: 14 }} />
@@ -146,7 +155,7 @@ function MoreTags({ bindings, onUnbind }: { bindings: ChannelBinding[]; onUnbind
 }
 
 /**
- * "Bound IM chats" pill tags plus a dashed "Bind chat" button. `maxVisible`
+ * "Bound IM chats" pill tags plus a dashed "Bind IM" button. `maxVisible`
  * keeps a tight header on one line; the rest fold into "+N".
  */
 export function ProjectImTags({ im, maxVisible = 2, showLabel = false }: { im: ProjectIm; maxVisible?: number; showLabel?: boolean }) {

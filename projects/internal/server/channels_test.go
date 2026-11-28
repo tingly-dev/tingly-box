@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,4 +101,36 @@ func TestPostingToABoundProjectStillWorksWithoutAnIMHost(t *testing.T) {
 	require.NotEmpty(t, evs.Events)
 	assert.Equal(t, db.EvUser, evs.Events[0].Kind)
 	assert.Empty(t, evs.Events[0].Source, "a web message has no source")
+}
+
+func TestChannelBindingMuteRoute(t *testing.T) {
+	_, c := newServer(t, nil)
+	var a db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "A"}, &a))
+	var bound db.ChannelBinding
+	require.Equal(t, 200, c.do("PUT", "/projects/channel-bindings", map[string]any{"platform": "telegram", "chat_id": "42", "project_id": a.ID}, &bound))
+
+	until := time.Now().Add(8 * time.Hour).UTC().Truncate(time.Second)
+	var muted db.ChannelBinding
+	require.Equal(t, 200, c.do("PUT", "/projects/channel-bindings/"+bound.ID+"/mute", map[string]any{"muted": true, "muted_until": until}, &muted))
+	assert.True(t, muted.Muted)
+	require.NotNil(t, muted.MutedUntil)
+	assert.True(t, muted.MutedUntil.Equal(until))
+	assert.Equal(t, a.ID, muted.ProjectID)
+
+	type list struct {
+		Bindings []db.ChannelBinding `json:"bindings"`
+	}
+	var l list
+	require.Equal(t, 200, c.do("GET", "/projects/channel-bindings", nil, &l))
+	require.Len(t, l.Bindings, 1)
+	assert.True(t, l.Bindings[0].Muted, "the list says which chats are muted")
+
+	var unmuted db.ChannelBinding
+	require.Equal(t, 200, c.do("PUT", "/projects/channel-bindings/"+bound.ID+"/mute", map[string]any{"muted": false}, &unmuted))
+	assert.False(t, unmuted.Muted)
+	assert.Nil(t, unmuted.MutedUntil)
+
+	require.Equal(t, 400, c.do("PUT", "/projects/channel-bindings/"+bound.ID+"/mute", map[string]any{"muted": true, "muted_until": time.Now().Add(-time.Hour)}, nil))
+	require.Equal(t, 404, c.do("PUT", "/projects/channel-bindings/nope/mute", map[string]any{"muted": true}, nil))
 }

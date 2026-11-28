@@ -107,6 +107,10 @@ const (
 	// CommandCompact compacts the session's conversation; the result comes
 	// back as the session's next reply.
 	CommandCompact = "compact"
+	// CommandMute stops what is sent to the chat, for a while ("1h", "8h",
+	// "tomorrow") or until CommandUnmute; the binding stays.
+	CommandMute   = "mute"
+	CommandUnmute = "unmute"
 )
 
 var commands = []CommandSpec{
@@ -118,6 +122,8 @@ var commands = []CommandSpec{
 	{CommandVerbose, "/verbose on|off", "Also see each step, not only the reply", 75},
 	{CommandYolo, "/yolo", "Use every tool without asking, or back", 74},
 	{CommandCompact, "/compact [instructions]", "Shrink the conversation to free up context", 73},
+	{CommandMute, "/mute [1h|8h|tomorrow]", "Stop replies and updates here for a while, or until /unmute", 72},
+	{CommandUnmute, "/unmute", "Hear replies and updates here again", 71},
 }
 
 // Commands are the session commands, in listing order.
