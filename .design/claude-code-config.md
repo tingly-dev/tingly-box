@@ -362,6 +362,17 @@ the rule-derived base. Runtime preferences such as token limits, timeouts,
 auto-compaction, behavior switches, proxy settings, and `defaultMode` remain
 valid per-profile overrides.
 
+The **connection default** (a project or thread with no named profile) runs
+through `GetClaudeCodeEnv` instead of a profile settings file. It layers the
+user's main `~/.claude/settings.json` over `DefaultClaudeCodePrefs`, so every
+preference there — output tokens included — reaches it, and it carries unknown
+keys through rather than filtering them. This matters for two reasons: a
+sandboxed thread's `$HOME` is an empty tmpfs and `settings.json` is not mounted,
+so the launch env is its only carrier; and that env is part of `agentboot`
+`launchSignature`, so editing the main config restarts a resident process
+instead of leaving it on the old value. Named profiles already inherit the main
+file through `ResolveCCProfileSettings`.
+
 The profile identity card shows a **Settings File** row immediately below Quick
 Start. Its path is derived on every profile-config response by the same backend
 path helper used for materialization; it is never stored in profile metadata or

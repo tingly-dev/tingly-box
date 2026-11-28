@@ -98,6 +98,22 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 	}
 }
 
+// The connection default carries its preferences in opts.Env (there is no
+// settings file), so a change there — output tokens included — must restart a
+// resident process instead of letting it run on the old env.
+func TestLaunchSignature_ChangesWhenEnvChanges(t *testing.T) {
+	low := agentboot.ExecutionOptions{Env: []string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS=32000", "ANTHROPIC_MODEL=cc"}}
+	high := agentboot.ExecutionOptions{Env: []string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000", "ANTHROPIC_MODEL=cc"}}
+	if launchSignature(low) == launchSignature(high) {
+		t.Fatal("a changed launch env must restart the resident process")
+	}
+	// Hosts build env from a map, so entry order must not matter.
+	reordered := agentboot.ExecutionOptions{Env: []string{"ANTHROPIC_MODEL=cc", "CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000"}}
+	if launchSignature(reordered) != launchSignature(high) {
+		t.Fatal("the signature must not depend on env order")
+	}
+}
+
 func TestLaunchSignatureChangesWhenTheSandboxChanges(t *testing.T) {
 	off := agentboot.ExecutionOptions{}
 	on := agentboot.ExecutionOptions{Sandbox: &process.Sandbox{Runtime: "bwrap", Policy: sandbox.Policy{Storage: sandbox.Storage{Mounts: []sandbox.Mount{{Path: "/w"}}}}}}
