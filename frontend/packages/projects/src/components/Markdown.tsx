@@ -4,7 +4,8 @@ import remarkGfm from 'remark-gfm';
 import { Box, ButtonBase, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useTranslation } from 'react-i18next';
-import { Check, ContentCopy, ExpandMore } from './icons';
+import { Check, ContentCopy, ErrorOutline, ExpandMore } from './icons';
+import { TableBlock } from './MarkdownTable';
 import { useCopyFeedback } from '@tingly/ui';
 import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -45,8 +46,14 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     const footer = phone && (overflows || open);
     const copyButton = (
         <Tooltip title={copied ? t('common.copied') : failed ? t('phone.copyFailed', { defaultValue: 'Could not copy' }) : t('common.copy')}>
-            <IconButton size="small" onClick={() => copy(code)} aria-label={t('common.copy')} sx={{ color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary' }}>
-                {copied ? <Check fontSize="inherit" color="success" /> : <ContentCopy fontSize="inherit" />}
+            <IconButton
+                size="small"
+                onClick={() => copy(code)}
+                aria-label={copied ? t('common.copied') : failed ? t('phone.copyFailed', { defaultValue: 'Could not copy' }) : t('common.copy')}
+                data-copy-state={copied ? 'copied' : failed ? 'failed' : 'idle'}
+                sx={{ color: copied ? 'success.main' : failed ? 'error.main' : 'text.secondary' }}
+            >
+                {copied ? <Check fontSize="inherit" color="success" /> : failed ? <ErrorOutline fontSize="inherit" color="error" /> : <ContentCopy fontSize="inherit" />}
             </IconButton>
         </Tooltip>
     );
@@ -111,6 +118,7 @@ const safeComponents: Components = {
 const markdownComponents: Components = {
     a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
     pre: ({ children }) => <>{children}</>,
+    table: ({ children }) => <TableBlock>{children}</TableBlock>,
     code: ({ className, children }) => {
         const match = /language-(\w+)/.exec(className ?? '');
         const code = String(children ?? '');

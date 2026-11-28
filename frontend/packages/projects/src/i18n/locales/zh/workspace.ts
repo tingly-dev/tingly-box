@@ -9,6 +9,8 @@ export const workspace: Dict<typeof workspaceEn> = {
         copy: '复制', copied: '已复制', more: '更多', star: '收藏', unstar: '取消收藏', retry: '重试',
         tokensApprox: '≈ {{value}} tokens', turnOn: '开启', turnOff: '关闭',
     },
+    // Markdown 表格的卡片：标签和复制操作（components/MarkdownTable.tsx）。
+    markdown: { table: '表格', copyTable: '复制表格' },
     // 标签页在后台时的桌面通知（notifications/engine.ts）。
     notifications: {
         waiting: '等待你的输入',

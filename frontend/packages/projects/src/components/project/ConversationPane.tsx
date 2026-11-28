@@ -8,7 +8,7 @@ import { ImSourceBadge } from '../im/ImSourceBadge';
 import { AttachmentChips, AttachmentGallery, uploadAttachments } from '../attachments';
 import { ThreadComposer } from '../ThreadComposer';
 import type { SendMode } from '../Composer';
-import { Markdown } from '../Markdown';
+import { CodeBlock, Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { useTranscriptHost } from '../../transcript/context';
@@ -481,6 +481,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                             working={busy}
                             expandAll={false}
                             onRespond={async () => false}
+                            codeBlock={CodeBlock}
                             attachments={attachments}
                             messageSource={(message) => message.imSource ? <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} /> : null}
                             renderCustom={renderCustom}
