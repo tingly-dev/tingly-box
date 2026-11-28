@@ -1,6 +1,6 @@
 # 沙箱：安全模型与原语
 
-`sandbox/` 模块的权威设计：安全模型、五轴行为模型、接口原语、各运行时的映射、Projects 的默认值与推进步骤。历史推导（调研、实测、被否决的方案）留在 `projects/.design/thread-runtime.md` 与 `projects/.research/agent-sandbox-landscape.md`。
+`sandbox/` 模块的权威设计：安全模型、五轴行为模型、接口原语、各运行时的映射、Projects 的默认值与推进步骤。历史推导（调研、实测、被否决的方案）留在 `projects/.design/thread-runtime.md` 与 `projects/.research/agent-sandbox-landscape.md`。相关：[chat-mode.md](chat-mode.md)（项目之外的只读聊天：有 bwrap 就用，缺失时 host + `--restricted` + UI 提示，这是已接受的残余风险；项目线程仍遵守本文“不退回 host”）。
 
 状态（2026-11-25）：§3–§4 中标 **现行** 的已实现并合入（#2775–#2779）；标 **决定** 的已确认（用户 lgtm），待实施；标 **待验证** 的机制要先做实测再定。
 
