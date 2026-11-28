@@ -51,6 +51,18 @@ longer the bound; bytes are: one request carries at most
 parsed keeps its own error (400 with the cause, logged), so a truncated body is
 no longer reported as "not multipart".
 
+The web client checks the size before uploading, so a file over the limit is
+refused at the picker instead of after its bytes have gone up. Both upload
+entries (the composer's attach and the Library's add) go through
+`utils/uploadLimit.ts` (`precheckUploads`): the refused file is dropped from
+the pending list with a message naming it, the 200 MB limit and how far over it
+is; the other files still upload. The limit is a copy of the server's
+`MaxUploadBytes` (the server is the authority and has no API that reports it);
+a Go test (`TestWebClientUploadLimitMatchesTheServer`) fails if the copy
+drifts. The server's 413 stays as the second layer: the UI precheck is a
+convenience, not the enforcement. The UI shows the concrete limit (in the
+attach/add help and in the refusal) rather than a bare "file too large".
+
 A working folder is a `type=folder` project, and its uploads live in the
 project's own library like any other project's:
 `<data>/projects/<project>/library/uploads/<id>-<name>`, shared by every thread

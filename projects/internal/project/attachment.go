@@ -102,6 +102,13 @@ const maxNameBytes = 200
 // MaxAttachments caps the files on one message.
 const MaxAttachments = 20
 
+// MaxUploadBytes caps one uploaded file (200 MiB). It is the single source of
+// the per-file limit: the upload routes enforce it and answer a larger file
+// with 413. The web client mirrors it (frontend/packages/projects/src/utils/
+// uploadLimit.ts) so an oversized file is refused before its bytes go up;
+// TestWebClientUploadLimitMatchesTheServer keeps the two equal.
+const MaxUploadBytes int64 = 200 << 20
+
 // TooLargeError is an upload over the caller's limit. The HTTP layer answers
 // it with 413 and the reason, so an over-limit file is a readable refusal,
 // not a failed parse.

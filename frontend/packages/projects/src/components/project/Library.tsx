@@ -8,6 +8,7 @@ import { Delete, Download, Search, UploadFile } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { formatBytes, timeAgo } from '../../utils/format';
+import { precheckUploads, uploadLimitLabel } from '../../utils/uploadLimit';
 import { LazyTree } from '../common/LazyTree';
 import { LibraryPreview, previewKind, saveFile, type PreviewFile } from './LibraryPreview';
 import { displayName, LIBRARY_SORTS, matchesQuery, sortLibraryEntries, type LibrarySort } from './libraryEntries';
@@ -89,8 +90,23 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
     };
 
     const upload = async (list: FileList) => {
+        // Refuse an oversized file before its bytes go up, naming it and the
+        // limit, rather than after the server answers 413.
+        const { accepted, rejected } = precheckUploads(Array.from(list));
+        if (rejected.length) {
+            notify(rejected.map((r) => t('library.uploadTooLarge', {
+                name: r.file.name || 'file',
+                size: formatBytes(r.size),
+                limit: uploadLimitLabel(),
+                over: formatBytes(r.over),
+            })).join('\n'), 'error');
+        }
         const form = new FormData();
-        Array.from(list).forEach((f) => form.append('files', f));
+        accepted.forEach((f) => form.append('files', f));
+        if (accepted.length === 0) {
+            if (input.current) input.current.value = '';
+            return;
+        }
         setUploading(true);
         try {
             const res = await apiFetch(`/api/v1/projects/${projectId}/library`, { method: 'POST', body: form });
@@ -143,7 +159,9 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                     <MenuItem value="name-asc">{t('library.sortNameAsc')}</MenuItem>
                     <MenuItem value="name-desc">{t('library.sortNameDesc')}</MenuItem>
                 </Select>
-                <Button size="small" startIcon={<UploadFile />} onClick={() => input.current?.click()}>{t('library.add')}</Button>
+                <Tooltip title={t('library.addHint', { limit: uploadLimitLabel() })}>
+                    <Button size="small" startIcon={<UploadFile />} onClick={() => input.current?.click()}>{t('library.add')}</Button>
+                </Tooltip>
             </Box>
             {dir && (
                 // One line, clipped at the start so the project's own folder stays in view.
@@ -157,7 +175,7 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 </Box>
             )}
             {uploading && <LinearProgress sx={{ mb: 1 }} />}
-            <input ref={input} type="file" multiple hidden onChange={(e) => e.target.files && void upload(e.target.files)} />
+            <input ref={input} type="file" multiple hidden data-testid="library-file-input" onChange={(e) => e.target.files && void upload(e.target.files)} />
             <LazyTree<Node>
                 ariaLabel={t('library.tree')}
                 load={load}

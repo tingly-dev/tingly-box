@@ -53,7 +53,7 @@ export const session = {
         agentType: 'Type', used: 'Used', usage: '{{tools}} tools · {{tokens}} tokens', agentPrompt: 'Asked to', agentNow: 'Now',
         agentRecent: 'Recent steps', agentLatest: 'Latest reply', agentReport: 'Report',
     },
-    composer: { settings: 'Session settings', placeholder: 'Write a message…', send: 'Send (Enter)', sendShort: 'Send', stop: 'Stop', stopTurn: 'Stop the current turn', attach: 'Attach files', pastedText: 'Pasted text · {{count}} lines', removeAttachment: 'Remove {{name}}', attachFailed: 'Could not attach the file', keys: 'Enter to send · Shift+Enter for a new line',
+    composer: { settings: 'Session settings', placeholder: 'Write a message…', send: 'Send (Enter)', sendShort: 'Send', stop: 'Stop', stopTurn: 'Stop the current turn', attach: 'Attach files', attachHint: 'Attach files (up to {{limit}} each)', uploadTooLarge: '{{name}} is {{size}} — over the {{limit}} limit by {{over}}', pastedText: 'Pasted text · {{count}} lines', removeAttachment: 'Remove {{name}}', attachFailed: 'Could not attach the file', keys: 'Enter to send · Shift+Enter for a new line',
         sendOptions: 'How to send', insert: 'Insert into this turn (Enter)', sendNextTurn: 'Send after this turn (Enter)',
         sendInsert: 'Insert now', sendInsertHint: 'Claude reads it at its next step, without stopping (Enter)', sendInsertUnavailable: 'This agent reads messages only between turns',
         sendNextTurnLabel: 'Send after this turn', sendNextTurnHint: 'Holds it until Claude is done (Alt+Enter)',

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Library } from './Library';
+import { MAX_UPLOAD_BYTES } from '../../utils/uploadLimit';
 
 const m = vi.hoisted(() => ({ fetch: vi.fn(), del: vi.fn(), notify: vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
@@ -226,4 +227,30 @@ it('keeps expanded folders while filtering and reveals their matches', async () 
     await screen.findByText('notes.md');
     // The folder is still open, so its files come back with it.
     expect(screen.getByText('a.txt')).toBeInTheDocument();
+});
+
+// Only name/size are read, so a real 200 MB File is not needed.
+const tooBig = (name: string, over: number) => ({ name, size: MAX_UPLOAD_BYTES + over, type: 'application/octet-stream' }) as unknown as File;
+const uploadCalls = () => m.fetch.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST');
+
+it('refuses an oversized file before uploading it, naming the limit', async () => {
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('notes.md');
+    fireEvent.change(screen.getByTestId('library-file-input'), { target: { files: [tooBig('huge.bin', 1)] } });
+
+    await waitFor(() => expect(m.notify).toHaveBeenCalled());
+    expect(m.notify.mock.calls[0][1]).toBe('error');
+    expect(uploadCalls()).toEqual([]);
+});
+
+it('uploads the acceptable files and drops only the oversized one', async () => {
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('notes.md');
+    const ok = new File(['abc'], 'ok.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('library-file-input'), { target: { files: [ok, tooBig('huge.bin', 1)] } });
+
+    await waitFor(() => expect(uploadCalls()).toHaveLength(1));
+    const body = uploadCalls()[0][1]!.body as FormData;
+    expect(body.getAll('files').map((f) => (f as File).name)).toEqual(['ok.txt']);
+    expect(m.notify).toHaveBeenCalled();
 });

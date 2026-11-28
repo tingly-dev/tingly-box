@@ -9,6 +9,8 @@ import { ControlTooltip } from './ControlTooltip';
 import { ModelPicker } from './ModelPicker';
 import { EffortPicker } from './EffortPicker';
 import type { ModelSource } from '../hooks/useModels';
+import { formatBytes } from '../utils/format';
+import { precheckUploads, uploadLimitLabel } from '../utils/uploadLimit';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { elevation } from '@tingly/ui/theme/elevation';
@@ -156,8 +158,17 @@ export function Composer({
 
     const addFiles = async (list: File[], pastedLines?: number) => {
         if (!attach || attachBlocked || list.length === 0) return;
-        setAttachError('');
-        const added: Pending[] = list.map((f) => ({
+        // Refuse an oversized file now, naming it and the limit, instead of
+        // after the whole body has gone up and the server answered 413.
+        const { accepted, rejected } = precheckUploads(list);
+        setAttachError(rejected.map((r) => t('composer.uploadTooLarge', {
+            name: r.file.name || 'file',
+            size: formatBytes(r.size),
+            limit: uploadLimitLabel(),
+            over: formatBytes(r.over),
+        })).join('\n'));
+        if (accepted.length === 0) return;
+        const added: Pending[] = accepted.map((f) => ({
             key: nextKey.current++,
             name: f.name || 'file',
             lines: pastedLines,
@@ -170,7 +181,7 @@ export function Composer({
             return !gone;
         }));
         try {
-            const stored = await attach(list);
+            const stored = await attach(accepted);
             if (stored.length !== added.length) throw new Error(t('composer.attachFailed'));
             setFiles((cur) => cur.map((f) => {
                 const i = added.findIndex((a) => a.key === f.key);
@@ -330,7 +341,7 @@ export function Composer({
     const inline = inlineRow || (!leftSlot && !onModelChange && !onEffortChange && !hint);
 
     const attachButton = attach && (
-        <ControlTooltip title={attachBlocked || t('composer.attach')}>
+        <ControlTooltip title={attachBlocked || t('composer.attachHint', { limit: uploadLimitLabel() })}>
             <span>
                 <IconButton size="small" disabled={disabled || !!attachBlocked} onClick={() => fileInput.current?.click()} aria-label={t('composer.attach')} sx={{ color: 'text.secondary' }}>
                     <Attach fontSize="small" />
@@ -371,7 +382,7 @@ export function Composer({
                     ))}
                 </Box>
             )}
-            {attachError !== '' && <Typography variant="caption" color="error" role="alert" sx={{ display: 'block', mt: 0.5 }}>{attachError}</Typography>}
+            {attachError !== '' && <Typography variant="caption" color="error" role="alert" sx={{ display: 'block', mt: 0.5, whiteSpace: 'pre-line' }}>{attachError}</Typography>}
         </Box>
     );
 
