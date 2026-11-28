@@ -196,6 +196,10 @@ type ProviderConfig struct {
 	// Scopes is the list of OAuth scopes to request
 	Scopes []string
 
+	// RefreshScopes, when set, is sent as `scope` on refresh_token grants.
+	// Empty keeps the refresh scope-less (the grant keeps its original scopes).
+	RefreshScopes []string
+
 	// AuthStyle is the authentication style (in header, body, etc.)
 	AuthStyle AuthStyle
 

@@ -115,6 +115,25 @@ health monitor, instead of surfacing to the client as "Please run /login".
   `E2EProber`, any cached model that goes through). Subscription windows only
   start counting on the first real request, so this keeps them moving while idle.
 
+## Claude Code: refresh restates the CLI's scope set
+
+Upstream #2822 aligned the Claude Code issuer with the official CLI's authorization and token requests (authorize on
+`claude.com/cai/oauth/authorize`, the platform token endpoint, `org:create_api_key`, `/api/oauth/profile`, no empty
+`client_secret`, an `axios/1.15.2` user agent). Two differences remain, and this branch closes them
+(`ai/oauth/registry.go`, `.research/claude-code/2.1.328.md` §4). A direct change, not a flag.
+
+| | Before | Now |
+|---|---|---|
+| Login scopes | CLI's set minus `user:plugins` | plus `user:plugins` (the CLI asks for it; `user:privacy_consents:write` is still left out — nothing here writes consent state) |
+| Refresh body | `client_id` only | `client_id` and `scope` (`ProviderConfig.RefreshScopes`: the CLI's default set, which has no login-only `org:create_api_key`) |
+| `invalid_scope` on refresh | hard failure | retried once without `scope`, which keeps the grant's original scopes (what the CLI does) |
+| Other issuers | — | unchanged: secret sent when configured, no `scope` unless `RefreshScopes` is set |
+
+**What to watch.** Every stored Claude credential now refreshes with `scope` set. If the endpoint rejects the set it answers
+`invalid_scope`, the retry drops it, and nothing changes for the user; a rejection of the scope *values* would surface as the
+usual "Token refresh failed" with the issuer's own body. `user:plugins` only adds to the grant at the next login; existing
+tokens keep their scopes until re-authentication. Both points need one real login and one real refresh to confirm.
+
 ## Re-authentication (in place)
 
 Recovery flow for a credential that has gone **permanently** invalid — refresh token
