@@ -75,6 +75,26 @@ func Daemonize(overrideArgs ...string) error {
 // child that came up from one that died on startup. The child outlives the
 // parent: it is its own session leader and its stdio is detached.
 func Spawn(overrideArgs ...string) (<-chan error, error) {
+	child, err := SpawnProcess(nil, overrideArgs...)
+	if err != nil {
+		return nil, err
+	}
+	return child.Exited, nil
+}
+
+// Child is a detached daemon child returned by SpawnProcess.
+type Child struct {
+	// PID is the child's process id, for messages and logs. It is not used to
+	// decide readiness — the health handshake is.
+	PID int
+	// Exited yields the child's exit status once it ends.
+	Exited <-chan error
+}
+
+// SpawnProcess is Spawn with extra environment entries for the child and the
+// child's PID. extraEnv is appended to the parent's environment, so it can
+// carry per-launch values such as a readiness instance token.
+func SpawnProcess(extraEnv []string, overrideArgs ...string) (*Child, error) {
 	// Get the current executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -86,7 +106,7 @@ func Spawn(overrideArgs ...string) (<-chan error, error) {
 
 	// Set environment variable to mark the child as daemon
 	cmd := exec.Command(execPath, args...)
-	cmd.Env = append(os.Environ(), "_TINGLY_BOX_DAEMON=1")
+	cmd.Env = append(append(os.Environ(), "_TINGLY_BOX_DAEMON=1"), extraEnv...)
 
 	// Redirect stdin, stdout, stderr
 	cmd.Stdin = nil
@@ -103,7 +123,7 @@ func Spawn(overrideArgs ...string) (<-chan error, error) {
 
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
-	return exited, nil
+	return &Child{PID: cmd.Process.Pid, Exited: exited}, nil
 }
 
 // buildDaemonArgs computes the argv for the re-exec'd daemon child. Daemonize

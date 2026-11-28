@@ -1,6 +1,8 @@
 package options
 
 import (
+	"time"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -19,6 +21,12 @@ type StartFlags struct {
 	Daemon               bool
 	LogFile              string
 	ProjectsDir          string
+	// StartTimeout overrides how long a launcher waits for readiness
+	// (0 = default / env).
+	StartTimeout time.Duration
+	// KeepWaiting keeps waiting past StartTimeout while the server is still
+	// starting.
+	KeepWaiting bool
 }
 
 // StartServerOptions contains resolved options for starting the server
@@ -37,6 +45,10 @@ type StartServerOptions struct {
 	// ProjectsDir is where Projects keeps its data: --projects-dir, else
 	// "<config dir>-project", beside the config dir and never inside it.
 	ProjectsDir string
+	// StartTimeout is how long the launcher waits for the health endpoint.
+	StartTimeout time.Duration
+	// KeepWaiting keeps waiting past StartTimeout while the server is alive.
+	KeepWaiting bool
 }
 
 // AddStartFlags adds all start-related flags to a command
@@ -88,5 +100,7 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 		LogFile:           flags.LogFile,
 		RecordDir:         appConfig.ConfigDir() + "/record",
 		ProjectsDir:       resolvedProjectsDir,
+		StartTimeout:      flags.StartTimeout,
+		KeepWaiting:       flags.KeepWaiting,
 	}
 }

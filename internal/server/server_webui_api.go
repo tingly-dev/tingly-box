@@ -67,7 +67,7 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) *module.Route
 	rt := &module.Routes{Public: apiAuth, V1: apiV1, V2: apiV2, Engine: s.engine, Manager: manager, UserAuth: s.getUserAuthMiddleware(), MCPAuth: s.authMW.MCPAuthMiddleware(s.getUserAuthMiddleware())}
 
 	// Info endpoints: health (unauthenticated) + config/version (authenticated)
-	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir, s.launchSource)
+	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir, s.launchSource, s.instanceToken)
 	module.Mount(rt, infoHandler)
 
 	// Desktop / start-menu shortcut creation (authenticated) — see

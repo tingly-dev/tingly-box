@@ -41,6 +41,17 @@ func WithLaunchSource(source string) ServerOption {
 	}
 }
 
+// WithInstanceToken sets the token the health endpoint echoes in the
+// X-Tingly-Instance header. A launcher generates a fresh token per start,
+// hands it to this server, and then requires it back — so a restart cannot be
+// fooled by an older instance that is still answering on the same port. An
+// empty token (the default) makes the header absent.
+func WithInstanceToken(token string) ServerOption {
+	return func(s *Server) {
+		s.instanceToken = token
+	}
+}
+
 // WithUI enables or disables the UI for the server
 func WithUI(enabled bool) ServerOption {
 	return func(s *Server) {

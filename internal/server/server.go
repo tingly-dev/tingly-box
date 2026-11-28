@@ -199,6 +199,11 @@ type Server struct {
 	// launchSource is how this process was itself invoked ("", "binary", "npx", "npm") — see WithLaunchSource.
 	launchSource string
 
+	// instanceToken is echoed on the health endpoint so a launcher can prove
+	// the response came from the server it just started (see
+	// WithInstanceToken and internal/command/readiness).
+	instanceToken string
+
 	// webHandler serves the status, log, request-trace and token endpoints
 	// (log_handler.go, model_request_handler.go, status_handler.go,
 	// token_handler.go). Constructed as the LAST step of

@@ -923,8 +923,9 @@ func startServer(mgr TUIManager) error {
 	go func() { exited <- mgr.StartServerAt(port) }()
 
 	url := readiness.ProbeURL("localhost", port)
-	if err := readiness.Wait(context.Background(), url, exited, 30*time.Second); err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+	out := readiness.Wait(context.Background(), readiness.Options{URL: url, Exited: exited, Timeout: 30 * time.Second})
+	if out.State != readiness.StateReady {
+		return fmt.Errorf("failed to start server: %w", out.Err())
 	}
 	fmt.Println(successStyle.Render(fmt.Sprintf("Server started at http://localhost:%d", port)))
 	fmt.Println(descStyle.Render("Press Ctrl+C to stop"))
