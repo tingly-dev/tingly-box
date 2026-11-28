@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -30,6 +31,13 @@ const (
 	// (Prepare handles the empty-prompt case); older CLIs ignore the
 	// variable harmlessly.
 	EnvResumeInterruptedTurn = "CLAUDE_CODE_RESUME_INTERRUPTED_TURN"
+
+	// EnvAutoModeServer, "1" or "0", sets whether auto mode's actions are
+	// reviewed by the server inside the session's model requests. Sessions
+	// run behind tb's gateway, which can't pass that review through, so "0"
+	// is the default (see .design/claude-code.md). A value already in the
+	// environment, CustomEnv, opts.Env or the settings file wins.
+	EnvAutoModeServer = "CLAUDE_CODE_AUTO_MODE_SERVER"
 )
 
 // GetCleanEnv returns a clean environment for running Claude CLI.
@@ -75,6 +83,10 @@ func (d *CLIDiscovery) buildCleanEnv(ctx context.Context) ([]string, error) {
 		}
 
 		cleanEnv = append(cleanEnv, e)
+	}
+
+	if !slices.ContainsFunc(cleanEnv, func(e string) bool { return strings.HasPrefix(e, EnvAutoModeServer+"=") }) {
+		cleanEnv = append(cleanEnv, FormatEnv(EnvAutoModeServer, "0"))
 	}
 
 	// Ensure PATH doesn't contain local node_modules

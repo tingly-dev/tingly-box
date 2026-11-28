@@ -1989,6 +1989,7 @@ const mockMainClaudeCodePreferences: Record<string, string> = {
     DISABLE_TELEMETRY: '1',
     DISABLE_ERROR_REPORTING: '1',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    CLAUDE_CODE_AUTO_MODE_SERVER: '0',
 }
 
 const mockProfileClaudeConfigs: Record<string, { preferences: Record<string, string>; defaultMode?: string; overrideKeys: string[] }> = {}

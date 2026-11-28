@@ -57,6 +57,25 @@ func NormalizeClaudeCodeCoAuthoredBy(v *bool) bool {
 	return *v
 }
 
+// EnvClaudeCodeAutoModeServer asks Claude Code to have the server review
+// auto-mode actions inside its own model requests. tb's gateway can't pass
+// that review through (see .design/claude-code.md), so "0" is the default:
+// classifier calls then go through the gateway like any other request and the
+// "session isn't eligible" notice stays away. The user's choice (the
+// ClaudeCodePrefs field, Extra, a profile) wins; "1" turns the review back on.
+const (
+	EnvClaudeCodeAutoModeServer     = "CLAUDE_CODE_AUTO_MODE_SERVER"
+	DefaultClaudeCodeAutoModeServer = "0"
+)
+
+// withAutoModeServerDefault adds the auto-mode server default to env unless
+// env already carries the variable.
+func withAutoModeServerDefault(env map[string]string) {
+	if _, ok := env[EnvClaudeCodeAutoModeServer]; !ok {
+		env[EnvClaudeCodeAutoModeServer] = DefaultClaudeCodeAutoModeServer
+	}
+}
+
 // ClaudeCodePrefs is the user-tunable surface of Claude Code's env config.
 // JSON tags map 1:1 to the env var names Claude Code reads, so marshaling
 // produces exactly what should go under "env" in ~/.claude/settings.json.
@@ -101,6 +120,10 @@ type ClaudeCodePrefs struct {
 	DisableAutoupdater                   string `json:"DISABLE_AUTOUPDATER,omitempty"`
 	UseBuiltinRipgrep                    string `json:"USE_BUILTIN_RIPGREP,omitempty"`
 
+	// Auto mode's server-side classifier review — "1" to ask the server,
+	// "0" (tb's default, see EnvClaudeCodeAutoModeServer) to keep it off.
+	// Empty is filled with the default by ToEnv, not omitted.
+	ClaudeCodeAutoModeServer string `json:"CLAUDE_CODE_AUTO_MODE_SERVER,omitempty"`
 	// Network proxy. Backend accepts these; the current UI does not surface
 	// them (too niche for the form, and they overlap with system-level proxy
 	// settings managed elsewhere). Wire them up if/when a user asks.
@@ -153,6 +176,7 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	}
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey
+	withAutoModeServerDefault(env)
 
 	// If ANTHROPIC_BASE_URL points at localhost the user's system proxy must not
 	// intercept those calls — a proxy cannot reach loopback and will 502 every
@@ -204,6 +228,7 @@ func DefaultClaudeCodePrefs() ClaudeCodePrefs {
 	p.AnthropicDefaultOpusModel = "cc"
 	p.AnthropicDefaultFableModel = "cc"
 	p.ClaudeCodeSubagentModel = "cc"
+	p.ClaudeCodeAutoModeServer = DefaultClaudeCodeAutoModeServer
 	return p
 }
 

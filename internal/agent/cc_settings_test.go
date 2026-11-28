@@ -310,6 +310,34 @@ func TestResolveCCProfileSettings_InheritsThenAppliesOverrides(t *testing.T) {
 	}
 }
 
+func TestResolveCCProfileSettings_AutoModeServerDefaultAndOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	// A main settings file written before the default existed.
+	writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), `{"env":{"API_TIMEOUT_MS":"1234"}}`)
+
+	cfg := &serverconfig.Config{}
+	profile := typ.ProfileMeta{ID: "p1", Name: "work"}
+	resolve := func() map[string]string {
+		t.Helper()
+		resolved, err := ResolveCCProfileSettings(cfg, "http://localhost:12580", "tok", "claude_code:p1", profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resolved.Env
+	}
+
+	mustEq(t, resolve(), "CLAUDE_CODE_AUTO_MODE_SERVER", "0")
+
+	profile.ClaudeCode = &typ.ClaudeCodeProfileConfig{Env: map[string]string{"CLAUDE_CODE_AUTO_MODE_SERVER": "1"}}
+	mustEq(t, resolve(), "CLAUDE_CODE_AUTO_MODE_SERVER", "1")
+
+	writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), `{"env":{"CLAUDE_CODE_AUTO_MODE_SERVER":"1"}}`)
+	profile.ClaudeCode = nil
+	mustEq(t, resolve(), "CLAUDE_CODE_AUTO_MODE_SERVER", "1")
+}
+
 func TestDiffCCProfileConfig_StoresOnlyDeltaAndExplicitRemovals(t *testing.T) {
 	base := ClaudeCodePrefs{
 		APITimeoutMs:              "1234",
