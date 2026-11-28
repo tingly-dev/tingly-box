@@ -73,13 +73,16 @@ export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onP
     return (
         <Box>
             {value.map((r, i) => (
-                <Box key={r.root} sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: radius.row }}>
-                    <Typography sx={{ ...mono, fontSize: fontSizes.base, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
+                <Box key={r.root} sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: { xs: 0.75, sm: 1 }, rowGap: 0.75, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: radius.row }}>
+                    <Typography sx={{ ...mono, fontSize: fontSizes.base, flex: 1, flexBasis: { xs: '100%', sm: 0 }, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
                         {r.root}
                     </Typography>
-                    {r.kind === 'git' && <Tooltip title={t('repo.baseHint')}>
-                        <Chip size="small" variant="outlined" icon={<Branch sx={{ fontSize: 14 }} />} label={r.branch} sx={{ ...mono, fontSize: fontSizes.sm }} />
-                    </Tooltip>}
+                    {r.kind === 'git' && <Box sx={{ width: { xs: 64, sm: 88 }, flexShrink: 0, minWidth: 0 }}>
+                        <Tooltip title={t('repo.baseHint')}>
+                            <Chip size="small" variant="outlined" icon={<Branch sx={{ fontSize: 14 }} />} label={r.branch} title={r.branch}
+                                sx={{ ...mono, fontSize: fontSizes.sm, maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis', px: 0.75 } }} />
+                        </Tooltip>
+                    </Box>}
                     {r.dirty && (
                         <Tooltip title={t('repo.dirtyHint')}>
                             <Warning sx={{ fontSize: 16 }} color="warning" />
@@ -90,12 +93,13 @@ export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onP
                             <Chip size="small" variant="outlined" color="warning" label={t('repo.noCommits')} sx={{ fontSize: fontSizes.sm }} />
                         </Tooltip>
                     )}
-                    <Select size="small" value={r.workspace_mode} disabled={r.kind !== 'git'} inputProps={{ 'aria-label': `${t('repo.mode')} ${r.root}` }} onChange={(e) => onChange(value.map((v, j) => j === i ? { ...v, workspace_mode: e.target.value as RepoEntry['workspace_mode'] } : v))}>
+                    <Select size="small" value={r.workspace_mode} disabled={r.kind !== 'git'} inputProps={{ 'aria-label': `${t('repo.mode')} ${r.root}` }} onChange={(e) => onChange(value.map((v, j) => j === i ? { ...v, workspace_mode: e.target.value as RepoEntry['workspace_mode'] } : v))}
+                        sx={{ width: { xs: 124, sm: 176 }, flexShrink: 0 }}>
                         <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
                         {r.kind === 'git' && <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>}
                     </Select>
-                    {onPrimaryChange && <Button size="small" onClick={() => onPrimaryChange(r.root)} disabled={primary === r.root}>{t(primary === r.root ? 'repo.primary' : 'repo.makePrimary')}</Button>}
-                    <IconButton size="small" onClick={() => { const remaining = value.filter((_, j) => j !== i); onChange(remaining); if (primary === r.root) onPrimaryChange?.(remaining[0]?.root ?? ''); }} aria-label={t('common.delete')}>
+                    {onPrimaryChange && <Button size="small" onClick={() => onPrimaryChange(r.root)} disabled={primary === r.root} sx={{ minWidth: { xs: 88, sm: 96 }, flexShrink: 0 }}>{t(primary === r.root ? 'repo.primary' : 'repo.makePrimary')}</Button>}
+                    <IconButton size="small" onClick={() => { const remaining = value.filter((_, j) => j !== i); onChange(remaining); if (primary === r.root) onPrimaryChange?.(remaining[0]?.root ?? ''); }} aria-label={t('common.delete')} sx={{ flexShrink: 0 }}>
                         <Close fontSize="small" />
                     </IconButton>
                 </Box>

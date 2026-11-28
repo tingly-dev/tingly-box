@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
     Alert, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack, Switch,
-    Tab, TableHead, TableRow, Tabs, TextField, Typography,
+    Tab, TableHead, TableRow, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog, EmptyState } from '@tingly/ui';
 import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type SandboxRuntime, type Usage } from '../../client';
 import { TextEditDialog } from '../TextEditDialog';
 import { EffortPicker } from '../EffortPicker';
-import { Add, Close, Delete, Description, Duplicate } from '../icons';
+import { Add, Close, Delete, Description, Duplicate, Info } from '../icons';
 import { ForkProjectDialog } from './ForkProjectDialog';
 import { useModels } from '../../hooks/useModels';
 import { useNotify } from '../../hooks/useNotify';
@@ -21,7 +21,7 @@ import { directoryPayload, primaryPath, projectDirectories, RepoField, type Repo
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
-export type SettingsTab = 'basic' | 'runtime' | 'memory' | 'usage';
+export type SettingsTab = 'basic' | 'github' | 'runtime' | 'memory' | 'usage';
 
 const MAX_INSTRUCTIONS = 16000;
 // Until the server reports its limit (/projects/runtime).
@@ -45,6 +45,75 @@ const AXES = ['storage', 'network', 'exec', 'credentials', 'resources'] as const
 
 const sameGroups = (a: readonly string[], b: readonly string[]) => [...a].sort().join() === [...b].sort().join();
 
+// One control height and one numeric width for the whole dialog, so inputs in
+// 基本 and 运行 line up instead of sizing to their value.
+const CONTROL_HEIGHT = 40;
+const NUMERIC_WIDTH = 200;
+// The trailing unit/suffix slot inside a numeric control; memory puts the
+// MiB/GiB picker here, the other quotas reserve it so their number area matches.
+const UNIT_WIDTH = 72;
+
+// The quiet pickers the host renders (profile, model) become the same
+// outlined, fixed-height controls as every other field. A long value is
+// ellipsised by the picker's own no-wrap label, so the control never resizes.
+const pickerStackSx = {
+    display: 'flex', flexDirection: 'column', gap: 1, width: '100%', minWidth: 0,
+    '& > .MuiInputBase-root': {
+        width: '100%', minWidth: 0, height: CONTROL_HEIGHT, boxSizing: 'border-box',
+        border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.5, color: 'text.primary',
+    },
+    '& .MuiSelect-select': { minWidth: 0, overflow: 'hidden', px: '0 !important', py: '0 !important', display: 'flex', alignItems: 'center' },
+    '& .MuiSelect-icon': { right: 0 },
+    '& .MuiTypography-root': { overflow: 'hidden', textOverflow: 'ellipsis', fontSize: fontSizes.base },
+} as const;
+
+// A container for a quiet control (the effort button) at the shared height.
+const controlSx = {
+    display: 'flex', alignItems: 'center', width: '100%', minWidth: 0,
+    height: CONTROL_HEIGHT, boxSizing: 'border-box',
+    border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.5,
+    '& > .MuiButton-root': { width: '100%', height: '100%', px: 0, justifyContent: 'space-between', color: 'text.primary', fontSize: fontSizes.base },
+} as const;
+
+// The dialog's one form grid: two equal columns from `sm` up, one below it.
+function FormGrid({ children }: { children: ReactNode }) {
+    return (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 2, rowGap: 2, alignItems: 'start' }}>
+            {children}
+        </Box>
+    );
+}
+
+/** A field spanning both grid columns. */
+function Span({ children }: { children: ReactNode }) {
+    return <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>{children}</Box>;
+}
+
+function Control({ children }: { children: ReactNode }) {
+    return <Box sx={controlSx}>{children}</Box>;
+}
+
+// The one numeric control: fixed 200x40 box, label above, optional trailing
+// unit slot, error/help underneath. Concurrency and every quota use it.
+function NumericField({ label, hint, value, onChange, inputMode, disabled, error, helperText, unit }: {
+    label: string; hint?: string; value: string; onChange: (v: string) => void;
+    inputMode: 'numeric' | 'decimal'; disabled?: boolean; error?: boolean; helperText?: string; unit?: ReactNode;
+}) {
+    return (
+        <Box sx={{ width: NUMERIC_WIDTH, maxWidth: '100%' }}>
+            <Field label={label} hint={hint}>
+                <TextField value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} error={error} helperText={helperText}
+                    size="small" fullWidth
+                    slotProps={{
+                        htmlInput: { inputMode, 'aria-label': label },
+                        input: { sx: { height: CONTROL_HEIGHT, boxSizing: 'border-box' }, endAdornment: unit },
+                    }} />
+            </Field>
+        </Box>
+    );
+}
+
+
 // The runtime threads run in: the ones this server ships, from
 // /projects/runtime. Its level on each axis is shown under it, so what a
 // choice means is spelled out, whatever the runtime.
@@ -53,9 +122,10 @@ function SandboxField({ value, onChange, runtimes, inputRef }: { value: string; 
     const name = (s: SandboxRuntime) => t(`projectSettings.sandboxes.${s.name}`, { defaultValue: s.name });
     const current = runtimes.find((s) => s.name === value);
     return (
-        <TextField select label={t('projectSettings.sandbox')} value={value} onChange={(e) => onChange(e.target.value)} inputRef={inputRef}
+        <TextField select value={value} onChange={(e) => onChange(e.target.value)} inputRef={inputRef} size="small" fullWidth
             helperText={current && !current.available ? `${t('projectSettings.sandboxUnavailable')}: ${current.reason}` : undefined}
-            error={!!current && !current.available}>
+            error={!!current && !current.available}
+            slotProps={{ select: { inputProps: { 'aria-label': t('projectSettings.sandbox') } } }}>
             {runtimes.map((s) => (
                 <MenuItem key={s.name} value={s.name} disabled={!s.available && s.name !== value}>
                     <Box>
@@ -87,7 +157,7 @@ function SandboxAxes({ current, limited, sandbox }: { current?: SandboxRuntime; 
     );
 }
 
-function ModelField({ label, value, onChange, help }: { label: string; value: string; onChange: (v: string) => void; help: string }) {
+function ModelField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
     const { models } = useModels('projects');
     const { t } = useTranslation('projects');
     return (
@@ -97,20 +167,62 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
             value={value}
             onInputChange={(_, v) => onChange(v)}
             renderInput={(params) => (
-                <TextField {...params} label={label} placeholder={t('projectSettings.modelDefault')} helperText={help}
-                    slotProps={{ ...params.slotProps, inputLabel: { shrink: true }, htmlInput: { ...params.slotProps?.htmlInput, style: { ...mono, fontSize: fontSizes.base } } }} />
+                <TextField {...params} size="small" placeholder={t('projectSettings.modelDefault')}
+                    slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps?.htmlInput, 'aria-label': label, title: value || undefined, style: { ...mono, fontSize: fontSizes.base } } }} />
             )}
         />
     );
 }
 
+// The detail behind an info icon. It reads on hover and on keyboard focus,
+// and its accessible name is the detail itself, so a screen reader gets the
+// full explanation without the icon having visible text.
+function Hint({ text }: { text: string }) {
+    return (
+        <Tooltip title={text} arrow enterTouchDelay={0}>
+            <IconButton size="small" aria-label={text}
+                sx={{ p: 0.25, color: 'text.disabled', '&:hover, &:focus-visible': { color: 'text.secondary' } }}>
+                <Info sx={{ fontSize: fontSizes.title }} />
+            </IconButton>
+        </Tooltip>
+    );
+}
+
+/** A label row (short label + optional info icon) above its control. */
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+    return (
+        <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minHeight: 24 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>{label}</Typography>
+                {hint && <Hint text={hint} />}
+            </Box>
+            {children}
+        </Stack>
+    );
+}
+
+/** One settings block: a titled card, its explanation behind an info icon. */
+function Card({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
+    return (
+        <Box component="section" aria-label={title}
+            sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, minHeight: 48, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography sx={{ fontWeight: 600, color: 'text.primary', flex: 1, minWidth: 0 }}>{title}</Typography>
+                {hint && <Hint text={hint} />}
+                {action}
+            </Box>
+            <Stack spacing={2} sx={{ p: 2 }}>{children}</Stack>
+        </Box>
+    );
+}
+
 /** One settings action: what it does on the left, its button on the right. */
-function ActionRow({ title, help, action }: { title: string; help: string; action: ReactNode }) {
+function ActionRow({ title, hint, action }: { title: string; hint: string; action: ReactNode }) {
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
-                <Typography variant="body2" color="text.secondary">{help}</Typography>
+                <Hint text={hint} />
             </Box>
             {action}
         </Box>
@@ -124,47 +236,28 @@ function QuotaFields({ value, onChange, enabled, onEnableSandbox }: { value: Quo
     const err = quotaErrors(value);
     const set = (patch: Partial<Quota>) => onChange({ ...value, ...patch });
     return (
-        <Box role="group" aria-label={t('projectSettings.sandbox')}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-                <TextField label={t('projectSettings.quota.memory')} value={value.memory} onChange={(e) => set({ memory: e.target.value })} disabled={!enabled}
-                    error={err.memory} helperText={err.memory ? t('projectSettings.quota.memoryMin') : undefined} sx={{ flex: 1.4, width: '100%' }}
-                    slotProps={{
-                        htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.memory') },
-                        input: {
-                            endAdornment: (
-                                <TextField select variant="standard" value={value.unit} onChange={(e) => set({ unit: e.target.value as MemoryUnit })} disabled={!enabled}
-                                    sx={{ minWidth: 64 }} slotProps={{ input: { disableUnderline: true } }}>
-                                    <MenuItem value="MiB">MiB</MenuItem>
-                                    <MenuItem value="GiB">GiB</MenuItem>
-                                </TextField>
-                            ),
-                        },
-                    }} />
-                <TextField label={t('projectSettings.quota.processes')} value={value.tasks} onChange={(e) => set({ tasks: e.target.value })} disabled={!enabled}
-                    error={err.tasks} helperText={err.tasks ? t('projectSettings.quota.processesMin') : undefined} sx={{ flex: 1, width: '100%' }}
-                    slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.quota.processes') } }} />
-                <TextField label={t('projectSettings.quota.cpu')} value={value.cores} onChange={(e) => set({ cores: e.target.value })} disabled={!enabled}
-                    error={err.cores} helperText={err.cores ? t('projectSettings.quota.cpuMin') : undefined} sx={{ flex: 1, width: '100%' }}
-                    slotProps={{ htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.cpu') } }} />
-            </Stack>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">{enabled ? t('projectSettings.quota.help') : t('projectSettings.quota.hostHelp')}</Typography>
-                {!enabled && onEnableSandbox && <Button size="small" onClick={onEnableSandbox}>{t('projectSettings.switchToSandbox')}</Button>}
-            </Box>
+        <Box role="group" aria-label={t('projectSettings.quotaTitle')}>
+            <FormGrid>
+                <NumericField label={t('projectSettings.quota.memory')} value={value.memory} onChange={(v) => set({ memory: v })}
+                    inputMode="decimal" disabled={!enabled} error={err.memory} helperText={err.memory ? t('projectSettings.quota.memoryMin') : undefined}
+                    unit={
+                        <Box sx={{ width: UNIT_WIDTH, display: 'flex', justifyContent: 'flex-end' }}>
+                            <TextField select variant="standard" value={value.unit} onChange={(e) => set({ unit: e.target.value as MemoryUnit })} disabled={!enabled}
+                                sx={{ width: '100%' }} slotProps={{ input: { disableUnderline: true } }}>
+                                <MenuItem value="MiB">MiB</MenuItem>
+                                <MenuItem value="GiB">GiB</MenuItem>
+                            </TextField>
+                        </Box>
+                    } />
+                <NumericField label={t('projectSettings.quota.processes')} value={value.tasks} onChange={(v) => set({ tasks: v })}
+                    inputMode="numeric" disabled={!enabled} error={err.tasks} helperText={err.tasks ? t('projectSettings.quota.processesMin') : undefined}
+                    unit={<Box sx={{ width: UNIT_WIDTH }} />} />
+                <NumericField label={t('projectSettings.quota.cpu')} value={value.cores} onChange={(v) => set({ cores: v })}
+                    inputMode="decimal" disabled={!enabled} error={err.cores} helperText={err.cores ? t('projectSettings.quota.cpuMin') : undefined}
+                    unit={<Box sx={{ width: UNIT_WIDTH }} />} />
+            </FormGrid>
+            {!enabled && onEnableSandbox && <Box sx={{ mt: 1 }}><Button size="small" onClick={onEnableSandbox}>{t('projectSettings.switchToSandbox')}</Button></Box>}
         </Box>
-    );
-}
-
-function Section({ title, help, action, children }: { title: ReactNode; help?: ReactNode; action?: ReactNode; children: ReactNode }) {
-    return (
-        <Stack spacing={1.25}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontWeight: 600, color: 'text.primary', flex: 1 }}>{title}</Typography>
-                {action}
-            </Box>
-            {help && <Typography variant="body2" color="text.secondary" sx={{ mt: '-0.5rem' }}>{help}</Typography>}
-            {children}
-        </Stack>
     );
 }
 
@@ -191,21 +284,16 @@ function TabPage({ children, footer }: { children: ReactNode; footer: ReactNode 
     );
 }
 
-function ModelEffort({ label, help, value, onChange, effort, onEffort, launch }: { label: string; help: string; value: string; onChange: (v: string) => void; effort: Effort; onEffort: (v: Effort) => void; launch?: ReactNode }) {
+function ModelEffort({ label, hint, value, onChange, effort, onEffort, launch }: { label: string; hint: string; value: string; onChange: (v: string) => void; effort: Effort; onEffort: (v: Effort) => void; launch?: ReactNode }) {
     const { t } = useTranslation('projects');
     return (
-        <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
-            {launch ? (
-                <Stack spacing={0.25}>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    {launch}
-                    <Typography variant="caption" color="text.secondary">{help}</Typography>
-                </Stack>
-            ) : <ModelField label={label} value={value} onChange={onChange} help={help} />}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="caption" color="text.secondary">{t('projectSettings.effort')}</Typography>
-                <EffortPicker value={effort} onChange={(v) => onEffort(v as Effort)} />
-            </Box>
+        <Stack spacing={2} sx={{ minWidth: 0 }}>
+            <Field label={label} hint={hint}>
+                {launch ? <Stack sx={pickerStackSx} title={value || undefined}>{launch}</Stack> : <ModelField label={label} value={value} onChange={onChange} />}
+            </Field>
+            <Field label={t('projectSettings.effort')} hint={t('projectSettings.effortHelp')}>
+                <Control><EffortPicker value={effort} onChange={(v) => onEffort(v as Effort)} /></Control>
+            </Field>
         </Stack>
     );
 }
@@ -225,8 +313,6 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
     const [coordEffort, setCoordEffort] = useState<Effort>((project.coordinator_effort || '') as Effort);
     const [threadEffort, setThreadEffort] = useState<Effort>((project.thread_effort || '') as Effort);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'auto') as Mode);
-    const savedGithub = GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g));
-    const [github, setGithub] = useState<string[]>(savedGithub);
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const initialRepos = projectDirectories(project);
     const [repos, setRepos] = useState<RepoEntry[]>(initialRepos);
@@ -241,7 +327,6 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
     useEffect(() => setCoordEffort((project.coordinator_effort || '') as Effort), [project.coordinator_effort]);
     useEffect(() => setThreadEffort((project.thread_effort || '') as Effort), [project.thread_effort]);
     useEffect(() => setMode((project.thread_permission_mode || 'auto') as Mode), [project.thread_permission_mode]);
-    useEffect(() => setGithub(GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g))), [project.github_auto]);
     useEffect(() => setMaxRunning(String(project.max_running_threads)), [project.max_running_threads]);
     useEffect(() => { setRepos(projectDirectories(project)); setPrimary(primaryPath(project)); }, [project.repos, project.primary_repo_path]);
 
@@ -251,7 +336,7 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
     const dirDirty = JSON.stringify(dirPayload) !== JSON.stringify(directoryPayload(projectDirectories(project), primaryPath(project)));
     const dirty = name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model
         || coordEffort !== (project.coordinator_effort || '') || threadEffort !== (project.thread_effort || '')
-        || mode !== (project.thread_permission_mode || 'auto') || github.join() !== savedGithub.join()
+        || mode !== (project.thread_permission_mode || 'auto')
         || runningValue !== project.max_running_threads || dirDirty
         || (!!session?.launchPickers && (coordProfile !== (project.coordinator_profile || '') || threadProfile !== (project.thread_profile || '')));
     const canSave = !!name.trim() && !runningInvalid;
@@ -262,7 +347,7 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
         setName(project.name); setGoal(project.goal); setCoord(project.coordinator_model); setThreadModel(project.thread_model);
         setCoordProfile(project.coordinator_profile || ''); setThreadProfile(project.thread_profile || '');
         setCoordEffort((project.coordinator_effort || '') as Effort); setThreadEffort((project.thread_effort || '') as Effort);
-        setMode((project.thread_permission_mode || 'auto') as Mode); setGithub(savedGithub);
+        setMode((project.thread_permission_mode || 'auto') as Mode);
         setMaxRunning(String(project.max_running_threads)); setRepos(projectDirectories(project)); setPrimary(primaryPath(project));
     };
 
@@ -270,7 +355,7 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
         const body: Patch = {
             name, goal, coordinator_model: coord, thread_model: threadModel,
             coordinator_effort: coordEffort, thread_effort: threadEffort,
-            thread_permission_mode: mode, github_auto: github, max_running_threads: runningValue,
+            thread_permission_mode: mode, max_running_threads: runningValue,
             ...dirPayload,
         };
         if (session?.launchPickers) {
@@ -285,63 +370,50 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
 
     return (
         <TabPage footer={<SaveBar dirty={dirty} canSave={canSave} onSave={save} onDiscard={discard} />}>
-            <Stack spacing={2.5}>
-                <TextField label={t('project.name')} value={name} onChange={(e) => setName(e.target.value)} fullWidth />
-                <TextField label={t('project.goal')} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} helperText={t('project.goalHelp')} fullWidth />
-                <Divider />
+            <Stack spacing={2}>
+                <FormGrid>
+                    <Span>
+                        <Field label={t('project.name')}>
+                            <TextField value={name} onChange={(e) => setName(e.target.value)} size="small" fullWidth
+                                slotProps={{ htmlInput: { 'aria-label': t('project.name') } }} />
+                        </Field>
+                    </Span>
+                    <Span>
+                        <Field label={t('project.goal')} hint={t('project.goalHelp')}>
+                            <TextField value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} size="small" fullWidth
+                                slotProps={{ htmlInput: { 'aria-label': t('project.goal') } }} />
+                        </Field>
+                    </Span>
+                </FormGrid>
 
-                <Section title={t('projectSettings.threadDefaults')} help={t('projectSettings.threadDefaultsHelp')}>
-                    <TextField select label={t('projectSettings.permissionMode')} value={mode} onChange={(e) => setMode(e.target.value as Mode)} helperText={t(`projectSettings.mode.${mode}Help`)}>
-                        {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
-                            <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
-                        ))}
-                    </TextField>
+                <Card title={t('projectSettings.threadDefaults')} hint={t('projectSettings.threadDefaultsHelp')}>
+                    <Field label={t('projectSettings.permissionMode')} hint={t(`projectSettings.mode.${mode}Help`)}>
+                        <TextField select value={mode} onChange={(e) => setMode(e.target.value as Mode)} size="small"
+                            slotProps={{ select: { inputProps: { 'aria-label': t('projectSettings.permissionMode') } } }}>
+                            {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
+                                <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Field>
                     {mode === 'bypassPermissions' && <Alert severity="warning">{t('projectSettings.bypassWarning')}</Alert>}
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
-                        <ModelEffort label={t('projectSettings.coordinatorModel')} help={t('projectSettings.coordinatorModelHelp')}
+                    <FormGrid>
+                        <ModelEffort label={t('projectSettings.coordinatorModel')} hint={t('projectSettings.coordinatorModelHelp')}
                             value={coord} onChange={setCoord} effort={coordEffort} onEffort={setCoordEffort}
                             launch={launch({ profile: coordProfile, model: coord }, (next) => { setCoordProfile(next.profile); setCoord(next.model); })} />
-                        <ModelEffort label={t('projectSettings.threadModel')} help={t('projectSettings.threadModelHelp')}
+                        <ModelEffort label={t('projectSettings.threadModel')} hint={t('projectSettings.threadModelHelp')}
                             value={threadModel} onChange={setThreadModel} effort={threadEffort} onEffort={setThreadEffort}
                             launch={launch({ profile: threadProfile, model: threadModel }, (next) => { setThreadProfile(next.profile); setThreadModel(next.model); })} />
-                    </Stack>
-                    <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
-                        helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
-                        slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} sx={{ maxWidth: 280 }} />
-                </Section>
-                <Divider />
+                        <NumericField label={t('projectSettings.maxRunning')} hint={t('projectSettings.maxRunningHelp')} value={maxRunning} onChange={setMaxRunning}
+                            inputMode="numeric" error={runningInvalid}
+                            helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : undefined} />
+                    </FormGrid>
+                </Card>
 
-                <Section title={t('projectSettings.githubAuto')}
-                    action={<Typography variant="caption" color="text.secondary">{t('projectSettings.githubPresetCount', { on: github.length, total: GITHUB_GROUPS.length })}</Typography>}>
-                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                        {GITHUB_PRESETS.map((p) => {
-                            const active = sameGroups(github, p.groups);
-                            return <Chip key={p.key} label={t(`projectSettings.githubPresets.${p.key}`)} color={active ? 'primary' : 'default'}
-                                variant={active ? 'filled' : 'outlined'} onClick={() => setGithub(Array.from(p.groups as readonly string[]))} />;
-                        })}
-                    </Stack>
-                    <Stack spacing={1.5}>
-                        {GITHUB_GROUPS.map((g) => (
-                            <Box key={g} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <Typography sx={{ color: 'text.primary' }}>{t(`projectSettings.githubGroups.${g}`)}</Typography>
-                                    <Typography variant="body2" color="text.secondary">{t(`projectSettings.githubGroups.${g}Help`)}</Typography>
-                                </Box>
-                                <Switch checked={github.includes(g)} onChange={(_, on) => setGithub(GITHUB_GROUPS.filter((x) => (x === g ? on : github.includes(x))))}
-                                    slotProps={{ input: { 'aria-label': t(`projectSettings.githubGroups.${g}`) } }} />
-                            </Box>
-                        ))}
-                    </Stack>
-                    <Typography variant="caption" color="text.secondary">{t('projectSettings.githubAutoFoot')}</Typography>
-                </Section>
-                <Divider />
-
-                <Section title={t('projectSettings.workingDir')} help={t('projectSettings.reposHelp')}>
+                <Card title={t('projectSettings.workingDir')} hint={t('projectSettings.reposHelp')}>
                     <RepoField value={repos} onChange={setRepos} primary={primary} onPrimaryChange={setPrimary} />
-                </Section>
-                <Divider />
+                </Card>
 
-                <Section title={t('projectSettings.runtimeDiagnostics')} help={t('projectSettings.runtimeDiagnosticsHelp')}>
+                <Card title={t('projectSettings.runtimeDiagnostics')} hint={t('projectSettings.runtimeDiagnosticsHelp')}>
                     {runtime ? runtime.cli_path ? (
                         <Typography variant="body2" color="text.secondary">
                             {t('projectSettings.runtimeCli')} <Box component="span" sx={{ ...mono, color: 'text.primary' }}>{runtime.cli_path}</Box>
@@ -358,26 +430,81 @@ function Basic({ project, patch, runtime, runtimeError, maxLimit, onDirtyChange,
                                 : t('projectSettings.runtimeOwnLogin')}
                         </Typography>
                     )}
-                </Section>
-                <Divider />
+                </Card>
 
-                <Section title={t('projectSettings.projectManagement')} help={t('projectSettings.projectManagementHelp')}>
-                    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        <ActionRow title={project.paused ? t('projectSettings.resume') : t('projectSettings.pause')} help={t('projectSettings.pauseHelp')}
+                <Card title={t('projectSettings.projectManagement')} hint={t('projectSettings.projectManagementHelp')}>
+                    <Stack spacing={1.5} divider={<Divider />}>
+                        <ActionRow title={project.paused ? t('projectSettings.resume') : t('projectSettings.pause')} hint={t('projectSettings.pauseHelp')}
                             action={<Button variant="outlined" onClick={() => void patch({ paused: !project.paused })}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Button>} />
-                        <Divider />
-                        <ActionRow title={project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')} help={t('projectSettings.archiveHelp')}
+                        <ActionRow title={project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')} hint={t('projectSettings.archiveHelp')}
                             action={<Button variant="outlined" color="error" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>} />
                         {project.type !== 'folder' && (
-                            <>
-                                <Divider />
-                                <ActionRow title={t('projectSettings.fork')} help={t('projectSettings.forkHelp')}
-                                    action={<Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>} />
-                            </>
+                            <ActionRow title={t('projectSettings.fork')} hint={t('projectSettings.forkHelp')}
+                                action={<Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>} />
                         )}
-                    </Box>
-                </Section>
+                    </Stack>
+                </Card>
             </Stack>
+        </TabPage>
+    );
+}
+
+// GitHub approval on its own tab: the directories it applies to, the three
+// presets and the five write groups. Without a working directory there is
+// nothing for threads to push to, so it says that instead of dead toggles.
+function GithubTab({ project, patch, onDirtyChange, onOpenBasic }: {
+    project: Project; patch: (p: Patch) => Promise<void>; onDirtyChange: (dirty: boolean) => void; onOpenBasic: () => void;
+}) {
+    const { t } = useTranslation('projects');
+    const savedGithub = GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g));
+    const [github, setGithub] = useState<string[]>(savedGithub);
+
+    useEffect(() => setGithub(GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g))), [project.github_auto]);
+
+    const dirty = github.join() !== savedGithub.join();
+    useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+    const roots = projectDirectories(project).map((r) => r.root);
+
+    return (
+        <TabPage footer={<SaveBar dirty={dirty} canSave onSave={() => void patch({ github_auto: github })} onDiscard={() => setGithub(savedGithub)} />}>
+            <Card title={t('projectSettings.githubAuto')} hint={t('projectSettings.githubAutoFoot')}
+                action={roots.length > 0 ? <Typography variant="caption" color="text.secondary">{t('projectSettings.githubPresetCount', { on: github.length, total: GITHUB_GROUPS.length })}</Typography> : undefined}>
+                {roots.length === 0 ? (
+                    <EmptyState compact title={t('projectSettings.githubNoReposTitle')} description={t('projectSettings.githubNoReposBody')}
+                        primaryAction={{ label: t('projectSettings.githubOpenBasic'), onClick: onOpenBasic }} />
+                ) : (
+                    <>
+                        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                            <Typography variant="body2" color="text.secondary">{t('projectSettings.githubAppliesTo')}</Typography>
+                            <Typography variant="body2" title={roots.join(', ')}
+                                sx={{ ...mono, color: 'text.primary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {roots.join(', ')}
+                            </Typography>
+                            <Button size="small" onClick={onOpenBasic}>{t('projectSettings.githubChangeDir')}</Button>
+                        </Box>
+                        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                            {GITHUB_PRESETS.map((p) => {
+                                const active = sameGroups(github, p.groups);
+                                return <Chip key={p.key} label={t(`projectSettings.githubPresets.${p.key}`)} color={active ? 'primary' : 'default'}
+                                    variant={active ? 'filled' : 'outlined'} onClick={() => setGithub(Array.from(p.groups as readonly string[]))} />;
+                            })}
+                        </Stack>
+                        <Stack spacing={1.5}>
+                            {GITHUB_GROUPS.map((g) => (
+                                <Box key={g} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                        <Typography sx={{ color: 'text.primary' }}>{t(`projectSettings.githubGroups.${g}`)}</Typography>
+                                        <Hint text={t(`projectSettings.githubGroups.${g}Help`)} />
+                                    </Box>
+                                    <Switch checked={github.includes(g)} onChange={(_, on) => setGithub(GITHUB_GROUPS.filter((x) => (x === g ? on : github.includes(x))))}
+                                        slotProps={{ input: { 'aria-label': t(`projectSettings.githubGroups.${g}`) } }} />
+                                </Box>
+                            ))}
+                        </Stack>
+                    </>
+                )}
+            </Card>
         </TabPage>
     );
 }
@@ -410,8 +537,8 @@ function Runtime({ project, patch, runtime, runtimeError, onDirtyChange }: {
 
     return (
         <TabPage footer={<SaveBar dirty={dirty} canSave={!quotaInvalid} onSave={save} onDiscard={discard} />}>
-            <Stack spacing={2.5}>
-                <Section title={t('projectSettings.sandbox')} help={t('projectSettings.sandboxHelp')}>
+            <Stack spacing={2}>
+                <Card title={t('projectSettings.sandbox')} hint={t('projectSettings.sandboxHelp')}>
                     {runtime ? (runtimes.length > 0 ? (
                         <SandboxField value={sandbox} onChange={setSandbox} runtimes={runtimes} inputRef={selectRef} />
                     ) : (
@@ -420,12 +547,11 @@ function Runtime({ project, patch, runtime, runtimeError, onDirtyChange }: {
                         <Typography variant="body2" color="text.secondary">{runtimeError ? t('projectSettings.runtimeLoadFailed') : t('projectSettings.runtimeLoading')}</Typography>
                     )}
                     <SandboxAxes current={current} limited={limited} sandbox={sandbox} />
-                </Section>
-                <Divider />
-                <Section title={t('projectSettings.quotaTitle')}>
+                </Card>
+                <Card title={t('projectSettings.quotaTitle')} hint={sandbox !== 'host' ? t('projectSettings.quota.help') : t('projectSettings.quota.hostHelp')}>
                     <QuotaFields value={quota} onChange={setQuota} enabled={sandbox !== 'host'}
                         onEnableSandbox={runtimes.length > 0 ? () => { selectRef.current?.focus(); selectRef.current?.scrollIntoView({ block: 'center' }); } : undefined} />
-                </Section>
+                </Card>
             </Stack>
         </TabPage>
     );
@@ -651,12 +777,14 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
             </DialogTitle>
             <Tabs value={tab} onChange={(_, v) => requestTab(v as SettingsTab)} variant="scrollable" scrollButtons="auto" sx={{ px: 3, borderBottom: 1, borderColor: 'divider', flexShrink: 0, '& .MuiTab-root': { minWidth: 64 } }}>
                 <Tab value="basic" label={t('projectSettings.tabBasic')} />
+                <Tab value="github" label={t('projectSettings.tabGithub')} />
                 <Tab value="runtime" label={t('projectSettings.tabRuntime')} />
                 <Tab value="memory" label={t('projectSettings.tabMemory')} />
                 <Tab value="usage" label={t('projectSettings.tabUsage')} />
             </Tabs>
             <DialogContent sx={{ pt: 2.5, pb: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 {tab === 'basic' && <Basic project={project} patch={patch} runtime={runtime} runtimeError={runtimeError} maxLimit={maxLimit} onDirtyChange={onDirtyChange} onFork={() => setForking(true)} />}
+                {tab === 'github' && <GithubTab project={project} patch={patch} onDirtyChange={onDirtyChange} onOpenBasic={() => requestTab('basic')} />}
                 {tab === 'runtime' && <Runtime project={project} patch={patch} runtime={runtime} runtimeError={runtimeError} onDirtyChange={onDirtyChange} />}
                 {tab === 'memory' && <Memory project={project} patch={patch} refreshKey={memoryKey} onDirtyChange={onDirtyChange} />}
                 {tab === 'usage' && <UsageTab projectId={project.id} onDirtyChange={onDirtyChange} />}

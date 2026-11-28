@@ -19,12 +19,21 @@ function open(p: Record<string, unknown> = project) {
     render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="basic" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
     return screen.getByRole('textbox', { name: 'projectSettings.maxRunning' }) as HTMLInputElement;
 }
+const repos = [{ path: '/git', base_branch: 'main', kind: 'git', workspace_mode: 'worktree' }];
+function openTab(tab: 'github' | 'runtime', p: Record<string, unknown> = project) {
+    m.get.mockResolvedValue({ data: { max_running_threads_limit: 100, sandboxes: [] }, response: new Response() });
+    m.patch.mockResolvedValue({ data: { ...p }, response: new Response() });
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab={tab} onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+}
+const withRepos = { ...project, repos };
 const save = () => screen.getByRole('button', { name: 'common.save' });
 
 it('shows the stored limit as a plain number, 4 for a new project', () => {
     const field = open();
     expect(field.value).toBe('4');
-    expect(screen.getByText('projectSettings.maxRunningHelp')).toBeTruthy();
+    // The explanation lives behind an info icon, not in a paragraph.
+    expect(screen.getByRole('button', { name: 'projectSettings.maxRunningHelp' })).toBeTruthy();
+    expect(screen.queryByText('projectSettings.maxRunningHelp')).not.toBeInTheDocument();
     expect(save()).toBeDisabled();
 });
 
@@ -103,7 +112,7 @@ const sw = (g: string) => screen.getByRole('switch', { name: `projectSettings.gi
 const body = (b: Record<string, unknown>) => ({ params: { path: { id: 'p' } }, body: expect.objectContaining(b) });
 
 it('shows the five GitHub switches off for a project with no github_auto, and saves a toggle as github_auto', async () => {
-    open();
+    openTab('github', withRepos);
     for (const g of ['publish', 'rewrite', 'others', 'close', 'merge']) expect(sw(g)).not.toBeChecked();
     expect(save()).toBeDisabled();
     fireEvent.click(sw('merge'));
@@ -115,7 +124,7 @@ it('shows the five GitHub switches off for a project with no github_auto, and sa
 });
 
 it('starts the switches from project.github_auto and saves an empty list when all are turned off', async () => {
-    open({ ...project, github_auto: ['publish', 'close'] });
+    openTab('github', { ...withRepos, github_auto: ['publish', 'close'] });
     expect(sw('publish')).toBeChecked();
     expect(sw('close')).toBeChecked();
     expect(sw('merge')).not.toBeChecked();
@@ -126,11 +135,63 @@ it('starts the switches from project.github_auto and saves an empty list when al
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', body({ github_auto: [] })));
 });
 
-it('has four tabs in daily-first order: Basic, Runtime, Memory, Usage', () => {
+it('has five tabs in order: Basic, GitHub, Runtime, Memory, Usage', () => {
     open();
     expect(screen.getAllByRole('tab').map((el) => el.textContent)).toEqual([
-        'projectSettings.tabBasic', 'projectSettings.tabRuntime', 'projectSettings.tabMemory', 'projectSettings.tabUsage',
+        'projectSettings.tabBasic', 'projectSettings.tabGithub', 'projectSettings.tabRuntime', 'projectSettings.tabMemory', 'projectSettings.tabUsage',
     ]);
+});
+
+it('keeps Basic to the non-GitHub cards, in order', () => {
+    open();
+    expect(screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))).toEqual([
+        'projectSettings.threadDefaults',
+        'projectSettings.workingDir',
+        'projectSettings.runtimeDiagnostics',
+        'projectSettings.projectManagement',
+    ]);
+});
+
+it('gives GitHub its own tab with the approval card and the directories it applies to', () => {
+    openTab('github', withRepos);
+    expect(screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))).toEqual(['projectSettings.githubAuto']);
+    expect(screen.getByText('projectSettings.githubAppliesTo')).toBeTruthy();
+    expect(screen.getByText('/git')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'projectSettings.githubChangeDir' })).toBeTruthy();
+});
+
+it('explains a missing working directory instead of showing dead GitHub toggles', () => {
+    openTab('github', project);
+    expect(screen.getByText('projectSettings.githubNoReposTitle')).toBeTruthy();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'projectSettings.githubOpenBasic' })).toBeTruthy();
+});
+
+it('puts each thread-default detail behind a labelled info icon', () => {
+    open();
+    for (const name of [
+        'projectSettings.mode.autoHelp', 'projectSettings.coordinatorModelHelp',
+        'projectSettings.threadModelHelp', 'projectSettings.maxRunningHelp',
+    ]) {
+        expect(screen.getByRole('button', { name }), name).toBeTruthy();
+    }
+    expect(screen.getAllByRole('button', { name: 'projectSettings.effortHelp' })).toHaveLength(2);
+    // The external label still names the control it belongs to.
+    expect(screen.getByRole('combobox', { name: 'projectSettings.permissionMode' })).toBeTruthy();
+    // The card's own explanation is an info icon too, not a paragraph.
+    expect(screen.getByRole('button', { name: 'projectSettings.threadDefaultsHelp' })).toBeTruthy();
+    expect(screen.queryByText('projectSettings.threadDefaultsHelp')).not.toBeInTheDocument();
+});
+
+it('exposes a thread-default detail on a focusable, labelled info icon', async () => {
+    open();
+    const hint = screen.getByRole('button', { name: 'projectSettings.maxRunningHelp' });
+    // Reachable with Tab, and its name is the explanation a screen reader reads.
+    expect(hint.tabIndex).toBe(0);
+    hint.focus();
+    expect(document.activeElement).toBe(hint);
+    fireEvent.mouseOver(hint);
+    expect(await screen.findByRole('tooltip', {}, { timeout: 3000 })).toHaveTextContent('projectSettings.maxRunningHelp');
 });
 
 it('does not silently discard unsaved edits when switching tabs', async () => {
