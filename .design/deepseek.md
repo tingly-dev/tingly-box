@@ -108,7 +108,9 @@ envelope. No cross-vendor fallback or client-side QPS limiter is applied.
 
 ### Request billing
 
-DeepSeek currently charges **CNY 0.005 per successful request producing
+Verified against the official pricing and Search/Fetch guides on **2026-11-28**:
+the standalone `/v1/tools/search` and `/v1/tools/fetch` APIs used by this
+implementation charge **CNY 0.005 per successful request producing
 results**, independently of `count`. Empty searches, empty fetched content,
 failures and timeouts contribute zero billable requests. One usage event is
 recorded per logical invocation, not per retry:
@@ -123,4 +125,22 @@ spend separately from token usage. Existing token records migrate with
 `event_type=tokens` and zero request cost. Provider, latency, error status,
 and available caller/scenario/rule identity are retained for observability.
 
+`request_cost_cny` is a local estimate from the configured unit price and
+observed responses, not an amount reconciled against DeepSeek's account ledger.
+
+Do not confuse Tingly Box's **Server Tools** with **DeepSeek-native server
+tools**. Since **2026-11-18 12:00 Beijing time (UTC+8)**, search and fetch
+triggered inside DeepSeek model calls no longer incur a separate tool fee.
+Their results still enter the model context and are charged as model tokens.
+This applies to DeepSeek's native web tools, Anthropic-compatible `web_search`,
+and Responses `web_search`, not the standalone endpoints used here.
+
+Consequently, a direct tool test can correctly have zero model tokens and a
+nonzero estimated request charge. When a model subsequently consumes those
+results, model tokens are billed separately. Replacing a DeepSeek-native web
+tool with our standalone-backed tool can add a per-request charge; do not
+describe that substitution as billing-equivalent or mark these calls free.
+
 API reference: <https://api-docs.deepseek.com/zh-cn/guides/search/>.
+Pricing: <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/>.
+Native web tools: <https://api-docs.deepseek.com/zh-cn/guides/web_tools/>.
