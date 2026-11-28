@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Alert, Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 import { api } from '@/services/api';
 import type { Provider } from '@/types/provider';
 import type { MCPCatalogTool, MCPSourceConfig } from '../../features/mcp/types';
@@ -108,7 +109,7 @@ export default function WebtoolsSettings({ source, tools = emptyTools, onSave }:
                 const unavailable = selected[op] && !credentials.some((p) => p.uuid === selected[op]);
                 return (
                     <Stack key={op} spacing={1.5} component="section" aria-label={op === 'search' ? 'Search' : 'Fetch'}
-                        sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                        sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: radius.row }}>
                         <Typography variant="subtitle2">{op === 'search' ? 'Search' : 'Fetch'}</Typography>
                         <TextField select fullWidth id={`${id}-${op}`} value={value} disabled={saving}
                             label={op === 'search' ? label('webtoolsSearchBackend', 'Search source') : label('webtoolsFetchBackend', 'Fetch source')}
