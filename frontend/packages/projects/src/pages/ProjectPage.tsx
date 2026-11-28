@@ -600,9 +600,9 @@ export default function ProjectPage() {
                                 notify((e as Error).message, 'error');
                             }
                         }}
-                        onStartSuggestions={async (mid, indexes) => {
+                        onCardAction={async (mid, action, indexes) => {
                             try {
-                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/start', { params: { path: { id: mainThreadId, eid: mid } }, body: { indexes } }));
+                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/action', { params: { path: { id: mainThreadId, eid: mid } }, body: { action, indexes } }));
                                 conversation.apply(m);
                             } catch (e) {
                                 notify((e as Error).message, 'error');

@@ -28,7 +28,7 @@ const messages = [
 const worker = { id: 'worker', title: 'Worker title', status: 'running', branch: '', commits_ahead: 0, files_changed: 0 } as Thread;
 const props = () => ({
     projectId: 'project', threadId: 'main', messages, threads: new Map([['worker', worker]]), busy: false, disabled: false,
-    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
+    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onCardAction: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
     onModelChange: vi.fn(), composerContext: <button>Switch control</button>,
 });
 const show = (p = props()) => render(<MemoryRouter><ConversationPane {...p} /></MemoryRouter>);
@@ -101,8 +101,8 @@ describe('manager message detail', () => {
         expect(screen.getByText('Thread report')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'conversation.openThread' }));
         expect(p.onOpenThread).toHaveBeenCalledTimes(2);
-        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.start' })));
-        expect(p.onStartSuggestions).toHaveBeenCalledWith('suggest', [0]);
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.start: Proposed task' })));
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'start', [0]);
         expect(screen.getByRole('button', { name: 'evidence.png' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'threadSettings.settings' }));
         expect(screen.getByRole('button', { name: 'Switch control' })).toBeInTheDocument();

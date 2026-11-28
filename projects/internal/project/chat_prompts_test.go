@@ -79,7 +79,7 @@ func promptFixture(t *testing.T, script func(turn *enginetest.Turn) error) (*tes
 	relay := NewRelay(f.store, sink)
 	svc.Coordinator.OnFinal = relay.Message
 	svc.Coordinator.OnDecided = relay.Decided
-	svc.Coordinator.OnSuggested = relay.Suggested
+	svc.Coordinator.OnCardSettled = relay.CardSettled
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply

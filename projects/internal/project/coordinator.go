@@ -46,14 +46,23 @@ type Coordinator struct {
 	// where the answer came from, so chats that were shown it can restate it.
 	// It must not block.
 	OnDecided func(db.ThreadEvent, Source)
-	// OnSuggested is called after proposed threads of a suggestions card are
-	// started, with the card and where the start came from. It must not block.
-	OnSuggested func(db.ThreadEvent, Source)
+	// OnCardSettled is called after a proposal card changes state (threads
+	// started, proposals dismissed or superseded), with the card and where the
+	// change came from, so chats that were shown it can restate it. It must
+	// not block.
+	OnCardSettled func(db.ThreadEvent, Source)
 
 	mu     sync.Mutex
 	queues map[string]*queue
 	// choosing serialises Choose, so one card is answered once.
 	choosing sync.Mutex
+	// cards serialises changes to a proposal card's proposals: starting,
+	// dismissing and superseding them.
+	cards sync.Mutex
+	// actions is what runs a service-registered card action (see
+	// RegisterCardAction), keyed by the action id the card names.
+	actionsMu sync.Mutex
+	actions   map[string]CardActionHandler
 	// notifies are the times of each thread's recent notify_coordinator calls.
 	notifies map[string][]time.Time
 }
@@ -111,6 +120,9 @@ func (c *Coordinator) post(projectID, text, payload string, src Source) (*db.Thr
 	if p.Paused {
 		return nil, ErrPaused
 	}
+	// A new instruction makes the plan the older cards offered stale: keep
+	// their proposals visible but mark them expired.
+	c.SupersedeSuggestions(p.MainThreadID, "", src)
 	m := &db.ThreadEvent{Kind: db.EvUser, Content: text, Payload: payload}
 	src.stamp(m)
 	m.ThreadID = p.MainThreadID
@@ -413,6 +425,10 @@ func renderHistory(history []db.ThreadEvent, libraryDir string) []historyMessage
 				state := "not started"
 				if s.ThreadID != "" {
 					state = "started as " + short(s.ThreadID)
+				} else if s.Dismissed {
+					state = "dismissed"
+				} else if s.Superseded {
+					state = "expired"
 				}
 				parts = append(parts, fmt.Sprintf("%d. %s (%s)", i+1, s.Title, state))
 			}
@@ -544,12 +560,25 @@ Current date: %s
 	return b.String()
 }
 
-// suggestionsPayload is the payload of a suggestions message.
-type suggestionsPayload struct {
+// ProposalCard is the payload of a suggestions message: a card the user acts
+// on. Suggestions are its proposals; Title and Intent say how the card reads
+// (both optional, the frontend's words for the default card otherwise), and
+// Actions is the service-supplied action set (nil keeps the default actions).
+type ProposalCard struct {
 	Suggestions []Suggestion `json:"suggestions"`
+	Title       string       `json:"title,omitempty"`
+	Intent      string       `json:"intent,omitempty"`
+	Actions     []CardAction `json:"actions,omitempty"`
 }
 
-// Suggestion is a proposed thread; ThreadID is set once started.
+// suggestionsPayload is the historical name of ProposalCard, kept for the
+// code and tests that read the payload by it.
+type suggestionsPayload = ProposalCard
+
+// Suggestion is a proposed thread. ThreadID is set once started; Dismissed
+// and Superseded record why a proposal is no longer part of the plan (a
+// dismissed one is hidden and never started; a superseded one stays
+// startable, shown as expired).
 type Suggestion struct {
 	Title    string `json:"title"`
 	Task     string `json:"task"`
@@ -557,6 +586,11 @@ type Suggestion struct {
 	Base     string `json:"base,omitempty"`
 	Branch   string `json:"branch,omitempty"`
 	ThreadID string `json:"thread_id,omitempty"`
+	// Dismissed is the user declining this proposal.
+	Dismissed bool `json:"dismissed,omitempty"`
+	// Superseded is a new instruction making this proposal stale; it can
+	// still be started or dismissed, but the card shows it as expired.
+	Superseded bool `json:"superseded,omitempty"`
 }
 
 // threadName is how the coordinator's prompt and tool results name a thread:
@@ -608,6 +642,8 @@ func orNone(s string) string {
 // StartSuggestions starts proposed threads from a suggestions event of a main
 // thread. indexes selects which; empty starts every one not started yet.
 func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventID string, indexes []int, src Source) (*db.ThreadEvent, error) {
+	c.cards.Lock()
+	defer c.cards.Unlock()
 	main, err := c.store.GetThread(mainThreadID)
 	if err != nil {
 		return nil, err
@@ -635,7 +671,7 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 	var startErr error
 	for i := range pl.Suggestions {
 		s := &pl.Suggestions[i]
-		if s.ThreadID != "" || (len(want) > 0 && !want[i]) {
+		if s.ThreadID != "" || s.Dismissed || (len(want) > 0 && !want[i]) {
 			continue
 		}
 		t, err := c.threads.Start(ctx, p, StartSpec{Title: s.Title, Task: s.Task, Repo: s.Repo, Base: s.Base, Branch: s.Branch, Origin: "suggestion"})
@@ -652,8 +688,8 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 		return nil, err
 	}
 	c.publishEvent(projectID, m)
-	if c.OnSuggested != nil {
-		c.OnSuggested(*m, src)
+	if c.OnCardSettled != nil {
+		c.OnCardSettled(*m, src)
 	}
 	if startErr != nil {
 		return nil, startErr

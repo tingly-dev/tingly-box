@@ -2032,6 +2032,59 @@
         }
       }
     },
+    "/api/v1/threads/{id}/events/{eid}/action": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Run an action a proposal card offers: start or dismiss its proposals (empty indexes applies to all), or a custom action its service handles. The card keeps the result, so a dismissed proposal stays dismissed",
+        "description": "Run an action a proposal card offers: start or dismiss its proposals (empty indexes applies to all), or a custom action its service handles. The card keeps the result, so a dismissed proposal stays dismissed",
+        "operationId": "apiV1ThreadsIdEventsEidActionPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEvent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/events/{eid}/choose": {
       "post": {
         "tags": [
@@ -3232,6 +3285,26 @@
           "home",
           "path",
           "directories"
+        ]
+      },
+      "CardActionRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action"
+          },
+          "indexes": {
+            "type": "array",
+            "description": "Field indexes",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "required": [
+          "action"
         ]
       },
       "ChannelBinding": {

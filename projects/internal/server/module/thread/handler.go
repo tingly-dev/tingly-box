@@ -102,6 +102,14 @@ type StartSuggestionsRequest struct {
 	Indexes []int `json:"indexes,omitempty"`
 }
 
+// CardActionRequest runs an action a proposal card offers. Action is the
+// card's action id (start, dismiss, start_all, dismiss_all, or one a service
+// declared); empty Indexes applies it to every proposal still waiting.
+type CardActionRequest struct {
+	Action  string `json:"action" binding:"required"`
+	Indexes []int  `json:"indexes,omitempty"`
+}
+
 // ChooseRequest picks an option of a decision card.
 type ChooseRequest struct {
 	// Index is the picked option, counted from 0.
@@ -245,6 +253,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.POST("/threads/:id/events/:eid/start", h.startSuggestions, tag,
 		swagger.WithDescription("Start threads the coordinator proposed in a suggestions event of a main thread"),
 		swagger.WithRequestModel(StartSuggestionsRequest{}),
+		swagger.WithResponseModel(db.ThreadEvent{}))
+	api.POST("/threads/:id/events/:eid/action", h.cardAction, tag,
+		swagger.WithDescription("Run an action a proposal card offers: start or dismiss its proposals (empty indexes applies to all), or a custom action its service handles. The card keeps the result, so a dismissed proposal stays dismissed"),
+		swagger.WithRequestModel(CardActionRequest{}),
 		swagger.WithResponseModel(db.ThreadEvent{}))
 	api.POST("/threads/:id/events/:eid/choose", h.chooseDecision, tag,
 		swagger.WithDescription("Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message"),
@@ -582,6 +594,19 @@ func (h *Handler) startSuggestions(c *gin.Context) {
 		return
 	}
 	m, err := h.svc.Coordinator.StartSuggestions(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Indexes, rt.Source{})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, m)
+}
+
+func (h *Handler) cardAction(c *gin.Context) {
+	var req CardActionRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	m, err := h.svc.Coordinator.PerformCardAction(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Action, req.Indexes, rt.Source{})
 	if err != nil {
 		fail(c, err)
 		return

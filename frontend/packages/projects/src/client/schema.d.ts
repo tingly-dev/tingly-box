@@ -900,6 +900,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/events/{eid}/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run an action a proposal card offers: start or dismiss its proposals (empty indexes applies to all), or a custom action its service handles. The card keeps the result, so a dismissed proposal stays dismissed
+         * @description Run an action a proposal card offers: start or dismiss its proposals (empty indexes applies to all), or a custom action its service handles. The card keeps the result, so a dismissed proposal stays dismissed
+         */
+        post: operations["apiV1ThreadsIdEventsEidActionPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/events/{eid}/choose": {
         parameters: {
             query?: never;
@@ -1462,6 +1482,12 @@ export interface components {
             home: string;
             /** @description Field path */
             path: string;
+        };
+        CardActionRequest: {
+            /** @description Field action */
+            action: string;
+            /** @description Field indexes */
+            indexes?: number[];
         };
         ChannelBinding: {
             /** @description Field bot_uuid */
@@ -4275,6 +4301,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventsResponse"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdEventsEidActionPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Resource ID */
+                eid: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadEvent"];
                 };
             };
         };

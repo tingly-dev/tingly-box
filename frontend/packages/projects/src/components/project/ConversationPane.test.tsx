@@ -25,7 +25,7 @@ const event = (kind: string, content: string, extra: Partial<ThreadEvent> = {}):
 });
 const props = (messages: ThreadEvent[] = []): ComponentProps<typeof ConversationPane> => ({
     projectId: 'p', threadId: 'coordinator', messages, threads: new Map(), busy: false, disabled: false,
-    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onStartSuggestions: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
+    onSend: vi.fn().mockResolvedValue(true), onOpenThread: vi.fn(), onCardAction: vi.fn().mockResolvedValue(undefined), onChooseDecision: vi.fn().mockResolvedValue(undefined),
 });
 const show = (p: ComponentProps<typeof ConversationPane>) => render(<MemoryRouter><ProjectsHostProvider host={{ paths: { list: '/projects', project: (id) => `/projects/${id}`, folder: () => '/folders' } }}><ConversationPane {...p} /></ProjectsHostProvider></MemoryRouter>);
 
@@ -130,10 +130,10 @@ describe('conversation presentation', () => {
         show(p);
         fireEvent.click(screen.getByRole('button', { name: /Live task/ }));
         expect(p.onOpenThread).toHaveBeenCalledWith('t');
-        await act(async () => fireEvent.click(screen.getAllByRole('button', { name: 'conversation.start' })[0]));
-        expect(p.onStartSuggestions).toHaveBeenCalledWith('suggest', [0]);
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.start: Next task' })));
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'start', [0]);
         await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.startAll' })));
-        expect(p.onStartSuggestions).toHaveBeenCalledWith('suggest', []);
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'start_all', []);
         expect(screen.queryByText('Report details')).toBeNull();
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         expect(screen.getByText('Report details')).toBeInTheDocument();
@@ -309,5 +309,79 @@ describe('a thread asks to show the coordinator reply', () => {
         const onFocused = vi.fn();
         show({ ...props([event('assistant', 'Hi.')]), focusEventId: 'older', onFocused });
         expect(onFocused).not.toHaveBeenCalled();
+    });
+});
+
+describe('proposal cards', () => {
+    const suggestion = (payload: unknown, id = 'suggest') => event('suggestions', '', { id, payload: JSON.stringify(payload) });
+
+    it('renders the card from its payload, including a service action', async () => {
+        const p = props([suggestion({
+            title: 'Release checklist', intent: 'Cut 2.4 after the Redis PR.',
+            suggestions: [{ title: 'Prepare 2.4', task: 'tag it' }],
+            actions: [
+                { id: 'start', style: 'primary', scope: 'item' },
+                { id: 'dismiss', style: 'default', scope: 'item' },
+                { id: 'remember', label: 'Remember this plan', style: 'default', scope: 'card' },
+            ],
+        })]);
+        show(p);
+        expect(screen.getByText('Release checklist')).toBeInTheDocument();
+        expect(screen.getByText('Cut 2.4 after the Redis PR.')).toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Remember this plan' })));
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'remember', []);
+    });
+
+    it('falls back to the built-in actions when the payload names none', () => {
+        show(props([suggestion({ suggestions: [{ title: 'A', task: 'a' }, { title: 'B', task: 'b' }] })]));
+        expect(screen.getByRole('button', { name: 'conversation.start: A' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'conversation.dismiss: A' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'conversation.startAll' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'conversation.dismissAll' })).toBeInTheDocument();
+    });
+
+    it('asks before dismissing a proposal, and leaves a dismissed one out', async () => {
+        const p = props([suggestion({ suggestions: [{ title: 'Keep me', task: 'a' }, { title: 'Gone', task: 'b', dismissed: true }] })]);
+        show(p);
+        expect(screen.queryByText('Gone')).not.toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.dismiss: Keep me' })));
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByText('conversation.dismissConfirmTitle')).toBeInTheDocument();
+        await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'conversation.dismiss' })));
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'dismiss', [0]);
+    });
+
+    it('dismisses every proposal at once', async () => {
+        const p = props([suggestion({ suggestions: [{ title: 'A', task: 'a' }, { title: 'B', task: 'b' }] })]);
+        show(p);
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.dismissAll' })));
+        const dialog = screen.getByRole('dialog');
+        await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'conversation.dismiss' })));
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'dismiss', []);
+    });
+
+    it('keeps a superseded proposal viewable, weak and startable', async () => {
+        const p = props([suggestion({ suggestions: [{ title: 'Old plan', task: 'a', superseded: true }] })]);
+        show(p);
+        expect(screen.getByText('conversation.expired')).toBeInTheDocument();
+        expect(getComputedStyle(screen.getByTestId('proposal-row-0')).opacity).toBe('0.55');
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.start: Old plan' })));
+        expect(p.onCardAction).toHaveBeenCalledWith('suggest', 'start', [0]);
+    });
+
+    it('reads like a decision card: same card and row metrics', () => {
+        const decision = event('decision', '', { id: 'dec', payload: JSON.stringify({ question: 'Q?', options: [{ label: 'One' }], recommended: 0 }) });
+        show(props([suggestion({ suggestions: [{ title: 'A', task: 'a' }] }), decision]));
+        const card = getComputedStyle(screen.getByTestId('suggestions-card'));
+        const decisionCard = getComputedStyle(screen.getByTestId('decision-card'));
+        for (const key of ['padding', 'borderRadius'] as const) expect(card[key]).toBe(decisionCard[key]);
+        const row = getComputedStyle(screen.getByTestId('proposal-row-0'));
+        const option = getComputedStyle(screen.getByTestId('decision-option-0'));
+        for (const key of ['padding', 'borderRadius', 'backgroundColor'] as const) expect(row[key]).toBe(option[key]);
+    });
+
+    it('wraps the card actions on a narrow card', () => {
+        show(props([suggestion({ suggestions: [{ title: 'A', task: 'a' }, { title: 'B', task: 'b' }] })]));
+        expect(getComputedStyle(screen.getByTestId('proposal-card-actions')).flexWrap).toBe('wrap');
     });
 });

@@ -266,10 +266,12 @@ type replyMatch struct {
 	pendingRequest
 	// card is set when the request is a decision card.
 	card *Decision
-	// suggestions is set when the request is a suggestions card; start are the
-	// proposals the message starts (nil for all).
+	// suggestions is set when the request is a suggestions card; start and
+	// dismiss name the proposals to start or decline (nil for all).
 	suggestions []Suggestion
 	start       []int
+	dismiss     []int
+	dismissing  bool
 	// text is the answer in the message: the message less the request's code.
 	text string
 	// explicit is set when the message started with the request's code, which
@@ -302,6 +304,8 @@ func (s *Service) matchReplies(b *db.ChannelBinding, text string) []replyMatch {
 			}
 			if indexes, fits := startOfReply(len(sug), rest); fits {
 				out = append(out, replyMatch{pendingRequest: q, suggestions: sug, start: indexes, text: rest, explicit: explicit})
+			} else if indexes, fits := dismissOfReply(len(sug), rest); fits {
+				out = append(out, replyMatch{pendingRequest: q, suggestions: sug, dismiss: indexes, dismissing: true, text: rest, explicit: explicit})
 			}
 			continue
 		}
@@ -364,6 +368,10 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 		return true, nil
 	}
 	if chosen.suggestions != nil {
+		if chosen.dismissing {
+			_, err := s.Coordinator.DismissSuggestions(chosen.threadID, chosen.requestID, chosen.dismiss, src)
+			return true, err
+		}
 		_, err := s.Coordinator.StartSuggestions(context.Background(), chosen.threadID, chosen.requestID, chosen.start, src)
 		return true, err
 	}
@@ -597,11 +605,16 @@ func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value
 		return "", nil
 	}
 	if _, _, isSuggestion := s.Coordinator.pendingSuggestions(threadID, requestID); isSuggestion {
+		src := Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID}
+		if indexes, ok := dismissOfChoice(value); ok {
+			_, err := s.Coordinator.DismissSuggestions(threadID, requestID, indexes, src)
+			return "", err
+		}
 		indexes, ok := startOfChoice(value)
 		if !ok {
 			return "", fmt.Errorf("unknown choice %q", value)
 		}
-		_, err := s.Coordinator.StartSuggestions(context.Background(), threadID, requestID, indexes, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+		_, err := s.Coordinator.StartSuggestions(context.Background(), threadID, requestID, indexes, src)
 		return "", err
 	}
 	if m, err := s.Store.GetThreadEvent(requestID); err == nil && (m.Kind == db.EvDecision || m.Kind == db.EvSuggestions) && m.ThreadID == threadID {
