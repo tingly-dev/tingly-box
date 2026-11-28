@@ -169,8 +169,8 @@ func TestWebSearchDoesNotRetryClientError(t *testing.T) {
 func TestStandaloneDeepSeekWebtools(t *testing.T) {
 	t.Setenv("SERPER_API_KEY", "")
 	t.Setenv("DEEPSEEK_API_KEY", "deepseek-key")
-	t.Setenv("WEB_SEARCH_BACKEND", "auto")
-	t.Setenv("WEB_FETCH_BACKEND", "auto")
+	t.Setenv("WEB_SEARCH_BACKEND", "deepseek")
+	t.Setenv("WEB_FETCH_BACKEND", "deepseek")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer deepseek-key" {
 			t.Errorf("unexpected upstream auth")

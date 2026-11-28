@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
@@ -27,7 +28,15 @@ func isWebtoolSource(id string) bool {
 func (r *Runtime) webBackend(source typ.MCPSourceConfig, tool string) (string, error) {
 	env := maps.Clone(source.Env)
 	expandSourceEnvInPlace(env)
-	return mcptools.WebBackend(env, tool, r.deepSeekWebtools.Available())
+	return mcptools.WebBackend(env, tool, r.deepSeekService(env, tool).Available())
+}
+
+func (r *Runtime) deepSeekService(env map[string]string, tool string) *deepseek.Service {
+	key := "WEB_SEARCH_PROVIDER_UUID"
+	if tool == mcptools.BuiltinWebFetchToolName {
+		key = "WEB_FETCH_PROVIDER_UUID"
+	}
+	return r.deepSeekWebtools.ForProvider(strings.TrimSpace(env[key]))
 }
 
 func (r *Runtime) callDeepSeekWebtool(ctx context.Context, sourceID, toolName, arguments string) (coretool.ToolResult, bool, error) {
@@ -67,7 +76,9 @@ func (r *Runtime) callDeepSeekWebtool(ctx context.Context, sourceID, toolName, a
 		if toolName == mcptools.BuiltinWebFetchToolName {
 			operation = "fetch"
 		}
-		text, err := r.deepSeekWebtools.Tool(ctx, operation, args)
+		env := maps.Clone(source.Env)
+		expandSourceEnvInPlace(env)
+		text, err := r.deepSeekService(env, toolName).Tool(ctx, operation, args)
 		if err != nil {
 			return coretool.ErrorToolResult(err.Error()), true, nil
 		}

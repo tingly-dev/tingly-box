@@ -140,7 +140,7 @@ export default function MCPSourceWorkspace({
                     </AccordionSummary>
                     <AccordionDetails>
                         {webtools ? (
-                            <WebtoolsSettings source={source} onSave={saveSource} />
+                            <WebtoolsSettings source={source} tools={tools} onSave={saveSource} />
                         ) : advisor ? (
                             <AdvisorSettings advisorSource={source} onSave={(patch) => run(() => saveSource(patch))} />
                         ) : (

@@ -26,7 +26,7 @@ export default function MCPToolCard({
     const missingSearchKey = tool.name === 'mcp_web_search' && needsSearchKey(source, tool);
     const restricted = isToolRestricted(tool, source);
     const note = missingSearchKey
-        ? label('missing_searchKey', 'Search needs a configured DeepSeek provider or a Serper API key.')
+        ? label('missing_searchKey', 'The selected Search source is not ready. Check its credentials in Web tool settings.')
         : restricted
           ? source?.enabled === false
               ? label('connectionOff', 'This connection is off. Enable it to discover and use its tools.')

@@ -1,8 +1,9 @@
 package tools
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestWebBackendDefaultsAndOverrides(t *testing.T) {
@@ -15,13 +16,16 @@ func TestWebBackendDefaultsAndOverrides(t *testing.T) {
 	}{
 		{BuiltinWebSearchToolName, nil, false, "serper", false},
 		{BuiltinWebFetchToolName, nil, false, "jina", false},
-		{BuiltinWebSearchToolName, nil, true, "deepseek", false},
-		{BuiltinWebFetchToolName, nil, true, "deepseek", false},
+		{BuiltinWebSearchToolName, nil, true, "serper", false},
+		{BuiltinWebFetchToolName, nil, true, "jina", false},
 		{BuiltinWebSearchToolName, map[string]string{"SERPER_API_KEY": "key"}, true, "serper", false},
 		{BuiltinWebFetchToolName, map[string]string{"SERPER_API_KEY": "key"}, true, "jina", false},
+		{BuiltinWebSearchToolName, map[string]string{"WEB_SEARCH_BACKEND": "auto"}, true, "serper", false},
+		{BuiltinWebFetchToolName, map[string]string{"WEB_FETCH_BACKEND": "auto"}, true, "jina", false},
 		{BuiltinWebSearchToolName, map[string]string{"SERPER_API_KEY": "key", "WEB_SEARCH_BACKEND": "deepseek"}, true, "deepseek", false},
+		{BuiltinWebFetchToolName, map[string]string{"SERPER_API_KEY": "key", "WEB_FETCH_BACKEND": "deepseek"}, true, "deepseek", false},
 		{BuiltinWebFetchToolName, map[string]string{"WEB_FETCH_BACKEND": "jina"}, true, "jina", false},
-		{BuiltinWebSearchToolName, map[string]string{"WEB_SEARCH_BACKEND": "deepseek"}, false, "", true},
+		{BuiltinWebSearchToolName, map[string]string{"WEB_SEARCH_BACKEND": "deepseek"}, false, "deepseek", true},
 		{BuiltinWebFetchToolName, map[string]string{"WEB_FETCH_BACKEND": "serper"}, true, "", true},
 	} {
 		got, err := WebBackend(tc.env, tc.tool, tc.available)

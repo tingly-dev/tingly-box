@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import MCPToolCard from './MCPToolCard';
-import type { MCPCatalogTool } from './types';
+import type { MCPCatalogTool } from '../../features/mcp/types';
 
 const search: MCPCatalogTool = {
     source_id: 'server-webtools', name: 'mcp_web_search', normalized_name: 'search',

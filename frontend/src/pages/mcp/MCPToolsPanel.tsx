@@ -176,7 +176,7 @@ export default function MCPToolsPanel({
                                 )}
                                 {webtools && (
                                     <Typography variant="caption" color="text.secondary">
-                                        {workspace('webtoolsContext', 'Search / Fetch automatically reuse an available DeepSeek credential, or use Serper / Jina Reader. Enable tools separately. Ready tools replace native web tools; the MCP version has independent settings.')}
+                                        {workspace('webtoolsContext', 'Choose Search and Fetch sources and credentials independently in Web tool settings. MCP has separate settings.')}
                                     </Typography>
                                 )}
                                 {advisor && (

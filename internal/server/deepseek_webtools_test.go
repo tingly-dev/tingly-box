@@ -83,3 +83,33 @@ func TestDeepSeekToolUsageRecordsPriceAndAttribution(t *testing.T) {
 	require.EqualValues(t, 1, billable)
 	require.Equal(t, 1, errors)
 }
+
+func TestDeepSeekSelectedProviderMustRemainEligible(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	defer cfg.StoreManager().Close()
+	for _, p := range []*typ.Provider{
+		{UUID: "a", Name: "Default", Enabled: true, APIBase: "https://api.deepseek.com/v1", Token: "default-key"},
+		{UUID: "b", Name: "Selected", Enabled: true, APIBase: "https://api.deepseek.com/v1", Token: "selected-key"},
+		{UUID: "third-party", Name: "Third party", Enabled: true, APIBase: "https://other.example/v1", Token: "key"},
+	} {
+		require.NoError(t, cfg.AddProvider(p))
+	}
+	service := (&Server{config: cfg}).newDeepSeekWebtools()
+	selected := service.ForProvider("b")
+	require.Equal(t, "b", selected.Resolve().UUID)
+	require.False(t, service.ForProvider("").Available())
+	require.False(t, service.ForProvider("missing").Available())
+	require.False(t, service.ForProvider("third-party").Available())
+	p, err := cfg.GetProviderByUUID("b")
+	require.NoError(t, err)
+	p.Token = "rotated-key"
+	require.NoError(t, cfg.UpdateProvider("b", p))
+	require.Equal(t, "rotated-key", selected.Resolve().Token)
+	p.Enabled = false
+	require.NoError(t, cfg.UpdateProvider("b", p))
+	require.False(t, selected.Available())
+	require.True(t, service.Available(), "direct passthrough still has its default account")
+	require.NoError(t, cfg.DeleteProvider("b"))
+	require.False(t, selected.Available())
+}

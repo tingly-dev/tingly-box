@@ -65,19 +65,19 @@ or change `native_websearch_strip` semantics.
 Hosted calls resolve an **enabled API-key provider** whose OpenAI base (or
 fallback API base) has the exact host `api.deepseek.com`. The key is read on
 each call, never copied into source Env or persisted as a second secret. The
-provider's proxy is respected. If multiple credentials qualify, the lowest
-provider UUID wins deterministically. Anthropic-only DeepSeek bases are
-normalized to the same host's `/v1/tools/...` endpoints.
+provider's proxy is respected. Anthropic-only DeepSeek bases are normalized to
+that host's `/v1/tools/...` endpoints.
 
-- With a source's `SERPER_API_KEY` configured, Search/Fetch continue using
-  Serper/Jina.
-- Without that key, an available DeepSeek credential makes both tools use
-  DeepSeek. Without either credential, Fetch still uses Jina; Search is not
-  ready.
-- Advanced overrides use the source's existing environment map:
-  `WEB_SEARCH_BACKEND=auto|deepseek|serper` and
-  `WEB_FETCH_BACKEND=auto|deepseek|jina`. Explicit DeepSeek selection without a
-  usable provider is unconfigured; it does not silently fall back.
+- Choose Search (`deepseek|serper`) and Fetch (`deepseek|jina`) independently in
+  Web tool settings, backed by `WEB_SEARCH_BACKEND` and `WEB_FETCH_BACKEND`.
+- Each DeepSeek tool selects its own credential through
+  `WEB_SEARCH_PROVIDER_UUID` / `WEB_FETCH_PROVIDER_UUID`. Missing, disabled or
+  invalid selected credentials are unconfigured, never silently replaced.
+- Unset and obsolete `auto` values use the original Serper Search / Jina Fetch
+  defaults. Neither a Serper key nor a newly added DeepSeek account switches
+  another tool's backend. Jina Reader requires no configuration.
+- Direct `/v1/tools/*` passthrough retains deterministic default resolution:
+  the lowest eligible provider UUID wins when multiple credentials qualify.
 - Standalone `mcp-builtin` also accepts `DEEPSEEK_API_KEY` and optional
   `DEEPSEEK_BASE_URL`. Hosted provider-backed calls run in-process so that
   credentials stay out of the stdio subprocess and usage is recorded by the

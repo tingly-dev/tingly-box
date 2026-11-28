@@ -21,11 +21,28 @@ const PriceCNY = 0.005 // CNY per successful request producing results.
 // Service resolves credentials on every call, so rotations and disabled providers
 // take effect without restarting an MCP subprocess or persisting another secret.
 type Service struct {
-	Resolve func() *typ.Provider
-	Record  func(context.Context, *typ.Provider, string, bool, time.Duration, error)
+	Resolve         func() *typ.Provider
+	ResolveProvider func(uuid string) *typ.Provider
+	Record          func(context.Context, *typ.Provider, string, bool, time.Duration, error)
 }
 
 func (s *Service) Available() bool { return s != nil && s.Resolve != nil && s.Resolve() != nil }
+
+// ForProvider pins a web tool to its selected credential without copying the
+// secret. An absent or unavailable selection must never use the default account.
+func (s *Service) ForProvider(uuid string) *Service {
+	if s == nil {
+		return nil
+	}
+	selected := *s
+	selected.Resolve = func() *typ.Provider {
+		if uuid == "" || s.ResolveProvider == nil {
+			return nil
+		}
+		return s.ResolveProvider(uuid)
+	}
+	return &selected
+}
 
 // Call preserves the upstream status and JSON body for gateway passthrough.
 func (s *Service) Call(ctx context.Context, operation string, payload []byte) (body []byte, status int, err error) {

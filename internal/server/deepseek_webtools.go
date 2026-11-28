@@ -51,6 +51,18 @@ func (s *Server) newDeepSeekWebtools() *deepseek.Service {
 			}
 			return resolveDeepSeekProvider(s.config.ListProviders())
 		},
+		ResolveProvider: func(uuid string) *typ.Provider {
+			if s.config == nil {
+				return nil
+			}
+			p, err := s.config.GetProviderByUUID(uuid)
+			if err != nil {
+				return nil
+			}
+			// Apply the same first-party, enabled and API-key checks to an
+			// explicit selection as to direct passthrough requests.
+			return resolveDeepSeekProvider([]*typ.Provider{p})
+		},
 		Record: func(ctx context.Context, p *typ.Provider, op string, billable bool, latency time.Duration, callErr error) {
 			store := s.UsageStore()
 			if store == nil {

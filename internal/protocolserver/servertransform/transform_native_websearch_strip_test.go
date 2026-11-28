@@ -88,10 +88,10 @@ func TestIsNativeWebToolName_Fetch(t *testing.T) {
 }
 
 func TestDeepSeekReplacementKeepsNativeStrippingSemantics(t *testing.T) {
-	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "server-webtools", Command: "unused", Enabled: typ.BoolPtr(true), Tools: []string{"mcp_web_search", "mcp_web_fetch"}}}}
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "server-webtools", Env: map[string]string{"WEB_SEARCH_BACKEND": "deepseek", "WEB_FETCH_BACKEND": "deepseek", "WEB_SEARCH_PROVIDER_UUID": "selected", "WEB_FETCH_PROVIDER_UUID": "selected"}, Command: "unused", Enabled: typ.BoolPtr(true), Tools: []string{"mcp_web_search", "mcp_web_fetch"}}}}
 	rt := runtime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer rt.Close()
-	rt.SetDeepSeekWebtools(&deepseek.Service{Resolve: func() *typ.Provider { return &typ.Provider{Token: "configured"} }})
+	rt.SetDeepSeekWebtools(&deepseek.Service{ResolveProvider: func(string) *typ.Provider { return &typ.Provider{Token: "configured"} }})
 	req := &openai.ChatCompletionNewParams{Tools: []openai.ChatCompletionToolUnionParam{
 		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "web_search"}),
 		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "web_fetch"}),

@@ -32,7 +32,7 @@ describe('built-in sources', () => {
         expect(isServerToolSource({ id: 'server-webtools', transport: 'stdio' })).toBe(true);
         expect(isServerToolSource({ id: 'webtools', transport: 'stdio' })).toBe(false);
         expect(connectionSummary({ id: 'server-webtools', transport: 'stdio', command: '/app/tingly-box' })).toMatchObject({
-            target: 'Serper / Jina Reader',
+            target: 'Search → — / Fetch → —',
             missing: ['searchKey'],
         });
         expect(connectionSummary({ id: 'server-webtools', env: { SERPER_API_KEY: 'configured' } }).missing).toEqual([]);
@@ -66,7 +66,7 @@ describe('resolved web tool backends', () => {
             { name: 'mcp_web_search', backend: 'deepseek', ready: true },
             { name: 'mcp_web_fetch', backend: 'deepseek', ready: true },
         ] as never;
-        expect(connectionSummary(source, tools)).toMatchObject({ target: 'DeepSeek', missing: [] });
+        expect(connectionSummary(source, tools)).toMatchObject({ target: 'Search → DeepSeek / Fetch → DeepSeek', missing: [] });
     });
     it('uses runtime readiness rather than a saved but unresolved Serper reference', () => {
         const source = { id: 'server-webtools', env: { SERPER_API_KEY: '${MISSING}' } };

@@ -62,7 +62,9 @@ func (r *Runtime) DiscoverSource(ctx context.Context, id string) (SourceStatus, 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.RequestTimeout)*time.Second)
 	defer cancel()
 	var definitions []ToolDefinition
-	if source.ID == mcptools.ServerWebtoolsSourceID || source.ID == mcptools.BuiltinWebtoolsSourceID && r.deepSeekWebtools.Available() {
+	// Built-in web tool schemas are static. Credential availability is reported
+	// per tool below, and must not force discovery through a subprocess.
+	if isWebtoolSource(source.ID) {
 		tools, err := builtinserver.ToolDefinitions()
 		if err != nil {
 			return status, err

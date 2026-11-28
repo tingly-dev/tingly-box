@@ -75,7 +75,7 @@ export const connectionSummary = (source: MCPSourceConfig, tools: MCPCatalogTool
         const search = tools.find((tool) => tool.name === 'mcp_web_search');
         const fetch = tools.find((tool) => tool.name === 'mcp_web_fetch');
         const names: Record<string, string> = { deepseek: 'DeepSeek', serper: 'Serper', jina: 'Jina Reader' };
-        target = [...new Set([names[search?.backend || 'serper'], names[fetch?.backend || 'jina']])].join(' / ');
+        target = `Search → ${names[search?.backend || ''] || '—'} / Fetch → ${names[fetch?.backend || ''] || '—'}`;
         if (needsSearchKey(source, search)) missing.push('searchKey');
     } else if (source.transport === 'advisor' || source.advisor) {
         target = source.advisor?.model || '';

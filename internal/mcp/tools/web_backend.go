@@ -5,9 +5,8 @@ import (
 	"strings"
 )
 
-// WebBackend preserves Serper/Jina when a Serper key exists; otherwise an
-// available DeepSeek provider makes both tools work with the same account.
-// Overrides live on each source's existing Env, not in a new mode-selection UI.
+// WebBackend selects each operation independently. Unset (or obsolete "auto")
+// settings retain the original Serper/Jina defaults, independent of credentials.
 func WebBackend(env map[string]string, tool string, deepSeekAvailable bool) (string, error) {
 	key, legacy := "WEB_SEARCH_BACKEND", "serper"
 	if tool == BuiltinWebFetchToolName {
@@ -16,13 +15,10 @@ func WebBackend(env map[string]string, tool string, deepSeekAvailable bool) (str
 	backend := strings.ToLower(strings.TrimSpace(env[key]))
 	switch backend {
 	case "", "auto":
-		if env["SERPER_API_KEY"] == "" && deepSeekAvailable {
-			return "deepseek", nil
-		}
 		return legacy, nil
 	case "deepseek":
 		if !deepSeekAvailable {
-			return "", fmt.Errorf("no enabled DeepSeek API-key provider configured")
+			return backend, fmt.Errorf("selected DeepSeek API-key credential is missing, disabled, or unavailable")
 		}
 		return backend, nil
 	case legacy:
