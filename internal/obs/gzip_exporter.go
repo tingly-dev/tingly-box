@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -25,11 +27,23 @@ import (
 type GzipFileExporter struct {
 	baseDir string
 	level   int
+
+	retention RetentionPolicy
+	pruneMu   sync.Mutex
+	lastPrune time.Time
 }
 
-// NewGzipFileExporter creates an exporter rooted at baseDir.
+// NewGzipFileExporter creates an exporter rooted at baseDir with the default
+// retention policy (7 days / 1 GiB).
 func NewGzipFileExporter(baseDir string) *GzipFileExporter {
-	return &GzipFileExporter{baseDir: baseDir, level: gzip.BestSpeed}
+	return NewGzipFileExporterWithRetention(baseDir, DefaultRetention())
+}
+
+// NewGzipFileExporterWithRetention creates an exporter with an explicit
+// retention policy. A policy with all-zero fields means "use defaults"; a
+// negative MaxAge/MaxBytes disables that dimension.
+func NewGzipFileExporterWithRetention(baseDir string, retention RetentionPolicy) *GzipFileExporter {
+	return &GzipFileExporter{baseDir: baseDir, level: gzip.BestSpeed, retention: retention.normalize()}
 }
 
 // Export groups records by session path and appends one gzip member per session.
@@ -51,7 +65,27 @@ func (e *GzipFileExporter) Export(_ context.Context, records []*Record) error {
 			}
 		}
 	}
+	e.maybePrune()
 	return firstErr
+}
+
+// maybePrune runs retention at most once per PruneInterval. It is synchronous
+// with respect to the batch goroutine but throttled, so the common append path
+// pays nothing.
+func (e *GzipFileExporter) maybePrune() {
+	if e.baseDir == "" || e.retention.PruneInterval < 0 {
+		return
+	}
+	e.pruneMu.Lock()
+	defer e.pruneMu.Unlock()
+	now := time.Now()
+	if !e.lastPrune.IsZero() && now.Sub(e.lastPrune) < e.retention.PruneInterval {
+		return
+	}
+	e.lastPrune = now
+	if _, err := PruneRecordDir(e.baseDir, e.retention); err != nil {
+		logrus.Debugf("obs: retention prune: %v", err)
+	}
 }
 
 // Shutdown is a no-op; GzipFileExporter holds no persistent state.

@@ -776,3 +776,56 @@ func TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly(t *testing.T) {
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
 	assert.False(t, ok, "role-only delta must not mark TTFT")
 }
+
+// TestHandleOpenAIChatStream_InvokesStreamEventHooks pins the mechanism the
+// recording tap relies on: ProcessStream must invoke every OnStreamEvent hook
+// once per chunk before relaying it, so the response fingerprint sees every
+// upstream chunk.
+func TestHandleOpenAIChatStream_InvokesStreamEventHooks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	dec := &fakeChatDecoder{events: []string{
+		buildChatRoleOnlyChunkJSON(t),
+		buildChatContentChunkJSON(t, "hi"),
+		buildChatFinishChunkJSON(t),
+	}, current: -1}
+	stream := openaistream.NewStream[openai.ChatCompletionChunk](dec, nil)
+
+	hc := newTestHandleContext(c)
+	hc.DisableStreamUsage = true
+	var seen int
+	hc.OnStreamEventHooks = append(hc.OnStreamEventHooks, func(event interface{}) error {
+		seen++
+		return nil
+	})
+	_, err := HandleOpenAIChatStream(hc, stream)
+	require.NoError(t, err)
+	assert.Equal(t, 3, seen, "one hook call per chunk")
+}
+
+// TestHandleOpenAIResponsesStream_InvokesStreamEventHooks pins the hook
+// invocation added to the Responses loop (which does not use ProcessStream).
+func TestHandleOpenAIResponsesStream_InvokesStreamEventHooks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	decoder := newFakeResponsesDecoder([]string{
+		buildResponsesCompletedJSON(t, 50, 30, 7, 15),
+	})
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+
+	hc := newTestHandleContext(c)
+	var seen int
+	hc.OnStreamEventHooks = append(hc.OnStreamEventHooks, func(event interface{}) error {
+		seen++
+		return nil
+	})
+	_, err := HandleOpenAIResponsesStream(hc, stream, "gpt-4o")
+	require.NoError(t, err)
+	assert.Equal(t, 1, seen, "the Responses loop must invoke stream event hooks")
+}

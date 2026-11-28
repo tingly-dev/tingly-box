@@ -38,12 +38,13 @@ type ProtocolRecorder struct {
 	sessionShort string
 	sessionSrc   string
 
-	streamChunks []map[string]interface{}
-	isStreaming  bool
+	isStreaming bool
+	streamTap   *streamTap
 
 	originalRequest    *obs.RecordRequest
 	transformedRequest *obs.RecordRequest
 	finalResponse      *obs.RecordResponse
+	fingerprint        *obs.ResponseFingerprint
 
 	transformSteps []string
 
@@ -160,21 +161,29 @@ func (sr *ProtocolRecorder) BindProvider(provider *typ.Provider, model string, m
 	}
 }
 
-// EnableStreaming puts the recorder into streaming mode.
+// EnableStreaming puts the recorder into streaming mode and starts the
+// per-stream tap that accumulates the response fingerprint. Chunk bodies are
+// not buffered: only shape and timing are kept (bounded memory, no content).
 func (sr *ProtocolRecorder) EnableStreaming() {
 	if sr == nil {
 		return
 	}
 	sr.isStreaming = true
-	if sr.streamChunks == nil {
-		sr.streamChunks = make([]map[string]interface{}, 0)
+	if sr.streamTap == nil {
+		sr.streamTap = newStreamTap(sr.startTime)
 	}
 }
 
-// RecordStreamChunk records a single stream chunk.
+// RecordStreamChunk feeds a single stream chunk into the response tap. The
+// full chunk payload is deliberately not retained — the tap keeps only counts,
+// event names, timing, usage and identity scalars. Chunk bodies can be large
+// (tool arguments, long deltas) and are not needed for fingerprinting.
 func (sr *ProtocolRecorder) RecordStreamChunk(eventType string, chunk interface{}) {
 	if sr == nil || !sr.isStreaming {
 		return
+	}
+	if sr.streamTap == nil {
+		sr.streamTap = newStreamTap(sr.startTime)
 	}
 
 	var chunkJSON []byte
@@ -182,11 +191,11 @@ func (sr *ProtocolRecorder) RecordStreamChunk(eventType string, chunk interface{
 
 	switch v := chunk.(type) {
 	case *anthropic.MessageStreamEventUnion:
-		chunkJSON = []byte(v.RawJSON())
+		chunkJSON = rawJSONOrMarshal(v.RawJSON(), v)
 	case *anthropic.BetaRawMessageStreamEventUnion:
-		chunkJSON = []byte(v.RawJSON())
+		chunkJSON = rawJSONOrMarshal(v.RawJSON(), v)
 	case interface{ RawJSON() string }:
-		chunkJSON = []byte(v.RawJSON())
+		chunkJSON = rawJSONOrMarshal(v.RawJSON(), v)
 	default:
 		chunkJSON, err = json.Marshal(chunk)
 		if err != nil {
@@ -194,15 +203,29 @@ func (sr *ProtocolRecorder) RecordStreamChunk(eventType string, chunk interface{
 			return
 		}
 	}
+	if len(chunkJSON) == 0 {
+		return
+	}
 
 	var chunkData map[string]interface{}
 	if err := json.Unmarshal(chunkJSON, &chunkData); err != nil {
 		return
 	}
-	if _, ok := chunkData["type"]; !ok {
-		chunkData["type"] = eventType
+	sr.streamTap.record(eventType, chunkData)
+}
+
+// rawJSONOrMarshal prefers the SDK's cached raw JSON, falling back to a plain
+// marshal when the event was built in memory and has no raw payload (tests,
+// synthesised events).
+func rawJSONOrMarshal(raw string, v interface{}) []byte {
+	if raw != "" && raw != "null" {
+		return []byte(raw)
 	}
-	sr.streamChunks = append(sr.streamChunks, chunkData)
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 // SetAssembledResponse stores the final assembled (post-stream) response.
@@ -301,15 +324,18 @@ func (sr *ProtocolRecorder) emit(err error) {
 	}
 
 	// Capture-point filtering: each selected point contributes its slot.
-	// Response-side points are paused for now — request recording is the
-	// supported surface (.design/recording.md §3.5):
-	//   - upstream_response (Record.ProviderResponse) has no producer until
-	//     the wire-level recorder lands (Phase 3).
-	//   - final_response (Record.FinalResponse) is captured internally
-	//     (SetAssembledResponse / synthesis fallback) but its quality is not
-	//     good enough to emit yet; re-enable when the response path is
-	//     reworked (Phase 4 EventTap):
-	//     if m.Has(typ.RecordFinalResponse) { r.FinalResponse = sr.finalResponse }
+	//
+	// final_response was paused in #1644 because streaming relied on
+	// assembly/synthesis fallbacks whose quality was inadequate. It is
+	// resumed here for passive response capture: streamed responses now have
+	// a chunk tap on every path that records them (native Anthropic hooks and
+	// the OpenAI passthrough taps), and the emitted record carries a compact,
+	// redacted ResponseFingerprint alongside the (size-capped) body. See
+	// .design/recording.md §3.5.
+	//
+	// upstream_response (Record.ProviderResponse) is still without a producer:
+	// provider raw bytes/headers are only available at the wire transport
+	// (Phase 3 wire recorder).
 	m := typ.RecordingMode(sr.mode)
 	if m.Has(typ.RecordClientRequest) {
 		r.OriginalRequest = sr.originalRequest
@@ -317,9 +343,62 @@ func (sr *ProtocolRecorder) emit(err error) {
 	if m.Has(typ.RecordUpstreamRequest) {
 		r.TransformedRequest = sr.transformedRequest
 	}
+	if m.Has(typ.RecordFinalResponse) && err == nil && sr.finalResponse != nil {
+		// Build the fingerprint first (it needs the raw headers), then
+		// redact/cap the full response that is persisted for debugging.
+		sr.fingerprint = sr.buildFingerprint()
+		sr.finalResponse.Headers = obs.RedactFullHeaders(sr.finalResponse.Headers)
+		sr.finalResponse.Body = obs.CapResponseBody(sr.finalResponse.Body, obs.DefaultMaxResponseBodyBytes)
+		r.FinalResponse = sr.finalResponse
+		r.Fingerprint = sr.fingerprint
+	}
 
 	sr.sink.Emit(r)
 	sr.release()
+}
+
+// buildFingerprint derives the compact response fingerprint from the assembled
+// response body (when present) and the stream tap. It must run before the
+// final_response headers/body are redacted and capped.
+func (sr *ProtocolRecorder) buildFingerprint() *obs.ResponseFingerprint {
+	status := 0
+	var headers map[string]string
+	var body map[string]interface{}
+	if sr.finalResponse != nil {
+		status = sr.finalResponse.StatusCode
+		headers = sr.finalResponse.Headers
+		body = sr.finalResponse.Body
+	}
+	if status == 0 && sr.c != nil {
+		status = sr.c.Writer.Status()
+	}
+	fp := obs.BuildResponseFingerprint(sr.providerStyle, status, headers, body, time.Since(sr.startTime))
+	if sr.streamTap != nil && sr.isStreaming {
+		tap := sr.streamTap
+		fp.Stream = tap.snapshot(time.Since(sr.startTime))
+		// Prefer values seen on the upstream event stream over body-derived
+		// ones: the body may be a synthesis stub (its id is a placeholder) or
+		// have been rewritten by the gateway/assembler.
+		if tap.model != "" {
+			fp.Model = tap.model
+		}
+		if tap.id != "" {
+			fp.IDPattern = obs.IDPattern(tap.id)
+		}
+		if tap.systemFingerprint != "" {
+			fp.SystemFingerprint = tap.systemFingerprint
+		}
+		if tap.serviceTier != "" {
+			fp.ServiceTier = tap.serviceTier
+		}
+		if tap.usage != nil {
+			fp.Usage = tap.usage
+		}
+		if len(tap.finishReasons) > 0 {
+			fp.FinishReasons = tap.finishReasons
+		}
+	}
+	return fp
 }
 
 // release drops per-request recorder state once the obs.Record has
@@ -331,10 +410,11 @@ func (sr *ProtocolRecorder) release() {
 	if sr == nil {
 		return
 	}
-	sr.streamChunks = nil
+	sr.streamTap = nil
 	sr.originalRequest = nil
 	sr.transformedRequest = nil
 	sr.finalResponse = nil
+	sr.fingerprint = nil
 	sr.transformSteps = nil
 	sr.c = nil
 }
@@ -376,11 +456,11 @@ func (sr *ProtocolRecorder) synthesizeFinalResponse() *obs.RecordResponse {
 	}
 
 	var bodyJSON map[string]interface{}
-	if sr.isStreaming && len(sr.streamChunks) > 0 {
+	if sr.isStreaming && sr.streamTap != nil && sr.streamTap.chunkCount > 0 {
 		bodyJSON = baseMessageMap(sr.model, sr.startTime)
-		bodyJSON["_stream_chunks"] = len(sr.streamChunks)
+		bodyJSON["_stream_chunks"] = sr.streamTap.chunkCount
 		bodyJSON["_note"] = "assembled response unavailable"
-		logrus.Debugf("obs: ProtocolRecorder fallback response, chunks=%d", len(sr.streamChunks))
+		logrus.Debugf("obs: ProtocolRecorder fallback response, chunks=%d", sr.streamTap.chunkCount)
 	}
 
 	resp := &obs.RecordResponse{
@@ -388,15 +468,6 @@ func (sr *ProtocolRecorder) synthesizeFinalResponse() *obs.RecordResponse {
 		Headers:     headers,
 		Body:        bodyJSON,
 		IsStreaming: sr.isStreaming,
-	}
-	if sr.isStreaming && len(sr.streamChunks) > 0 {
-		chunks := make([]string, 0, len(sr.streamChunks))
-		for _, chunk := range sr.streamChunks {
-			if data, err := json.Marshal(chunk); err == nil {
-				chunks = append(chunks, string(data))
-			}
-		}
-		resp.StreamChunks = chunks
 	}
 	return resp
 }

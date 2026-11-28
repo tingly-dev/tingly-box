@@ -369,6 +369,16 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 
 		evt := stream.Current()
 
+		// Observer hooks (e.g. the response recorder) see the upstream event
+		// before the client-facing rewriting below, so they capture upstream
+		// values rather than the gateway's normalised output. Hooks here are
+		// read-only observers: an error must not break the client stream.
+		for _, hook := range hc.OnStreamEventHooks {
+			if hookErr := hook(evt); hookErr != nil {
+				logrus.WithContext(c.Request.Context()).Debugf("responses stream event hook: %v", hookErr)
+			}
+		}
+
 		// Marshal event using RawJSON() to avoid serializing empty union fields.
 		// strings.Clone breaks the gjson backing reference to the SSE buffer.
 		eventRaw := strings.Clone(evt.RawJSON())

@@ -26,6 +26,9 @@ type SlimRecord struct {
 	ProviderResponse   *SlimHTTPData `json:"provider_response,omitempty"`
 	FinalResponse      *SlimHTTPData `json:"final_response,omitempty"`
 
+	// Fingerprint is always inline (it is small and contains no user content).
+	Fingerprint *ResponseFingerprint `json:"fingerprint,omitempty"`
+
 	DurationMs int64  `json:"duration_ms"`
 	Error      string `json:"error,omitempty"`
 
@@ -72,9 +75,10 @@ func recordToSlim(r *Record, knownBlobs map[string]struct{}, threshold int) (*Sl
 		Provider:   r.Provider,
 		Scenario:   r.Scenario,
 		Model:      r.Model,
-		DurationMs: r.Duration.Milliseconds(),
-		Error:      r.Err,
-		Steps:      r.Steps,
+		DurationMs:  r.Duration.Milliseconds(),
+		Error:       r.Err,
+		Steps:       r.Steps,
+		Fingerprint: r.Fingerprint,
 	}
 
 	if r.OriginalRequest != nil {

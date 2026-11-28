@@ -122,20 +122,30 @@ func (ph *ProtocolHandler) streamOpenAIChat(c *gin.Context, provider *typ.Provid
 	hc.DisableStreamUsage = disableStreamUsage
 	hc.EstimatedInputTokens = estimatedInputTokens
 
+	// Tap every chunk into the recorder so the response fingerprint (chunk
+	// shape, timing, usage, system_fingerprint, finish_reason) is built from
+	// real upstream traffic. ProcessStream invokes these hooks before relaying
+	// each chunk, so the tap sees upstream values before any client-side
+	// rewriting.
+	if recorder != nil {
+		recorder.EnableStreaming()
+		hc.WithOnStreamEvent(func(event interface{}) error {
+			recorder.RecordStreamChunk("chat.completion.chunk", event)
+			return nil
+		})
+	}
+
 	usage, err := stream.HandleOpenAIChatStream(hc, streamResp)
 
 	// Track usage from stream handler
 	ph.trackUsageWithTokenUsage(c, usage, err)
 
-	// Emit the record for the passthrough stream. No chunk tap exists on this
-	// path (the SSE bytes are relayed by HandleOpenAIChatStream), so the final
-	// response is synthesized from the writer state; the request-side capture
-	// points are unaffected.
+	// Emit the record for the passthrough stream. The chunk tap above feeds
+	// the response fingerprint; the request-side capture points are unaffected.
 	if recorder != nil {
 		if err != nil {
 			recorder.RecordError(err)
 		} else {
-			recorder.EnableStreaming()
 			recorder.RecordResponse(provider, req.Model)
 		}
 	}
@@ -193,10 +203,28 @@ func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transfo
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
+	// The Responses stream handler runs its own RunLoop (not ProcessStream),
+	// but invokes OnStreamEventHooks per event so the recorder can build the
+	// response fingerprint from the real event stream.
+	if recorder != nil {
+		recorder.EnableStreaming()
+		hc.WithOnStreamEvent(func(event interface{}) error {
+			recorder.RecordStreamChunk("", event)
+			return nil
+		})
+	}
 	usage, err := stream.HandleOpenAIResponsesStream(hc, primedStream, responseModel)
 
 	// Track usage from stream handler
 	ph.trackUsageWithTokenUsage(c, usage, err)
+
+	if recorder != nil {
+		if err != nil {
+			recorder.RecordError(err)
+		} else {
+			recorder.RecordResponse(provider, reqCtx.RequestModel)
+		}
+	}
 }
 
 // normalizeOpenAIChatReasoningExtras backfills message.reasoning_content on a

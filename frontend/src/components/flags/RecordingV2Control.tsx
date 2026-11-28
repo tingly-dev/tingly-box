@@ -5,14 +5,14 @@ import {pluginControlStateStyles} from './pluginControlStyles';
 
 // Capture points along the gateway pipeline (multi-select). Mirrors the
 // backend registry options (typ.RuleFlagRegistry "recording"). Response-side
-// points exist in the value domain but are not offered yet — no dead toggles
-// (.design/recording.md §3.5):
-//   - final_response (final): capture quality not good enough; emit paused.
-//     { value: 'final_response', label: 'Final response', short: 'Resp', description: 'The response as returned to the client' },
-//   - upstream_response (provider raw): no capture until the wire recorder lands.
+// capture: final_response is offered (it records status, redacted headers, a
+// size-capped body and a compact fingerprint — .design/recording.md §3.6);
+// upstream_response (provider raw) is still not offered until the wire
+// recorder lands.
 export const RECORDING_POINTS = [
     { value: 'client_request', label: 'Client request (inbound)', short: 'In', description: 'The request exactly as the client sent it (before transforms)' },
     { value: 'upstream_request', label: 'Upstream request (outbound)', short: 'Out', description: 'The final request dispatched to the provider (after all transforms)' },
+    { value: 'final_response', label: 'Final response', short: 'Resp', description: 'The response sent back to the client: status, redacted headers, size-capped body and a compact fingerprint (usage, finish reason, stream shape/timing)' },
 ] as const;
 
 // Legacy single-enum values (pre point-set model) mapped onto point sets, so

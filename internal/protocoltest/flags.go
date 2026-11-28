@@ -1044,26 +1044,43 @@ func baseRuleFlagCases() []flagCase {
 				t.Error("record carries final_response though final_response was not selected")
 			}
 
-			// Response-side recording is paused (emit commented out — see
-			// recorder.go / .design/recording.md §3.5): a stored value that
-			// still selects final_response must record the request points
-			// only, never a final_response.
+			// Response-side capture is enabled at the final_response point
+			// (.design/recording.md §3.6): the record now carries the response
+			// plus the passive fingerprint, in addition to the request points.
+			// A fresh record dir keeps the assertion unambiguous.
+			dir2, err := os.MkdirTemp("", "flag-recording-resp-*")
+			if err != nil {
+				t.Fatalf("temp record dir: %v", err)
+			}
+			t.Cleanup(func() { os.RemoveAll(dir2) })
+			renv2, err := NewTestEnvForCLI(NewTestEnvOptionWithRecordDir(dir2))
+			if err != nil {
+				t.Fatalf("create recording env: %v", err)
+			}
+			t.Cleanup(renv2.Close)
+
 			s2 := flagScenario()
-			s2.Name = "flags-resp-paused"
-			model2 := renv.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, s2,
+			s2.Name = "flags-resp-enabled"
+			model2 := renv2.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, s2,
 				typ.RuleFlags{Recording: "client_request,upstream_request,final_response"})
-			res2 := sendFlag(t, renv, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model2, false, nil, nil)
+			res2 := sendFlag(t, renv2, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model2, false, nil, nil)
 			if res2.HTTPStatus != 200 {
 				t.Fatalf("request failed: status=%d body=%s", res2.HTTPStatus, truncate(string(res2.RawBody), 300))
 			}
-			renv.FlushRecordSinks(context.Background())
-			records = readRecordedLines(t, dir)
-			rec = records[len(records)-1]
-			if rec["transformed_request"] == nil {
-				t.Error("paused-response record missing transformed_request")
+			renv2.FlushRecordSinks(context.Background(), sourceToRuleScenario(protocol.TypeOpenAIChat))
+			records2 := readRecordedLines(t, dir2)
+			if len(records2) == 0 {
+				t.Fatal("no record for the final_response-enabled route")
 			}
-			if rec["final_response"] != nil {
-				t.Error("final_response emitted though response-side recording is paused")
+			rec2 := records2[len(records2)-1]
+			if rec2["transformed_request"] == nil {
+				t.Error("response-enabled record missing transformed_request")
+			}
+			if rec2["final_response"] == nil {
+				t.Error("final_response not emitted though final_response point was selected")
+			}
+			if rec2["fingerprint"] == nil {
+				t.Error("record missing the passive response fingerprint")
 			}
 		}},
 

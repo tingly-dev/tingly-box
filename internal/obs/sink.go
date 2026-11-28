@@ -66,6 +66,8 @@ type sinkConfig struct {
 	explicitExporters []RecordExporter
 	// enableCAS appends a CASFileExporter alongside the default gzip exporter.
 	enableCAS bool
+	// retention overrides the default gzip exporter retention (7d / 1 GiB).
+	retention *RetentionPolicy
 }
 
 // WithCASExporter appends a CASFileExporter to the default gzip exporter.
@@ -73,6 +75,13 @@ type sinkConfig struct {
 // JSONL + blobs) — useful for cross-session analysis or replay tooling.
 func WithCASExporter() SinkOption {
 	return func(c *sinkConfig) { c.enableCAS = true }
+}
+
+// WithRetention overrides the default gzip exporter's retention policy
+// (age and total-size cleanup). Ignored when explicit exporters replace the
+// defaults.
+func WithRetention(p RetentionPolicy) SinkOption {
+	return func(c *sinkConfig) { c.retention = &p }
 }
 
 // WithExporters replaces the Sink's default exporter list entirely. Useful for
@@ -126,7 +135,7 @@ func buildExporter(baseDir string, cfg *sinkConfig) (RecordExporter, error) {
 		}
 		return NewMultiExporter(cfg.explicitExporters...), nil
 	}
-	exporters := []RecordExporter{NewGzipFileExporter(baseDir)}
+	exporters := []RecordExporter{NewGzipFileExporterWithRetention(baseDir, retentionOf(cfg))}
 	if cfg.enableCAS {
 		cas, err := NewCASFileExporter(baseDir)
 		if err != nil {
@@ -138,6 +147,13 @@ func buildExporter(baseDir string, cfg *sinkConfig) (RecordExporter, error) {
 		return exporters[0], nil
 	}
 	return NewMultiExporter(exporters...), nil
+}
+
+func retentionOf(cfg *sinkConfig) RetentionPolicy {
+	if cfg.retention != nil {
+		return *cfg.retention
+	}
+	return DefaultRetention()
 }
 
 // Emit enqueues r for asynchronous export. The call is non-blocking.
