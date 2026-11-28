@@ -6,6 +6,7 @@ package usage
 
 // UsageStatsQuery represents query parameters for usage statistics
 type UsageStatsQuery struct {
+	EventType string `json:"event_type" form:"event_type" description:"tokens (default) for model usage; requests for web tools"`
 	GroupBy   string `json:"group_by" form:"group_by" description:"Aggregation level: model, provider, scenario, rule, user, daily, hourly" example:"model"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
@@ -64,6 +65,7 @@ type UsageStatsMeta struct {
 
 // TimeSeriesQuery represents query parameters for time-series data
 type TimeSeriesQuery struct {
+	EventType string `json:"event_type" form:"event_type" description:"tokens (default) for model usage; requests for web tools"`
 	Interval  string `json:"interval" form:"interval" description:"Time bucket: minute, hour, day, week" example:"hour"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
@@ -104,6 +106,7 @@ type TimeSeriesMeta struct {
 
 // UsageRecordsQuery represents query parameters for usage records
 type UsageRecordsQuery struct {
+	EventType string `json:"event_type" form:"event_type" description:"tokens (default) for model usage; requests for web tools"`
 	StartTime string `json:"start_time" form:"start_time" description:"ISO 8601 start time" example:"2025-01-10T00:00:00Z"`
 	EndTime   string `json:"end_time" form:"end_time" description:"ISO 8601 end time" example:"2025-01-11T00:00:00Z"`
 	Provider  string `json:"provider" form:"provider" description:"Filter by provider UUID"`

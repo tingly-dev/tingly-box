@@ -189,11 +189,6 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                             {r.model || '-'}
                                         </Typography>
                                     </Tooltip>
-                                    {r.event_type === 'requests' && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            CNY {(r.request_cost_cny || 0).toFixed(3)}
-                                        </Typography>
-                                    )}
                                 </TableCell>
 
                                 {/* Scenario */}

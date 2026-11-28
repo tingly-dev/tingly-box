@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -183,5 +185,55 @@ func TestProviderBaseNormalization(t *testing.T) {
 		service.Resolve = func() *typ.Provider { return provider }
 		_, _, err := service.Call(context.Background(), "search", []byte(`{"query":"go"}`))
 		require.NoError(t, err)
+	}
+}
+
+func TestDeepSeekToolOutputBoundAndIgnoredFetchPrompt(t *testing.T) {
+	huge := strings.Repeat("网页内容", 16000)
+	service := testService(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "fetch") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"title": "Page", "content": huge})
+		} else {
+			_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{map[string]any{"title": "Page", "url": "https://example.com", "content": huge}}})
+		}
+	})
+	for _, op := range []string{"search", "fetch"} {
+		text, err := service.Tool(context.Background(), op, map[string]any{"query": "go", "url": "https://example.com", "prompt": "only prices", "need_content": true})
+		require.NoError(t, err)
+		require.LessOrEqual(t, len(text), maxToolTextBytes)
+		require.True(t, utf8.ValidString(text))
+		require.Contains(t, text, "[Truncated:")
+		if op == "fetch" {
+			require.Contains(t, text, "does not apply the prompt")
+		}
+		body, status, err := service.Call(context.Background(), op, []byte(`{}`))
+		require.NoError(t, err)
+		require.Equal(t, 200, status)
+		require.Greater(t, len(body), maxToolTextBytes, "direct passthrough remains intact")
+	}
+}
+
+func TestDeepSeekOwnedProxyTransportClosesIdleConnections(t *testing.T) {
+	closed := make(chan struct{}, 1)
+	proxy := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"results":[{"title":"page"}]}`) }))
+	proxy.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			select {
+			case closed <- struct{}{}:
+			default:
+			}
+		}
+	}
+	proxy.Start()
+	defer proxy.Close()
+	service := &Service{Resolve: func() *typ.Provider {
+		return &typ.Provider{APIBase: "http://upstream.invalid", Token: "key", ProxyURL: proxy.URL}
+	}}
+	_, _, err := service.Call(context.Background(), "search", []byte(`{"query":"go"}`))
+	require.NoError(t, err)
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("owned proxy transport retained idle connection")
 	}
 }

@@ -52,7 +52,7 @@ func (r *Runtime) callDeepSeekWebtool(ctx context.Context, sourceID, toolName, a
 			continue
 		}
 		// Keep source/tool opt-in and allow lists authoritative on both surfaces.
-		if !r.IsClientToolAvailable(sourceID, toolName) {
+		if (sourceID == mcptools.ServerWebtoolsSourceID && !r.IsBuiltinServerToolAvailable(sourceID, toolName)) || (sourceID != mcptools.ServerWebtoolsSourceID && !r.IsClientToolAvailable(sourceID, toolName)) {
 			return coretool.ToolResult{}, true, fmt.Errorf("web tool is disabled or not configured")
 		}
 		backend, err := r.webBackend(source, toolName)
@@ -85,4 +85,31 @@ func (r *Runtime) callDeepSeekWebtool(ctx context.Context, sourceID, toolName, a
 		return coretool.TextToolResult(text), true, nil
 	}
 	return coretool.ToolResult{}, false, nil
+}
+
+// DeepSeekServerService resolves the same enabled source and selected credential
+// used by gateway-injected tools. Direct endpoints must not bypass these choices.
+func (r *Runtime) DeepSeekServerService(toolName string) (*deepseek.Service, error) {
+	if r == nil || !r.IsBuiltinServerToolAvailable(mcptools.ServerWebtoolsSourceID, toolName) {
+		return nil, fmt.Errorf("Server Tool is disabled or not configured")
+	}
+	cfg := r.GetConfig()
+	if cfg != nil {
+		for _, source := range cfg.Sources {
+			if source.ID != mcptools.ServerWebtoolsSourceID {
+				continue
+			}
+			backend, err := r.webBackend(source, toolName)
+			if err != nil || backend != "deepseek" {
+				break
+			}
+			env := maps.Clone(source.Env)
+			expandSourceEnvInPlace(env)
+			service := r.deepSeekService(env, toolName)
+			if service.Available() {
+				return service, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("select an available DeepSeek credential for this Server Tool")
 }

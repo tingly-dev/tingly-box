@@ -26,6 +26,10 @@ func NewHandler(usageStore *db.UsageStore) *Handler {
 
 // GetStats returns aggregated usage statistics
 func (h *Handler) GetStats(c *gin.Context) {
+	eventType, ok := parseUsageEventType(c)
+	if !ok {
+		return
+	}
 	if h.usageStore == nil {
 		apierr.Message(c, http.StatusServiceUnavailable, "Usage store not available")
 		return
@@ -33,6 +37,7 @@ func (h *Handler) GetStats(c *gin.Context) {
 
 	// Parse query parameters
 	query := db.UsageStatsQuery{
+		EventType: eventType,
 		GroupBy:   c.DefaultQuery("group_by", "model"),
 		Limit:     parseIntQuery(c, "limit", 100),
 		SortBy:    c.DefaultQuery("sort_by", "total_tokens"),
@@ -102,6 +107,10 @@ func (h *Handler) GetStats(c *gin.Context) {
 
 // GetTimeSeries returns time-series data for usage
 func (h *Handler) GetTimeSeries(c *gin.Context) {
+	eventType, ok := parseUsageEventType(c)
+	if !ok {
+		return
+	}
 	if h.usageStore == nil {
 		apierr.Message(c, http.StatusServiceUnavailable, "Usage store not available")
 		return
@@ -113,7 +122,7 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 	endTime := parseTimeQuery(c, "end_time", time.Now())
 
 	// Build filters
-	filters := make(map[string]string)
+	filters := map[string]string{"event_type": eventType}
 	if provider := c.Query("provider"); provider != "" {
 		filters["provider_uuid"] = provider
 	}
@@ -168,6 +177,10 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 
 // GetRecords returns individual usage records
 func (h *Handler) GetRecords(c *gin.Context) {
+	eventType, ok := parseUsageEventType(c)
+	if !ok {
+		return
+	}
 	if h.usageStore == nil {
 		apierr.Message(c, http.StatusServiceUnavailable, "Usage store not available")
 		return
@@ -185,7 +198,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	}
 
 	// Build filters
-	filters := make(map[string]string)
+	filters := map[string]string{"event_type": eventType}
 	if provider := c.Query("provider"); provider != "" {
 		filters["provider_uuid"] = provider
 	}
@@ -364,4 +377,13 @@ func parseTimeQuery(c *gin.Context, key string, defaultValue time.Time) time.Tim
 
 func intPtr(v int) *int {
 	return &v
+}
+
+func parseUsageEventType(c *gin.Context) (string, bool) {
+	kind := c.DefaultQuery("event_type", "tokens")
+	if kind != "tokens" && kind != "requests" {
+		apierr.Message(c, http.StatusBadRequest, "event_type must be tokens or requests")
+		return "", false
+	}
+	return kind, true
 }

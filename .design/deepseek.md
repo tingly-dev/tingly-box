@@ -76,8 +76,8 @@ that host's `/v1/tools/...` endpoints.
 - Unset and obsolete `auto` values use the original Serper Search / Jina Fetch
   defaults. Neither a Serper key nor a newly added DeepSeek account switches
   another tool's backend. Jina Reader requires no configuration.
-- Direct `/v1/tools/*` passthrough retains deterministic default resolution:
-  the lowest eligible provider UUID wins when multiple credentials qualify.
+- Direct `/v1/tools/*` passthrough uses the enabled Server Tool’s selected
+  DeepSeek credential, not an unrelated default account.
 - Standalone `mcp-builtin` also accepts `DEEPSEEK_API_KEY` and optional
   `DEEPSEEK_BASE_URL`. Hosted provider-backed calls run in-process so that
   credentials stay out of the stdio subprocess and usage is recorded by the
@@ -90,21 +90,26 @@ content is opt-in with `need_content=true`. Scores, authority and dates are
 annotated without filtering low-scoring results. `ori_question` is forwarded
 **only if explicitly provided**; conversation messages are never automatically
 sent to search. Fetch accepts `url`; the legacy `prompt` is optional and is
-not sent to DeepSeek.
+not sent to DeepSeek. A result notice explicitly says extraction was not applied.
+Model-facing output is capped at 32 KiB with a UTF-8-safe truncation notice;
+direct JSON passthrough is not truncated.
 
 ### Gateway API
 
-Model-authenticated clients can call `/v1/tools/search` and `/v1/tools/fetch`
+The owner/global model credential can call `/v1/tools/search` and `/v1/tools/fetch`
 directly, or append `/tools/search` and `/tools/fetch` to their existing
 `/tingly/:scenario[/v1]` base. Bodies and upstream error envelopes are passed
 through without chat/protocol conversion. Only the resolved provider's Bearer
 key is sent upstream. Team-scoped sharing keys cannot use these direct APIs
-to bypass their assigned model/provider routing.
+to bypass their assigned model/provider routing; delegated enterprise contexts
+are also refused. The corresponding Server Tool must be enabled and explicitly
+select DeepSeek. Root and all scenario aliases share a 30/minute, burst-5
+limiter across both operations (a rate limit, not a monetary budget).
 
 HTTP 408, 429 and 5xx responses are retried at most twice with cancellable
 500 ms / 1 s backoff. Other 4xx responses are not retried. MCP callers receive
 a clear top-up message on 402; direct callers retain the upstream 402 error
-envelope. No cross-vendor fallback or client-side QPS limiter is applied.
+envelope. No cross-vendor fallback is applied.
 
 ### Request billing
 
@@ -119,6 +124,9 @@ recorded per logical invocation, not per retry:
 - `billable_requests`, price snapshot `unit_price=0.005`, `currency=CNY`;
 - `request_cost_cny` is separate from all token counters (which remain zero).
 
+Usage reads default to `event_type=tokens`; `event_type=requests` selects
+web-tool statistics separately. Both rollup tiers include event type in their
+dimensions; pre-dimension caches are rebuilt without changing raw records.
 The measures survive raw queries and daily pre-aggregation, and are exposed
 in stats, time series and request records. The Dashboard displays CNY request
 spend separately from token usage. Existing token records migrate with

@@ -520,7 +520,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		ClientPool:              server.clientPool,
 		LoadBalancer:            server.loadBalancer,
 		MCPRuntime:              server.mcpRuntime,
-		DeepSeekWebtools:        deepSeekWebtools,
 		TemplateManager:         server.templateManager,
 		RoutingSelector:         server.routingSelector,
 		VisionProxyService:      server.visionProxyService,

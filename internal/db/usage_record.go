@@ -109,6 +109,7 @@ type RollupSums struct {
 // usage_records scans for completed hours. UsageDailyRecord is derived from
 // these rows, never from raw records.
 type UsageHourlyRecord struct {
+	EventType    string `gorm:"column:event_type;not null;default:tokens;uniqueIndex:uq_hourly_dim,priority:5"`
 	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
 	Hour         string `gorm:"column:hour;index:idx_hourly_hour;uniqueIndex:uq_hourly_dim,priority:1;not null"` // YYYY-MM-DD HH (UTC)
 	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_hourly_dim,priority:2;not null"`
@@ -128,6 +129,7 @@ func (UsageHourlyRecord) TableName() string {
 // UsageDailyScenarioRecord for why scenario is not a dimension of the main
 // table.
 type UsageHourlyScenarioRecord struct {
+	EventType  string `gorm:"column:event_type;not null;default:tokens;uniqueIndex:uq_hourly_scenario,priority:3"`
 	ID         uint   `gorm:"primaryKey;autoIncrement;column:id"`
 	Hour       string `gorm:"column:hour;index:idx_hourly_scenario_hour;uniqueIndex:uq_hourly_scenario,priority:1;not null"` // YYYY-MM-DD HH (UTC)
 	Scenario   string `gorm:"column:scenario;uniqueIndex:uq_hourly_scenario,priority:2;not null;default:''"`
@@ -146,6 +148,7 @@ func (UsageHourlyScenarioRecord) TableName() string {
 // substitute raw usage_records scans for completed days. Rows are the sum of
 // the day's UsageHourlyRecord rows.
 type UsageDailyRecord struct {
+	EventType    string `gorm:"column:event_type;not null;default:tokens;uniqueIndex:uq_daily_dim,priority:5"`
 	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
 	Date         string `gorm:"column:date;index:idx_date;uniqueIndex:uq_daily_dim,priority:1;not null"` // YYYY-MM-DD (UTC)
 	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_daily_dim,priority:2;not null"`
@@ -171,6 +174,7 @@ func (UsageDailyRecord) TableName() string {
 // Always written in the same transaction as the usage_daily rows of the same
 // days, so a day is present in both or neither.
 type UsageDailyScenarioRecord struct {
+	EventType  string `gorm:"column:event_type;not null;default:tokens;uniqueIndex:uq_daily_scenario,priority:3"`
 	ID         uint   `gorm:"primaryKey;autoIncrement;column:id"`
 	Date       string `gorm:"column:date;index:idx_daily_scenario_date;uniqueIndex:uq_daily_scenario,priority:1;not null"` // YYYY-MM-DD (UTC)
 	Scenario   string `gorm:"column:scenario;uniqueIndex:uq_daily_scenario,priority:2;not null;default:''"`
@@ -303,6 +307,22 @@ func dropUnusedUsageIndexes(db *gorm.DB) error {
 // split or backfill of an existing measure — needs the rebuild.
 func ensureUsageDailySchema(db *gorm.DB) error {
 	m := db.Migrator()
+	// Mixed cached aggregates cannot be split without rebuilding from raw events.
+	// Rebuild all companion tiers together, once, when adding the event dimension.
+	tables := []any{&UsageHourlyRecord{}, &UsageHourlyScenarioRecord{}, &UsageDailyRecord{}, &UsageDailyScenarioRecord{}}
+	for _, table := range tables {
+		if m.HasTable(table) && !m.HasColumn(table, "event_type") {
+			return db.Transaction(func(tx *gorm.DB) error {
+				for _, old := range tables {
+					if err := tx.Migrator().DropTable(old); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}
+	}
+
 	if m.HasTable(&UsageDailyRecord{}) &&
 		(!m.HasColumn(&UsageDailyRecord{}, "user_id") || !m.HasTable(&UsageDailyScenarioRecord{})) {
 		if err := m.DropTable(&UsageDailyRecord{}); err != nil {
@@ -357,6 +377,7 @@ func (us *UsageStore) RenameRuleUUID(oldUUID, newUUID string) error {
 
 // GetAggregatedStats returns aggregated usage statistics based on query parameters
 type UsageStatsQuery struct {
+	EventType string // tokens (default) or requests; never mix model and tool metrics
 	GroupBy   string // model, provider, scenario, rule, user, daily, hourly
 	StartTime time.Time
 	EndTime   time.Time
@@ -432,6 +453,7 @@ func withinTimeRange(start, end time.Time) func(*gorm.DB) *gorm.DB {
 // one widens the result set, and for user_id that would mean handing back
 // another user's records.
 var usageFilterColumns = map[string]struct{}{
+	"event_type":    {},
 	"provider_uuid": {},
 	"provider_name": {},
 	"model":         {},
@@ -503,6 +525,7 @@ func withStatsFilters(q UsageStatsQuery) func(*gorm.DB) *gorm.DB {
 func (q UsageStatsQuery) filterMap() map[string]string {
 	filters := make(map[string]string, 7)
 	for column, value := range map[string]string{
+		"event_type":    usageEventType(q.EventType),
 		"provider_uuid": q.Provider,
 		"model":         q.Model,
 		"scenario":      q.Scenario,
@@ -681,6 +704,7 @@ type TimeSeriesData struct {
 // spanning several completed days are served from usage_daily with raw scans
 // only for the partial edge days (see usage_daily.go).
 func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
+	filters = withDefaultUsageEvent(filters)
 	if data, ok, err := us.timeSeriesFromRollups(interval, startTime, endTime, filters); ok {
 		return data, err
 	}
@@ -703,6 +727,7 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 // rawSeriesBuckets groups usage_records into time buckets keyed by the Unix
 // seconds of the bucket start.
 func (us *UsageStore) rawSeriesBuckets(interval string, startTime, endTime time.Time, filters map[string]string) ([]aggBucket, error) {
+	filters = withDefaultUsageEvent(filters)
 	var timeFormat string
 	switch interval {
 	case "minute":
@@ -816,6 +841,7 @@ func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filter
 
 // GetPerformanceSummaryContext cancels waiting and reading when the caller leaves.
 func (us *UsageStore) GetPerformanceSummaryContext(ctx context.Context, startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
+	filters = withDefaultUsageEvent(filters)
 	if err := validateFilterColumns(filters); err != nil {
 		return PerformanceSummary{}, err
 	}
@@ -1034,6 +1060,7 @@ func (us *UsageStore) UsageMinutesSince(providerUUID, model, ruleUUID string, si
 // (user_id, team_id, model, provider_uuid, rule_uuid, ...): the warm start of
 // person / team / model limits.
 func (us *UsageStore) UsageMinutesWhere(filters map[string]string, since time.Time) ([]UsageMinute, error) {
+	filters = withDefaultUsageEvent(filters)
 	us.mu.RLock()
 	defer us.mu.RUnlock()
 	if err := validateFilterColumns(filters); err != nil {
@@ -1073,7 +1100,7 @@ func (us *UsageStore) UsageMinutesByUser(teamID string, since time.Time) (map[st
 	}
 	err := us.db.Model(&UsageRecord{}).
 		Select("user_id, "+minuteSelect).
-		Where("team_id = ? AND user_id <> ''", teamID).
+		Where("team_id = ? AND user_id <> '' AND event_type = ?", teamID, "tokens").
 		Scopes(withinTimeRange(since, time.Time{})).
 		Group("user_id, minute").Scan(&rows).Error
 	if err != nil {
@@ -1096,4 +1123,20 @@ func minuteBucket(minute string, requests, tokens int64) (UsageMinute, bool) {
 		return UsageMinute{}, false
 	}
 	return UsageMinute{At: at.UTC().Add(30 * time.Second), Requests: requests, Tokens: tokens}, true
+}
+
+// Model metrics are the default. Tool callers explicitly select requests.
+func usageEventType(value string) string {
+	if value == "" {
+		return "tokens"
+	}
+	return value
+}
+func withDefaultUsageEvent(filters map[string]string) map[string]string {
+	out := maps.Clone(filters)
+	if out == nil {
+		out = make(map[string]string)
+	}
+	out["event_type"] = usageEventType(out["event_type"])
+	return out
 }

@@ -15,7 +15,7 @@ export const isBuiltinSource = (source?: MCPSourceConfig) =>
 export const isServerWebtoolsSource = (source?: MCPSourceConfig) => source?.id === BUILTIN_SERVER_WEBTOOLS_ID;
 
 export const needsSearchKey = (source?: MCPSourceConfig, tool?: MCPCatalogTool) =>
-    isServerWebtoolsSource(source) && (tool?.ready !== undefined ? !tool.ready : !source?.env?.SERPER_API_KEY?.trim());
+    isServerWebtoolsSource(source) && tool?.ready === false;
 
 // Server Tools have their own configuration and do not belong to MCP profiles.
 export const isServerToolSource = (source?: MCPSourceConfig) =>

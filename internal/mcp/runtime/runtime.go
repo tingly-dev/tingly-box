@@ -791,15 +791,8 @@ func (r *Runtime) IsClientToolAvailable(sourceID string, toolName string) bool {
 		if !typ.IsMCPSourceEnabled(source) {
 			return false
 		}
-		// Check tool is listed for this source.
-		found := false
-		for _, t := range source.Tools {
-			if t == toolName || t == "*" {
-				found = true
-				break
-			}
-		}
-		if !found {
+		enabled, _ := EffectiveToolPolicy(source, toolName)
+		if !enabled {
 			return false
 		}
 		return r.isSourceToolConfigured(source, toolName)

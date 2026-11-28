@@ -197,11 +197,6 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             >
                                                 {stat.model || stat.key}
                                             </Typography>
-                                            {(stat.billable_requests || 0) > 0 && (
-                                                <Typography variant="caption" color="text.secondary">
-                                                    CNY {(stat.request_cost_cny || 0).toFixed(3)}
-                                                </Typography>
-                                            )}
                                         </TableCell>
                                         <UsageMetricValueCells
                                             usage={stat}

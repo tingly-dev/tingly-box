@@ -4,6 +4,7 @@ import {controlApi} from './openapi';
 export const usageApi = {
     // Usage Dashboard API calls
     getUsageStats: async (params: {
+        event_type?: 'tokens' | 'requests';
         group_by?: string;
         start_time?: string;
         end_time?: string;
@@ -19,6 +20,7 @@ export const usageApi = {
             headers,
             params: {
                 query: {
+                    event_type: params.event_type,
                     group_by: params.group_by as any,
                     start_time: params.start_time,
                     end_time: params.end_time,
@@ -34,6 +36,7 @@ export const usageApi = {
         })),
 
     getUsageTimeSeries: async (params: {
+        event_type?: 'tokens' | 'requests';
         interval?: string;
         start_time?: string;
         end_time?: string;
@@ -46,6 +49,7 @@ export const usageApi = {
             headers,
             params: {
                 query: {
+                    event_type: params.event_type,
                     interval: params.interval as any,
                     start_time: params.start_time,
                     end_time: params.end_time,
@@ -58,6 +62,7 @@ export const usageApi = {
         })),
 
     getUsageRecords: async (params: {
+        event_type?: 'tokens' | 'requests';
         start_time?: string;
         end_time?: string;
         provider?: string;
@@ -72,6 +77,7 @@ export const usageApi = {
             headers,
             params: {
                 query: {
+                    event_type: params.event_type,
                     start_time: params.start_time,
                     end_time: params.end_time,
                     provider: params.provider,

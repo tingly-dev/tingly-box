@@ -33,7 +33,7 @@ describe('built-in sources', () => {
         expect(isServerToolSource({ id: 'webtools', transport: 'stdio' })).toBe(false);
         expect(connectionSummary({ id: 'server-webtools', transport: 'stdio', command: '/app/tingly-box' })).toMatchObject({
             target: 'Search → — / Fetch → —',
-            missing: ['searchKey'],
+            missing: [],
         });
         expect(connectionSummary({ id: 'server-webtools', env: { SERPER_API_KEY: 'configured' } }).missing).toEqual([]);
     });
@@ -72,5 +72,13 @@ describe('resolved web tool backends', () => {
         const source = { id: 'server-webtools', env: { SERPER_API_KEY: '${MISSING}' } };
         const tools = [{ name: 'mcp_web_search', backend: 'serper', ready: false }] as never;
         expect(connectionSummary(source, tools).missing).toContain('searchKey');
+    });
+});
+
+describe('unknown web tool readiness', () => {
+    it('does not report a missing key before discovery or after discovery fails', () => {
+        for (const backend of ['deepseek', 'serper']) {
+            expect(connectionSummary({ id: 'server-webtools', env: { WEB_SEARCH_BACKEND: backend } }, []).missing).toEqual([]);
+        }
     });
 });

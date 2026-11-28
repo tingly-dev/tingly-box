@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -75,7 +76,11 @@ func (s *Service) Call(ctx context.Context, operation string, payload []byte) (b
 	// DeepSeek also offers an Anthropic base; tools always live under /v1.
 	u.Path = strings.TrimSuffix(strings.TrimSuffix(strings.TrimRight(u.Path, "/"), "/v1"), "/anthropic") + "/v1/tools/" + operation
 	u.RawQuery, u.Fragment = "", ""
-	httpClient := *client.CreateHTTPClientWithProxy(p.ProxyURL)
+	baseClient := client.CreateHTTPClientWithProxy(p.ProxyURL)
+	httpClient := *baseClient
+	if baseClient != http.DefaultClient {
+		defer httpClient.CloseIdleConnections()
+	}
 	httpClient.Timeout = 30 * time.Second
 	// Never forward the provider credential across redirects.
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -229,7 +234,11 @@ func (s *Service) Tool(ctx context.Context, operation string, args map[string]an
 		if err := json.Unmarshal(body, &page); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("# %s\n\n%s", page.Title, page.Content), nil
+		notice := ""
+		if prompt, _ := args["prompt"].(string); strings.TrimSpace(prompt) != "" {
+			notice = "Note: DeepSeek Fetch does not apply the prompt extraction instruction; returning page content.\n\n"
+		}
+		return limitToolText(notice + fmt.Sprintf("# %s\n\n%s", page.Title, page.Content)), nil
 	}
 	var response struct {
 		Results []struct {
@@ -266,5 +275,19 @@ func (s *Service) Tool(ctx context.Context, operation string, args map[string]an
 		}
 		fmt.Fprintf(&out, "\n\n%s\n\n", text)
 	}
-	return out.String(), nil
+	return limitToolText(out.String()), nil
+}
+
+const maxToolTextBytes = 32 * 1024
+const toolTruncationNotice = "\n\n[Truncated: web tool output exceeds 32 KiB. Narrow the query or fetch a more specific page.]"
+
+func limitToolText(text string) string {
+	if len(text) <= maxToolTextBytes {
+		return text
+	}
+	end := maxToolTextBytes - len(toolTruncationNotice)
+	for end > 0 && !utf8.RuneStart(text[end]) {
+		end--
+	}
+	return text[:end] + toolTruncationNotice
 }

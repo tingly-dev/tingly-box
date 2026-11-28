@@ -135,3 +135,26 @@ func TestDeepSeekWebtoolsSelectIndependentCredentialsWithoutFallback(t *testing.
 	delete(providers, "fetch-account")
 	require.True(t, r.IsBuiltinServerToolAvailable("server-webtools", "mcp_web_fetch"))
 }
+
+func TestDeepSeekToolAvailabilityUsesSamePolicy(t *testing.T) {
+	for _, tools := range [][]string{nil, {"*"}, {" mcp_web_search "}, {"mcp_web_fetch"}} {
+		for _, sourceID := range []string{"server-webtools", "webtools"} {
+			cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: sourceID, Enabled: typ.BoolPtr(true), Command: "unused", Tools: tools, Env: map[string]string{"WEB_SEARCH_BACKEND": "deepseek", "WEB_SEARCH_PROVIDER_UUID": "p"}}}}
+			r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+			r.SetDeepSeekWebtools(&deepseek.Service{ResolveProvider: func(string) *typ.Provider { return &typ.Provider{Token: "key"} }})
+			enabled, _ := EffectiveToolPolicy(cfg.Sources[0], "mcp_web_search")
+			require.Equal(t, enabled, r.IsClientToolAvailable(sourceID, "mcp_web_search"))
+			if sourceID == "server-webtools" {
+				require.Equal(t, enabled, r.IsBuiltinServerToolAvailable(sourceID, "mcp_web_search"))
+			}
+			cfg.Sources[0].Enabled = typ.BoolPtr(false)
+			require.False(t, r.IsClientToolAvailable(sourceID, "mcp_web_search"))
+			require.False(t, r.IsBuiltinServerToolAvailable(sourceID, "mcp_web_search"))
+			cfg.Sources[0].Enabled = typ.BoolPtr(true)
+			cfg.Sources[0].ToolPolicies = map[string]typ.MCPToolPolicy{"mcp_web_search": {Enabled: typ.BoolPtr(false)}}
+			require.False(t, r.IsClientToolAvailable(sourceID, "mcp_web_search"))
+			require.False(t, r.IsBuiltinServerToolAvailable(sourceID, "mcp_web_search"))
+			r.Close()
+		}
+	}
+}

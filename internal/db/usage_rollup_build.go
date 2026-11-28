@@ -186,19 +186,19 @@ func buildHours(tx *gorm.DB, from, to time.Time) error {
 	// mid-hour must not split the group into two conflicting rows), so MAX()
 	// picks one.
 	if err := tx.Exec(`
-		INSERT INTO usage_hourly (hour, provider_uuid, provider_name, model, user_id, `+rollupSumColumns+`)
-		SELECT k, COALESCE(provider_uuid, ''), COALESCE(MAX(provider_name), ''), COALESCE(model, ''), COALESCE(user_id, ''),
+		INSERT INTO usage_hourly (hour, provider_uuid, provider_name, model, user_id, event_type, `+rollupSumColumns+`)
+		SELECT k, COALESCE(provider_uuid, ''), COALESCE(MAX(provider_name), ''), COALESCE(model, ''), COALESCE(user_id, ''), event_type,
 			`+rawSumSelect+`
 		`+keyed+`
-		GROUP BY k, provider_uuid, model, user_id`, scanStart, scanEnd, fromKey, toKey).Error; err != nil {
+		GROUP BY k, provider_uuid, model, user_id, event_type`, scanStart, scanEnd, fromKey, toKey).Error; err != nil {
 		return err
 	}
 	if err := tx.Exec(`
-		INSERT INTO usage_hourly_scenario (hour, scenario, `+rollupSumColumns+`)
-		SELECT k, COALESCE(scenario, ''),
+		INSERT INTO usage_hourly_scenario (hour, scenario, event_type, `+rollupSumColumns+`)
+		SELECT k, COALESCE(scenario, ''), event_type,
 			`+rawSumSelect+`
 		`+keyed+`
-		GROUP BY k, scenario`, scanStart, scanEnd, fromKey, toKey).Error; err != nil {
+		GROUP BY k, scenario, event_type`, scanStart, scanEnd, fromKey, toKey).Error; err != nil {
 		return err
 	}
 	return markEmptyBuckets(tx, hourTier, from, to)
@@ -213,19 +213,19 @@ func deriveDays(tx *gorm.DB, from, to time.Time) error {
 	}
 	hourFrom, hourTo := hourTier.key(from), hourTier.key(to)
 	if err := tx.Exec(`
-		INSERT INTO usage_daily (date, provider_uuid, provider_name, model, user_id, `+rollupSumColumns+`)
-		SELECT substr(hour, 1, 10), provider_uuid, MAX(provider_name), model, user_id,
+		INSERT INTO usage_daily (date, provider_uuid, provider_name, model, user_id, event_type, `+rollupSumColumns+`)
+		SELECT substr(hour, 1, 10), provider_uuid, MAX(provider_name), model, user_id, event_type,
 			`+rollupSumSelect+`
 		FROM usage_hourly WHERE hour >= ? AND hour < ? AND request_count > 0
-		GROUP BY substr(hour, 1, 10), provider_uuid, model, user_id`, hourFrom, hourTo).Error; err != nil {
+		GROUP BY substr(hour, 1, 10), provider_uuid, model, user_id, event_type`, hourFrom, hourTo).Error; err != nil {
 		return err
 	}
 	if err := tx.Exec(`
-		INSERT INTO usage_daily_scenario (date, scenario, `+rollupSumColumns+`)
-		SELECT substr(hour, 1, 10), scenario,
+		INSERT INTO usage_daily_scenario (date, scenario, event_type, `+rollupSumColumns+`)
+		SELECT substr(hour, 1, 10), scenario, event_type,
 			`+rollupSumSelect+`
 		FROM usage_hourly_scenario WHERE hour >= ? AND hour < ? AND request_count > 0
-		GROUP BY substr(hour, 1, 10), scenario`, hourFrom, hourTo).Error; err != nil {
+		GROUP BY substr(hour, 1, 10), scenario, event_type`, hourFrom, hourTo).Error; err != nil {
 		return err
 	}
 	return markEmptyBuckets(tx, dayTier, from, to)
