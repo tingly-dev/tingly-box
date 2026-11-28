@@ -201,6 +201,26 @@ func (m *Manager) ListQuota(ctx context.Context) ([]*ProviderUsage, error) {
 	return usages, err
 }
 
+// UpdateStored lets a caller that learned something about a provider's quota
+// from traffic (rather than from a poll) fold it into the stored snapshot.
+// mutate edits the snapshot and reports whether it changed anything worth
+// saving. A provider with no stored snapshot is left alone: the poll creates
+// it, and a record made of one header reading would read as a full one.
+// It returns whether a snapshot was saved.
+func (m *Manager) UpdateStored(ctx context.Context, providerUUID string, mutate func(*ProviderUsage) bool) (bool, error) {
+	usage, err := m.store.Get(ctx, providerUUID)
+	if err != nil || usage == nil || !usage.hasReading() {
+		return false, nil
+	}
+	if !mutate(usage) {
+		return false, nil
+	}
+	if err := m.store.Save(ctx, usage); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // annotateBackoff tells a reader that automatic refreshes of this provider are
 // being held back, and until when. A window already past is not reported: the
 // next tick asks, so there is nothing left to wait for.

@@ -81,7 +81,10 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	// default client would). No ruleFlagTransport, so the Claude Code UA
 	// above stays decisive (.design/user-agent.md).
 	httpClient := &http.Client{
-		Transport: wrapWithLogging(createSessionBoundTransport(provider, sessionID), provider),
+		Transport: &claudeObservingTransport{
+			next:     wrapWithLogging(createSessionBoundTransport(provider, sessionID), provider),
+			provider: provider,
+		},
 	}
 	options = append(options, anthropicOption.WithHTTPClient(httpClient))
 

@@ -483,6 +483,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		// the op is optional (passes through with no provider wired).
 		serviceSelector.SetQuotaProvider(quotaMgr)
 		wireLimitsQuota(limitsGuard, quotaMgr)
+		installPassiveClaudeQuota(quotaMgr)
 	}
 	warmStartLimits(limitsGuard, cfg, server.UsageStore())
 	server.limitPolicies = initLimitPolicies(limitsGuard, cfg, server.UsageStore())

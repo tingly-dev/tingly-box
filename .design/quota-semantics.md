@@ -363,6 +363,25 @@ quota 是 health 的**前瞻版**：不用先吃 429，恢复时间从猜变准�
 
 ---
 
+## 8.1 被动读数：Claude 订阅的响应头
+
+Anthropic 订阅账号的每个响应都带 `anthropic-ratelimit-unified-*` 头（Claude Code 自己的配额检查就是发一个 1-token 请求读它们）。我们已经在转发这些响应，所以从中读取，而不是只靠 `/api/oauth/usage` 轮询：
+
+| 头 | 含义 | 落点 |
+|---|---|---|
+| `…-5h-utilization` / `…-7d-utilization` | 窗口用量，**0–1 小数**（轮询接口是 0–100 百分数；>1 的值按已是百分数处理） | `five_hour` / `seven_day` 窗口的 `UsedPercent` |
+| `…-5h-reset` / `…-7d-reset` | 重置时间，unix 秒 | `ResetsAt` |
+| `…-status`、`…-5h-status`、`…-7d-status` | `allowed` / `allowed_warning` / `rejected` | `rejected` → 该窗口 `LimitReached=true`、`Allowed=false` |
+
+实现：`client` 层的 `claudeObservingTransport` 把带统一头的响应头交给观察者（`SetClaudeResponseObserver`）；`internal/server/quota_passive.go` 解析（`fetcher.ParseAnthropicUnifiedHeaders`）并经 `Manager.UpdateStored` 合并进**已存在**的快照，窗口替换走 `AddWindow`，与轮询窗口语义一致。
+
+约束：
+- **只更新、不创建**：没有轮询快照的 provider 不写，避免一条只含两个窗口的记录被当成完整读数；溢价额度 `extra_usage`、按模型的 breakdown 仍只来自轮询。
+- **限流**：每次 `Save` 追加一行历史，所以同一 provider 每 2 分钟最多存一次；状态在 `rejected` 与否之间翻转时立即存。读数没变（百分比、重置时间、`LimitReached` 都相同）不存。
+- 写库在 goroutine 里，不拖响应。
+- 轮询不变，也**没有**加 `?skip_spend=1`：它会省掉溢价额度那块，而我们要展示它。
+- 未覆盖：`overage-*`（溢价额度的实时读数）、`slow-*`、`grace-*`；用 `rejected` 直接熔断路由（现有 429 → 健康监控路径不变）。
+
 ## 9. 待定
 
 1. **数据新鲜度**：各 fetcher 硬编码 `ExpiresAt`（5min/1h）与 `Config.CacheTTL` 各行其是。
