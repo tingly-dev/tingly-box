@@ -102,6 +102,20 @@ const maxNameBytes = 200
 // MaxAttachments caps the files on one message.
 const MaxAttachments = 20
 
+// TooLargeError is an upload over the caller's limit. The HTTP layer answers
+// it with 413 and the reason, so an over-limit file is a readable refusal,
+// not a failed parse.
+type TooLargeError struct {
+	// Name is the file's name as it came in.
+	Name string
+	// Limit is the cap in bytes.
+	Limit int64
+}
+
+func (e *TooLargeError) Error() string {
+	return fmt.Sprintf("%s is larger than %d MB", e.Name, e.Limit>>20)
+}
+
 // Attachment is a file a person attached to a message.
 type Attachment struct {
 	Name string `json:"name"`
@@ -126,7 +140,7 @@ func (l Layout) SaveAttachment(projectID, name string, src io.Reader, limit int6
 	}
 	n, err := l.WriteLibraryFile(projectID, rel, src, true)
 	if err == nil && limit > 0 && n > limit {
-		err = fmt.Errorf("%s is larger than %d MB", name, limit>>20)
+		err = &TooLargeError{Name: name, Limit: limit}
 	}
 	if err != nil {
 		_ = l.RemoveLibraryFile(projectID, rel)
@@ -291,7 +305,7 @@ func (l Layout) SaveUploads(owner string, files []*multipart.FileHeader, limit i
 	out := make([]Attachment, 0, len(files))
 	for _, fh := range files {
 		if fh.Size > limit {
-			return nil, fmt.Errorf("%s is larger than %d MB", fh.Filename, limit>>20)
+			return nil, &TooLargeError{Name: fh.Filename, Limit: limit}
 		}
 		src, err := fh.Open()
 		if err != nil {

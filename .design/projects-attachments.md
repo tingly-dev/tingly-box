@@ -39,6 +39,18 @@ only in memory or in the conversation.
   age or per owner without touching anything else. Deleting a project already
   removes its library. Age-based cleanup of files never sent is the follow-up.
 
+The upload endpoints clear the host's per-request I/O deadlines
+(`module.UploadRequest`; the event streams already lift the write one):
+`http.Server` arms `ReadTimeout` (30s in Tingly Box) when a request starts and
+never extends it, so a large file over a slow link was cut mid-body and failed
+as `expected multipart form with field "files"`
+([#2831](https://github.com/tingly-dev/tingly-box/issues/2831)). Time is no
+longer the bound; bytes are: one request carries at most
+`maxUpload × MaxAttachments` (20 × 200 MB, plus framing), and a file over
+200 MB (`maxUpload`) is refused with 413 and the reason. A form that cannot be
+parsed keeps its own error (400 with the cause, logged), so a truncated body is
+no longer reported as "not multipart".
+
 A working folder is a `type=folder` project, and its uploads live in the
 project's own library like any other project's:
 `<data>/projects/<project>/library/uploads/<id>-<name>`, shared by every thread

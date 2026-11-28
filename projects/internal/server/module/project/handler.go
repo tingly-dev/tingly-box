@@ -343,9 +343,11 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithQuery("path", "string", "Library-relative folder; empty is the library root"))
 	api.POST("/projects/:id/library", h.uploadLibrary, tag,
 		swagger.WithDescription("Upload files (multipart field \"files\") to the library"),
+		swagger.WithMiddleware(module.UploadRequest(maxUpload)),
 		swagger.WithResponseModel(LibraryResponse{}))
 	api.POST("/projects/:id/attachments", h.uploadAttachments, tag,
 		swagger.WithDescription("Upload files for a message (multipart field \"files\"); they are kept in the library under uploads/"),
+		swagger.WithMiddleware(module.UploadRequest(maxUpload)),
 		swagger.WithResponseModel(rt.AttachmentsResponse{}))
 	api.GET("/projects/:id/library/file", h.downloadLibrary, tag,
 		swagger.WithDescription("Download a library file"),
@@ -1016,14 +1018,13 @@ func (h *Handler) uploadLibrary(c *gin.Context) {
 	if !ok {
 		return
 	}
-	form, err := c.MultipartForm()
-	if err != nil {
-		apierr.BadRequest(c, `expected multipart form with field "files"`)
+	files, ok := module.ParseUpload(c)
+	if !ok {
 		return
 	}
-	for _, fh := range form.File["files"] {
+	for _, fh := range files {
 		if fh.Size > maxUpload {
-			apierr.BadRequest(c, fmt.Sprintf("%s is larger than 200 MB", fh.Filename))
+			module.UploadError(c, &rt.TooLargeError{Name: fh.Filename, Limit: maxUpload})
 			return
 		}
 		if err := h.saveUpload(p.ID, fh); err != nil {
@@ -1043,16 +1044,15 @@ func (h *Handler) uploadAttachments(c *gin.Context) {
 	if !ok {
 		return
 	}
-	form, err := c.MultipartForm()
-	if err != nil {
-		apierr.BadRequest(c, `expected multipart form with field "files"`)
+	files, ok := module.ParseUpload(c)
+	if !ok {
 		return
 	}
 	// A folder's uploads go to its library like a project's: they are shared
 	// by all of its threads, including the one the first message starts.
-	atts, err := h.svc.Layout.SaveUploads(p.ID, form.File["files"], maxUpload)
+	atts, err := h.svc.Layout.SaveUploads(p.ID, files, maxUpload)
 	if err != nil {
-		apierr.BadRequest(c, err.Error())
+		module.UploadError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, rt.AttachmentsResponse{Attachments: atts})

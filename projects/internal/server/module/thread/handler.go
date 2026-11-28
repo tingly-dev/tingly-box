@@ -317,6 +317,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(TaskOutputResponse{}))
 	api.POST("/threads/:id/attachments", h.uploadAttachments, tag,
 		swagger.WithDescription("Upload files for a message to the thread (multipart field \"files\")"),
+		swagger.WithMiddleware(module.UploadRequest(maxUpload)),
 		swagger.WithResponseModel(rt.AttachmentsResponse{}))
 	api.GET("/threads/:id/attachments/file", h.downloadAttachment, tag,
 		swagger.WithDescription("Download an attachment of the thread"),
@@ -1029,14 +1030,13 @@ func (h *Handler) uploadAttachments(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	form, err := c.MultipartForm()
-	if err != nil {
-		apierr.BadRequest(c, `expected multipart form with field "files"`)
+	files, ok := module.ParseUpload(c)
+	if !ok {
 		return
 	}
-	atts, err := h.svc.Layout.SaveUploads(owner, form.File["files"], maxUpload)
+	atts, err := h.svc.Layout.SaveUploads(owner, files, maxUpload)
 	if err != nil {
-		apierr.BadRequest(c, err.Error())
+		module.UploadError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, rt.AttachmentsResponse{Attachments: atts})
