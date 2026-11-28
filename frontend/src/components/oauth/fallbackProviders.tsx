@@ -12,6 +12,7 @@ export interface OAuthProvider {
     icon: React.ReactNode;
     color: string;
     enabled?: boolean;
+    hiddenFromPicker?: boolean;
     dev?: boolean;
     deviceCodeFlow?: boolean;
     // Some upstream OAuth apps (Anthropic's Claude Code CLI client, OpenAI's Codex
@@ -46,6 +47,8 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         icon: <Gemini size={32}/>,
         color: oauthBrandColors.gemini,
         enabled: true,
+        // Keep the entry available for reauthorizing existing credentials.
+        hiddenFromPicker: true,
     },
     {
         id: 'antigravity',
