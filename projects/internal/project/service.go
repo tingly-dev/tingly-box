@@ -73,7 +73,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	coord.OnFinal = relay.Message
 	coord.OnDecided = relay.Decided
-	coord.OnSuggested = relay.Suggested
+	coord.OnCardSettled = relay.CardSettled
 	threads.OnWait = relay.NeedsUser
 	threads.OnSettled = relay.Settled
 	threads.OnReply = relay.ThreadReply

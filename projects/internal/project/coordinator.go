@@ -46,9 +46,11 @@ type Coordinator struct {
 	// where the answer came from, so chats that were shown it can restate it.
 	// It must not block.
 	OnDecided func(db.ThreadEvent, Source)
-	// OnSuggested is called after proposed threads of a suggestions card are
-	// started, with the card and where the start came from. It must not block.
-	OnSuggested func(db.ThreadEvent, Source)
+	// OnCardSettled is called after a proposal card changes state (threads
+	// started, proposals dismissed or superseded), with the card and where the
+	// change came from, so chats that were shown it can restate it. It must
+	// not block.
+	OnCardSettled func(db.ThreadEvent, Source)
 
 	mu     sync.Mutex
 	queues map[string]*queue
@@ -120,7 +122,7 @@ func (c *Coordinator) post(projectID, text, payload string, src Source) (*db.Thr
 	}
 	// A new instruction makes the plan the older cards offered stale: keep
 	// their proposals visible but mark them expired.
-	c.SupersedeSuggestions(p.MainThreadID, "")
+	c.SupersedeSuggestions(p.MainThreadID, "", src)
 	m := &db.ThreadEvent{Kind: db.EvUser, Content: text, Payload: payload}
 	src.stamp(m)
 	m.ThreadID = p.MainThreadID
@@ -686,8 +688,8 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 		return nil, err
 	}
 	c.publishEvent(projectID, m)
-	if c.OnSuggested != nil {
-		c.OnSuggested(*m, src)
+	if c.OnCardSettled != nil {
+		c.OnCardSettled(*m, src)
 	}
 	if startErr != nil {
 		return nil, startErr

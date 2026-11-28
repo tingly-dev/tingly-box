@@ -44,7 +44,7 @@ func TestDismissSuggestionsPersists(t *testing.T) {
 		{Title: "A", Task: "do a"}, {Title: "B", Task: "do b"}, {Title: "C", Task: "do c"},
 	}})
 
-	got, err := c.DismissSuggestions(p.MainThreadID, e.ID, []int{1})
+	got, err := c.DismissSuggestions(p.MainThreadID, e.ID, []int{1}, Source{})
 	require.NoError(t, err)
 	pl := payloadOf(t, f.store, got.ID)
 	assert.False(t, pl.Suggestions[0].Dismissed)
@@ -52,7 +52,7 @@ func TestDismissSuggestionsPersists(t *testing.T) {
 	assert.False(t, pl.Suggestions[2].Dismissed)
 
 	// Empty indexes dismisses every remaining proposal.
-	_, err = c.DismissSuggestions(p.MainThreadID, e.ID, nil)
+	_, err = c.DismissSuggestions(p.MainThreadID, e.ID, nil, Source{})
 	require.NoError(t, err)
 	pl = payloadOf(t, f.store, e.ID)
 	for i, s := range pl.Suggestions {
@@ -60,7 +60,7 @@ func TestDismissSuggestionsPersists(t *testing.T) {
 	}
 
 	// Dismissing again changes nothing: the card is already settled.
-	again, err := c.DismissSuggestions(p.MainThreadID, e.ID, nil)
+	again, err := c.DismissSuggestions(p.MainThreadID, e.ID, nil, Source{})
 	require.NoError(t, err)
 	assert.Equal(t, jsonString(pl), again.Payload)
 

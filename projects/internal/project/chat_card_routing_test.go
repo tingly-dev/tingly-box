@@ -204,7 +204,7 @@ func TestProposedThreadsCanBeStartedFromAChat(t *testing.T) {
 	for _, c := range m.p.Choices {
 		values = append(values, c.Value)
 	}
-	assert.Equal(t, []string{"sall", "s0", "s1"}, values)
+	assert.Equal(t, []string{"sall", "s0", "s1", "dall"}, values)
 
 	_, err = svc.AnswerFromChannel("telegram", "own", m.p.ThreadID, m.p.RequestID, "s1")
 	require.NoError(t, err)

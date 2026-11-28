@@ -127,7 +127,7 @@ func (s *coordinatorSessions) insert(p *db.Project, text string, atts []Attachme
 	}
 	s.c.publishEvent(p.ID, ev)
 	// The inserted instruction makes an older plan stale, as a queued one does.
-	s.c.SupersedeSuggestions(p.MainThreadID, "")
+	s.c.SupersedeSuggestions(p.MainThreadID, "", src)
 	return ev
 }
 

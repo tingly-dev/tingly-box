@@ -84,7 +84,7 @@ func (c *Coordinator) ProposeCard(ctx context.Context, p *db.Project, card Propo
 	if err := checkProposals(ctx, p, card.Suggestions); err != nil {
 		return nil, err
 	}
-	c.SupersedeSuggestions(p.MainThreadID, "")
+	c.SupersedeSuggestions(p.MainThreadID, "", Source{})
 	m := c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvSuggestions, Payload: jsonString(card)})
 	c.final(m)
 	return m, nil
@@ -94,7 +94,7 @@ func (c *Coordinator) ProposeCard(ctx context.Context, p *db.Project, card Propo
 // thread, so they never start and stay dismissed after a reload. indexes
 // selects which; empty dismisses every proposal not started yet. It is the
 // user's own answer, so the card keeps the record instead of disappearing.
-func (c *Coordinator) DismissSuggestions(mainThreadID, eventID string, indexes []int) (*db.ThreadEvent, error) {
+func (c *Coordinator) DismissSuggestions(mainThreadID, eventID string, indexes []int, src Source) (*db.ThreadEvent, error) {
 	c.cards.Lock()
 	defer c.cards.Unlock()
 	main, m, pl, err := c.cardEvent(mainThreadID, eventID)
@@ -120,6 +120,9 @@ func (c *Coordinator) DismissSuggestions(mainThreadID, eventID string, indexes [
 		return nil, err
 	}
 	c.publishEvent(main.ProjectID, m)
+	if c.OnCardSettled != nil {
+		c.OnCardSettled(*m, src)
+	}
 	return m, nil
 }
 
@@ -131,7 +134,7 @@ func (c *Coordinator) PerformCardAction(ctx context.Context, mainThreadID, event
 	case ActionStart, ActionStartAll:
 		return c.StartSuggestions(ctx, mainThreadID, eventID, indexes, src)
 	case ActionDismiss, ActionDismissAll:
-		return c.DismissSuggestions(mainThreadID, eventID, indexes)
+		return c.DismissSuggestions(mainThreadID, eventID, indexes, src)
 	}
 	main, m, pl, err := c.cardEvent(mainThreadID, eventID)
 	if err != nil {
@@ -159,7 +162,7 @@ func (c *Coordinator) PerformCardAction(ctx context.Context, mainThreadID, event
 // stale. Started and dismissed proposals are left as they are, and the card
 // a new action is about is passed as exceptEventID. Superseded proposals can
 // still be started or dismissed; the card only says they are expired.
-func (c *Coordinator) SupersedeSuggestions(mainThreadID, exceptEventID string) {
+func (c *Coordinator) SupersedeSuggestions(mainThreadID, exceptEventID string, src Source) {
 	main, err := c.store.GetThread(mainThreadID)
 	if err != nil {
 		return
@@ -196,6 +199,9 @@ func (c *Coordinator) SupersedeSuggestions(mainThreadID, exceptEventID string) {
 			continue
 		}
 		c.publishEvent(main.ProjectID, m)
+		if c.OnCardSettled != nil {
+			c.OnCardSettled(*m, src)
+		}
 	}
 }
 

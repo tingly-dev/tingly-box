@@ -102,9 +102,23 @@ one line in `actions` plus one `RegisterCardAction`.
 
 Deferred (not built, smallest useful next step): an HTTP endpoint for other
 services to post cards (`POST /projects/{id}/proposal-cards` with the payload
-above), and a per-card settle callback in IM chats when a card is dismissed from
-the web (today `Relay.Suggested` only restates started cards). Neither is needed
-for the coordinator's own `propose_threads` flow.
+above). `ProposeCard` plus `RegisterCardAction` are the Go seam; an HTTP route
+would need an authorization story (project scope, like the MCP tools) before it
+is safe to expose, so it is not part of this change.
+
+## Chats
+
+A proposal card reaches the project's chats too (`Relay.suggestions`): one
+button per proposal, Start all, and Dismiss all, or the reply forms
+`start 1,3` / `start all` / `dismiss 1,3` / `dismiss all`. Every state change
+calls `Coordinator.OnCardSettled` → `Relay.CardSettled`, which rewrites the
+chat prompt with what happened ("Started/Dismissed/Expired … on the web|in a
+chat") and takes its buttons away, and forgets the request so the chat's next
+message is no longer taken as an answer. `DismissSuggestions` publishes the
+updated event, which is what settles the web card when the change came from a
+chat — the same state everywhere. Proposals still waiting after a partial
+change are listed in the settled line ("start it in the web UI") because a
+restated prompt cannot carry new buttons.
 
 ## Mistake protection
 

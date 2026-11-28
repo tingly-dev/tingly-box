@@ -18,6 +18,8 @@ import (
 const (
 	// choiceStartAll is the value of the button that starts every proposal.
 	choiceStartAll = "sall"
+	// choiceDismissAll is the value of the button that declines every proposal.
+	choiceDismissAll = "dall"
 	// maxSuggestionButtons is how many proposals get a button of their own.
 	maxSuggestionButtons = 6
 )
@@ -35,11 +37,28 @@ func startOfChoice(value string) (indexes []int, ok bool) {
 	return []int{n}, err == nil && strings.HasPrefix(value, "s") && n >= 0
 }
 
+// dismissOfChoice reads the button value that declines every proposal.
+func dismissOfChoice(value string) (indexes []int, ok bool) {
+	return nil, value == choiceDismissAll
+}
+
+// dismissOfReply reads a reply such as "dismiss 1,3" or "dismiss all" as the
+// proposals to decline (nil for all). It is startOfReply under the other verb.
+func dismissOfReply(n int, text string) (indexes []int, ok bool) {
+	return replyIndexes(n, text, "dismiss")
+}
+
 // startOfReply reads a reply such as "start 1,3" or "start all" as proposals
 // to start (nil for all). ok is false for anything else, and for numbers that
 // are not among the n proposals.
 func startOfReply(n int, text string) (indexes []int, ok bool) {
-	rest, found := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), "start")
+	return replyIndexes(n, text, "start")
+}
+
+// replyIndexes reads "<verb> 1,3" or "<verb> all" as proposal indexes (nil
+// for all), refusing numbers outside 1..n.
+func replyIndexes(n int, text, verb string) (indexes []int, ok bool) {
+	rest, found := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), verb)
 	if !found || (rest != "" && !strings.ContainsAny(rest[:1], " \t:,.")) {
 		return nil, false
 	}
@@ -113,20 +132,23 @@ func (r *Relay) suggestions(e db.ThreadEvent) {
 	if len(lines) == 0 {
 		return
 	}
+	choices = append(choices, agent.Choice{Value: choiceDismissAll, Label: "Dismiss all"})
 	body := "Proposed threads:\n" + strings.Join(lines, "\n")
 	r.enqueueJob(relayJob{
 		threadIDs:        []string{e.ThreadID},
 		requestProjectID: t.ProjectID,
-		text:             body + "\nReply \"start 1,3\" or \"start all\" to start them.",
+		text:             body + "\nReply \"start 1,3\" or \"start all\" to start them, or \"dismiss 1,3\" to decline.",
 		quote:            "Re: Proposed threads",
 		request:          &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
 		prompt:           &agent.Prompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: body, Choices: choices},
 	})
 }
 
-// Suggested restates a suggestions card in the chats it was shown to, with
-// the threads started and where, so none offers buttons for it any more.
-func (r *Relay) Suggested(e db.ThreadEvent, src Source) {
+// CardSettled restates a proposal card in the chats it was shown to, with
+// what happened to each proposal (started, dismissed, expired) and where, so
+// none offers buttons for it any more, and stops taking their next message as
+// its answer. The web card gets the same change through publishEvent.
+func (r *Relay) CardSettled(e db.ThreadEvent, src Source) {
 	if r == nil || r.sink == nil {
 		return
 	}
@@ -134,22 +156,45 @@ func (r *Relay) Suggested(e db.ThreadEvent, src Source) {
 	if json.Unmarshal([]byte(e.Payload), &pl) != nil {
 		return
 	}
-	var started []string
+	var started, dismissed, expired, left []string
 	for _, s := range pl.Suggestions {
-		if s.ThreadID == "" {
-			continue
-		}
-		if t, err := r.store.GetThread(s.ThreadID); err == nil {
-			started = append(started, threadTag(t.Seq, t.Title))
+		switch {
+		case s.ThreadID != "":
+			name := s.Title
+			if t, err := r.store.GetThread(s.ThreadID); err == nil {
+				name = threadTag(t.Seq, t.Title)
+			}
+			started = append(started, name)
+		case s.Dismissed:
+			dismissed = append(dismissed, s.Title)
+		case s.Superseded:
+			expired = append(expired, s.Title)
+		default:
+			left = append(left, s.Title)
 		}
 	}
-	if len(started) == 0 {
-		return
-	}
-	r.forget(e.ID)
 	where := " on the web"
 	if src.Kind == db.SourceIM {
 		where = " in a chat"
 	}
-	r.enqueueJob(relayJob{settle: e.ID, text: join("Started"+where, strings.Join(started, ", "))})
+	var lines []string
+	if len(started) > 0 {
+		lines = append(lines, "Started"+where+": "+strings.Join(started, ", "))
+	}
+	if len(dismissed) > 0 {
+		lines = append(lines, "Dismissed"+where+": "+strings.Join(dismissed, ", "))
+	}
+	if len(expired) > 0 {
+		lines = append(lines, "Expired"+where+": "+strings.Join(expired, ", "))
+	}
+	if len(left) > 0 {
+		// The buttons are gone from the chat copy; the web card still
+		// offers what is left.
+		lines = append(lines, "Still proposed: "+strings.Join(left, ", ")+" (start it in the web UI).")
+	}
+	if len(lines) == 0 {
+		return
+	}
+	r.forget(e.ID)
+	r.enqueueJob(relayJob{settle: e.ID, text: strings.Join(lines, "\n")})
 }
