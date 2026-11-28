@@ -151,6 +151,17 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	if err != nil {
 		return nil, err
 	}
+	ApplyConnectionEnv(env, baseURL, apiKey)
+	return env, nil
+}
+
+// ApplyConnectionEnv sets the server-owned connection values on an already
+// resolved env map, in place: the gateway base URL and model token, and the
+// loopback hosts added to NO_PROXY. It is the one place a Claude Code launch
+// env gets its routing, shared by the typed preference path (ToEnv), the
+// settings-file generator, and the connection-default launch, so the same
+// rules apply however the env was assembled.
+func ApplyConnectionEnv(env map[string]string, baseURL, apiKey string) {
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey
 
@@ -158,11 +169,7 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	// intercept those calls — a proxy cannot reach loopback and will 502 every
 	// request. Append localhost/127.0.0.1 to NO_PROXY (preserving any existing
 	// entries the user may have set via the Extra or typed field).
-	noProxy := env["NO_PROXY"]
-	noProxy = appendNoProxy(noProxy, "localhost", "127.0.0.1", "::1")
-	env["NO_PROXY"] = noProxy
-
-	return env, nil
+	env["NO_PROXY"] = appendNoProxy(env["NO_PROXY"], "localhost", "127.0.0.1", "::1")
 }
 
 // appendNoProxy adds hosts to a NO_PROXY value, skipping duplicates.

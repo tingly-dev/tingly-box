@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -107,6 +108,29 @@ func TestHostHandoffGoesThroughTinglyBox(t *testing.T) {
 	h := NewHost(newConfig(t))
 	assert.Equal(t, []string{selfExecutable(), "cc"}, h.HandoffLaunch(""))
 	assert.Equal(t, []string{selfExecutable(), "profile", "p1"}, h.HandoffLaunch("p1"))
+}
+
+// A project or thread with no named profile runs on the connection default.
+// It must still honour the user's main Claude Code settings, or a preference
+// set there (output tokens above all) never reaches the running process —
+// a sandboxed thread cannot read ~/.claude/settings.json itself.
+func TestThreadEnvHonorsMainClaudeSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".claude"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".claude", "settings.json"),
+		[]byte(`{"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"}}`), 0o644))
+
+	h := NewHost(newConfig(t))
+	env, _ := h.ThreadEnv(context.Background())
+	got := map[string]string{}
+	for _, kv := range env {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			got[k] = v
+		}
+	}
+	assert.Equal(t, "64000", got["CLAUDE_CODE_MAX_OUTPUT_TOKENS"])
 }
 
 func TestHostChecksModelTiers(t *testing.T) {

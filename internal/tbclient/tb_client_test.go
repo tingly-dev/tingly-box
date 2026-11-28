@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -165,6 +167,12 @@ func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {
 }
 
 func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
+	// Keep the connection-default env hermetic: it now layers the user's main
+	// Claude Code settings, so an isolated HOME keeps a developer's real
+	// ~/.claude/settings.json out of the test.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+
 	cfg := &serverconfig.Config{
 		ServerPort: 9000,
 		Rules:      []typ.Rule{ccRule("built-in-cc", "cc")},
@@ -174,15 +182,7 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 	env, err := client.GetClaudeCodeEnv(context.Background())
 	require.NoError(t, err)
 
-	kv := map[string]string{}
-	for _, e := range env {
-		for i := 0; i < len(e); i++ {
-			if e[i] == '=' {
-				kv[e[:i]] = e[i+1:]
-				break
-			}
-		}
-	}
+	kv := envMap(env)
 
 	assert.Equal(t, "http://localhost:9000/tingly/claude_code", kv["ANTHROPIC_BASE_URL"])
 	// The sonnet slot follows the default, so ANTHROPIC_MODEL stays unset and
@@ -192,6 +192,68 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 	assert.Equal(t, "cc", kv["ANTHROPIC_DEFAULT_OPUS_MODEL"])
 	_, hasToken := kv["ANTHROPIC_AUTH_TOKEN"]
 	assert.True(t, hasToken)
+}
+
+// envMap parses KEY=VALUE entries into a map.
+func envMap(env []string) map[string]string {
+	kv := map[string]string{}
+	for _, e := range env {
+		if k, v, ok := strings.Cut(e, "="); ok {
+			kv[k] = v
+		}
+	}
+	return kv
+}
+
+// The connection default (no named profile) must honour the user's main Claude
+// Code settings: a preference configured there — above all the output token
+// limit that a thread needs raised — has to reach the launch env. This is the
+// path that used to hard-code DefaultClaudeCodePrefs and ignore the file.
+func TestGetClaudeCodeEnv_HonorsMainSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".claude"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{
+		"env": {
+			"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000",
+			"API_TIMEOUT_MS": "1234",
+			"CUSTOM_INHERITED": "yes",
+			"ANTHROPIC_BASE_URL": "http://stale:1/old",
+			"ANTHROPIC_MODEL": "stale-model"
+		}
+	}`), 0o644))
+
+	cfg := &serverconfig.Config{
+		ServerPort: 9000,
+		Rules:      []typ.Rule{ccRule("builtin:claude_code:cc", "team/coder")},
+	}
+	env, err := NewTBClient(cfg).GetClaudeCodeEnv(context.Background())
+	require.NoError(t, err)
+	kv := envMap(env)
+
+	assert.Equal(t, "64000", kv["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "configured output tokens must reach the launch env")
+	assert.Equal(t, "1234", kv["API_TIMEOUT_MS"], "configured timeout must reach the launch env")
+	assert.Equal(t, "yes", kv["CUSTOM_INHERITED"], "unknown keys must not be silently filtered")
+	// Server-owned connection values and rule-derived models win over stale ones.
+	assert.Equal(t, "http://localhost:9000/tingly/claude_code", kv["ANTHROPIC_BASE_URL"])
+	assert.Equal(t, "team/coder", kv["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	assert.NotContains(t, kv, "ANTHROPIC_MODEL", "the default tier equals the sonnet slot, so ANTHROPIC_MODEL is omitted")
+}
+
+// With no main settings file yet, the connection default still gets tb's
+// canonical defaults rather than an empty env.
+func TestGetClaudeCodeEnv_DefaultsWithoutSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	env, err := NewTBClient(&serverconfig.Config{ServerPort: 9000}).GetClaudeCodeEnv(context.Background())
+	require.NoError(t, err)
+	kv := envMap(env)
+
+	assert.Equal(t, "32000", kv["CLAUDE_CODE_MAX_OUTPUT_TOKENS"])
+	assert.Equal(t, "3000000", kv["API_TIMEOUT_MS"])
 }
 
 func TestGetClaudeCodeSettingsPathForProfile_EmptyIDReturnsNoPath(t *testing.T) {

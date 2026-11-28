@@ -3,8 +3,10 @@ package tbclient
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	tbagent "github.com/tingly-dev/tingly-box/internal/agent"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -53,7 +55,13 @@ func NewTBClient(cfg *serverconfig.Config) *TBClientImpl {
 }
 
 // GetClaudeCodeEnv builds the env vars needed to route the Claude Code CLI
-// through the local tingly-box gateway.
+// through the local tingly-box gateway for the connection default (no named
+// profile). The user's main Claude Code settings (~/.claude/settings.json)
+// are the source of truth for every preference — output tokens, timeouts,
+// proxies and any other env key — so they are layered over tb's defaults here
+// and reach a default-routed thread, folder session and the coordinator. The
+// rule-derived model slots and the gateway connection values are owned by tb
+// and always win.
 func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	port := c.config.GetServerPort()
 	if port == 0 {
@@ -63,19 +71,30 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	baseURL := fmt.Sprintf("http://%s:%d", host, port)
 	apiKey := c.config.GetModelToken()
 
-	models := c.resolveClaudeCodeModels()
-	prefs := tbagent.DefaultClaudeCodePrefs()
-	prefs.AnthropicModel = models.def
-	prefs.AnthropicDefaultHaikuModel = models.haiku
-	prefs.AnthropicDefaultSonnetModel = models.sonnet
-	prefs.AnthropicDefaultOpusModel = models.opus
-	prefs.ClaudeCodeSubagentModel = models.subagent
-	prefs.AnthropicDefaultFableModel = models.fable
-
-	envMap, err := prefs.ToEnv(baseURL, apiKey)
+	// tb's canonical defaults seed a fresh setup (timeouts, output limit and
+	// telemetry switches); an existing main settings file then overrides them,
+	// key for key and without dropping any key it carries.
+	envMap, err := tbagent.DefaultClaudeCodePrefs().Values()
 	if err != nil {
 		return nil, fmt.Errorf("build claude code env: %w", err)
 	}
+	if snapshot, readErr := tbagent.ReadMainClaudeCodeSettings(); readErr != nil {
+		logrus.WithError(readErr).Warn("tbclient: cannot read the main Claude Code settings; using defaults")
+	} else {
+		maps.Copy(envMap, snapshot.Env)
+	}
+
+	models := c.resolveClaudeCodeModels()
+	envMap["ANTHROPIC_MODEL"] = models.def
+	envMap["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = models.haiku
+	envMap["ANTHROPIC_DEFAULT_SONNET_MODEL"] = models.sonnet
+	envMap["ANTHROPIC_DEFAULT_OPUS_MODEL"] = models.opus
+	envMap["ANTHROPIC_DEFAULT_FABLE_MODEL"] = models.fable
+	envMap["CLAUDE_CODE_SUBAGENT_MODEL"] = models.subagent
+
+	// Connection values are owned by the current server context and always win.
+	tbagent.ApplyConnectionEnv(envMap, baseURL, apiKey)
+	envMap["TINGLY_API_URL"] = baseURL
 	tbagent.OmitFollowedDefaultModel(envMap)
 
 	env := make([]string, 0, len(envMap))
