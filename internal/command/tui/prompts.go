@@ -328,8 +328,8 @@ type selectModel[T any] struct {
 	items    []SelectItem[T] // all items (never mutated)
 	opts     SelectOptions
 	filter   string
-	visible  []int  // indices into items that pass the current filter
-	cursor   int    // index into visible
+	visible  []int // indices into items that pass the current filter
+	cursor   int   // index into visible
 	offset   int
 	done     bool
 	result   Result[T]

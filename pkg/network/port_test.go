@@ -1,43 +1,37 @@
 package network
 
 import (
-	"fmt"
 	"net"
 	"testing"
 	"time"
 )
 
-func TestIsPortAvailable(t *testing.T) {
-	// Use a high port number that's likely available
-	port := 12580
-
-	// Debug: Check port with detailed info
-	available, info := IsPortAvailableWithInfo("", port)
-	t.Logf("Initial check for port %d: available=%v, info=%s", port, available, info)
-
-	if !available {
-		t.Logf("WARNING: Port %d was already occupied before test!", port)
-		t.Logf("This means another process is using port 12580")
-		t.Logf("Try running: lsof -i :12580  to find the process")
-	}
-
-	// Occupy the port and test again
-	listener, err := net.Listen("tcp", ":12580")
+// listenEphemeral binds a kernel-chosen port on all interfaces — the same
+// address family IsPortAvailable probes — and returns the listener and port.
+// An ephemeral port keeps these tests from colliding with a real Tingly Box
+// listening on the default 12580.
+func listenEphemeral(t *testing.T) (net.Listener, int) {
+	t.Helper()
+	l, err := net.Listen("tcp", ":0")
 	if err != nil {
-		t.Fatalf("Failed to occupy port for testing: %v", err)
+		t.Fatalf("listen on ephemeral port: %v", err)
 	}
-	defer listener.Close()
-	t.Logf("Successfully occupied port %d with test listener", port)
+	return l, l.Addr().(*net.TCPAddr).Port
+}
 
-	// Now check again while port is occupied
-	available, info = IsPortAvailableWithInfo("", port)
-	t.Logf("Check while port is occupied: available=%v, info=%s", available, info)
+func TestIsPortAvailable(t *testing.T) {
+	// Keep the listener open for the "occupied" assertion so there is no
+	// window for another process to grab the port.
+	occupied, port := listenEphemeral(t)
+	if available, info := IsPortAvailableWithInfo("", port); available {
+		t.Errorf("port %d is occupied (%s) but IsPortAvailableWithInfo returned available", port, info)
+	}
 
-	if available {
-		t.Errorf("ERROR: Port %d is occupied but IsPortAvailable returned true!", port)
-		t.Errorf("This should NOT happen - net.Listen should have failed")
-	} else {
-		t.Logf("SUCCESS: Port %d correctly detected as occupied", port)
+	if err := occupied.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+	if available, info := IsPortAvailableWithInfo("", port); !available {
+		t.Errorf("port %d should be available after release, got: %s", port, info)
 	}
 }
 
@@ -53,64 +47,33 @@ func TestGetAvailablePort(t *testing.T) {
 }
 
 func TestWaitForPortAvailable(t *testing.T) {
-	port := 15433
+	listener, port := listenEphemeral(t)
 
-	// Occupy the port
-	listener, err := net.Listen("tcp", ":15433")
-	if err != nil {
-		t.Fatalf("Failed to occupy port for testing: %v", err)
-	}
-
-	// Start a goroutine to release the port after 100ms
+	// Release the port after 100ms; WaitForPortAvailable polls at 100ms, so a
+	// 2s deadline leaves room for scheduling jitter.
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		listener.Close()
+		_ = listener.Close()
 	}()
 
-	// The port frees after ~100ms and the poll interval is 100ms; use a
-	// generous deadline so scheduling jitter can't flake the test.
-	err = WaitForPortAvailable(port, 2*time.Second)
-	if err != nil {
+	if err := WaitForPortAvailable(port, 2*time.Second); err != nil {
 		t.Errorf("WaitForPortAvailable failed: %v", err)
 	}
 }
 
-// TestMainPortDetection is a manual test for debugging port detection
-// Run with: go test -v -run TestMainPortDetection ./internal/util/
+// TestMainPortDetection covers the plain IsPortAvailable boolean across the
+// occupied → released transition (TestIsPortAvailable covers the WithInfo
+// variant).
 func TestMainPortDetection(t *testing.T) {
-	port := 12580
-
-	t.Logf("Testing port %d detection...", port)
-
-	// First check - should be available
-	available := IsPortAvailable(port)
-	t.Logf("First check (should be true): %v", available)
-
-	// Occupy the port
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		t.Fatalf("Failed to occupy port: %v", err)
-	}
-	t.Logf("Port %d is now occupied", port)
-
-	// Second check - should NOT be available
-	available = IsPortAvailable(port)
-	t.Logf("Second check while occupied (should be false): %v", available)
-
-	if available {
-		t.Errorf("ERROR: Port %d is occupied but IsPortAvailable returned true!", port)
+	occupied, port := listenEphemeral(t)
+	if IsPortAvailable(port) {
+		t.Fatalf("port %d is occupied but IsPortAvailable returned true", port)
 	}
 
-	// Wait a bit then close
-	time.Sleep(100 * time.Millisecond)
-	listener.Close()
-	t.Logf("Port %d is now released", port)
-
-	// Third check - should be available again
-	available = IsPortAvailable(port)
-	t.Logf("Third check after release (should be true): %v", available)
-
-	if !available {
-		t.Errorf("ERROR: Port %d is released but IsPortAvailable returned false!", port)
+	if err := occupied.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+	if !IsPortAvailable(port) {
+		t.Errorf("port %d is released but IsPortAvailable returned false", port)
 	}
 }
