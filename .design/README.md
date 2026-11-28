@@ -114,6 +114,7 @@
 | [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | `@cc` 已退役；bot 的 profile 如何用于 Projects 线程见 remote-into-projects.md |
 | [desk.md](./desk.md) | Desk (MVP)：已并入 Projects；§3 的会话引擎行为仍然适用 | 已退役 |
 | [projects-attachments.md](./projects-attachments.md) | Projects 附件：文件、图片、长文本作为输入，统一落盘在项目 uploads（TEP-2107） | 进行中 |
+| [projects-fetch.md](./projects-fetch.md) | projectsFetch 跨源请求（桌面 Wails）如何重放请求体而不整段读入内存；取舍与浏览器支持 | 已实现 |
 | [projects-panel.md](./projects-panel.md) | Projects 面板：项目和工作目录共用一个侧边栏（TEP-2063） | 已实现 |
 | [projects-desk-absorption.md](./projects-desk-absorption.md) | Desk 并入 Projects：工作目录会话、宿主能力与插槽、切换 | 已实施 |
 | [projects-im.md](./projects-im.md) | IM 聊天并入 Projects：chat 绑定到线程、IM 里审批、点名线程（TEP-2143；旧路径保留的决定见下一行） | 部分实施 |

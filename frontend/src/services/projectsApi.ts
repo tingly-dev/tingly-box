@@ -14,6 +14,25 @@ export const notifyProjectsChanged = () => {
     window.dispatchEvent(new Event(PROJECTS_CHANGED_EVENT));
 };
 
+/**
+ * Whether a request body can be handed to a second fetch as-is. FormData,
+ * Blob/File, strings, URLSearchParams and buffers are values the browser
+ * serializes per send — File/Blob contents are streamed from disk, not copied
+ * into the heap. A ReadableStream (or Node's async-iterable extension) is
+ * consumed by one send, so it cannot be replayed.
+ */
+function isReplayableBody(body: BodyInit | null | undefined): body is BodyInit {
+    if (body == null) return false;
+    if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) return false;
+    if (typeof (body as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function') return false;
+    return true;
+}
+
+/** Whether the caller set Content-Type itself, rather than `new Request` deriving it from the body. */
+function explicitContentType(headers: HeadersInit | undefined): boolean {
+    return headers != null && new Headers(headers).has('Content-Type');
+}
+
 export async function projectsFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const req = new Request(input, init);
     const [base, auth] = await Promise.all([getApiBaseUrl(), getControlApiHeaders()]);
@@ -29,13 +48,32 @@ export async function projectsFetch(input: RequestInfo | URL, init?: RequestInit
     if (url.origin !== window.location.origin || base === window.location.origin) {
         return fetch(new Request(req, { headers }));
     }
-    const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-    return fetch(`${base}${url.pathname}${url.search}`, {
-        method: req.method,
-        headers,
-        body: hasBody ? await req.arrayBuffer() : undefined,
-        signal: req.signal,
-    });
+    const target = `${base}${url.pathname}${url.search}`;
+    if (req.method === 'GET' || req.method === 'HEAD') {
+        return fetch(target, { method: req.method, headers, signal: req.signal });
+    }
+
+    // Replay the body rather than reading it into memory. Uploads reach here
+    // as a FormData in `init.body`; handing the same FormData to fetch streams
+    // each File from disk, while `await req.arrayBuffer()` would hold the
+    // whole body in the heap (twice for a large upload).
+    const body = init?.body;
+    if (isReplayableBody(body)) {
+        // `req.headers` carries the multipart Content-Type `new Request`
+        // derived from one serialization, boundary included. A second send
+        // re-serializes the FormData with a new boundary, so a copied header
+        // would not match the body. Let fetch generate it, unless the caller
+        // set Content-Type itself.
+        if (typeof FormData !== 'undefined' && body instanceof FormData && !explicitContentType(init?.headers)) {
+            headers.delete('Content-Type');
+        }
+        return fetch(target, { method: req.method, headers, body, signal: req.signal });
+    }
+
+    // A Request input (the typed openapi-fetch client) has no raw body to
+    // replay; its bodies are JSON, so buffering them keeps the old behavior
+    // without a large-file cost.
+    return fetch(target, { method: req.method, headers, body: await req.arrayBuffer(), signal: req.signal });
 }
 
 /** The fields of GET /api/v1/projects the nav reads (projects and folders share the list). */
